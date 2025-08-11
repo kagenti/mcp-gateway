@@ -5,13 +5,13 @@ with tools for time, HTTP header testing, and slow response testing.
 
 ## Test Go binary
 
-go run main.go --http localhost:9090
-MCP=http://localhost:9090/mcp
+MCP_TRANSPORT=http PORT=9091 go run main.go
+MCP=http://localhost:9091/mcp
 
 ## Build and run Dockerfile
 
-docker build --load --tag mcp-test1 . 
-docker run --publish 9091:9090 mcp-test1 /mcp-test-server --http 0.0.0.0:9090
+docker build --load --tag mcp-test2 .
+docker run --publish 9091:9090 --env MCP_TRANSPORT=http --env PORT=9090 mcp-test2
 MCP=http://localhost:9091/mcp
 
 ## Testing the MCP server with the @modelcontextprotocol/inspector
@@ -69,7 +69,7 @@ curl -v ${MCP} -H "mcp-session-id: ${SESSION_ID}" -H "Content-Type: application/
   "id": 1,
   "method": "tools/list"
 }
-' | grep "data:" | sed 's/data: //' | jq
+' | jq
 ```
 
 Inspect HTTP headers sent to server:
@@ -84,7 +84,7 @@ curl -v ${MCP} -H "mcp-session-id: ${SESSION_ID}" -H "Content-Type: application/
     "name": "headers"
   }
 }
-' | grep "data:" | sed 's/data: //' | jq
+' | jq
 ```
 
 Make a slow call with progress updates:
