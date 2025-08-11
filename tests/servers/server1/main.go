@@ -79,13 +79,29 @@ func slowTool(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolPa
 			break
 		}
 
-		fmt.Printf("Notify client that we have waited %d seconds\n", waited)
-		err := ss.NotifyProgress(ctx, &mcp.ProgressNotificationParams{
-			Message:  fmt.Sprintf("Waited %d seconds...", waited),
-			Progress: float64(waited),
-		})
-		if err != nil {
-			fmt.Printf("NotifyProgress error: %v\n", err)
+		var progressToken string = ""
+		if params.Meta != nil {
+			rawProgressToken := params.Meta["progressToken"]
+			switch v := rawProgressToken.(type) {
+			case string:
+				progressToken = v
+			case float64:
+				progressToken = fmt.Sprintf("%d", int(v))
+			default:
+				fmt.Printf("Unexpected type for progressToken: %T\n", v)
+			}
+		}
+
+		if progressToken != "" {
+			fmt.Printf("Notify client that we have waited %d seconds\n", waited)
+			err := ss.NotifyProgress(ctx, &mcp.ProgressNotificationParams{
+				Message:       fmt.Sprintf("Waited %d seconds...", waited),
+				ProgressToken: progressToken,
+				Progress:      float64(waited),
+			})
+			if err != nil {
+				fmt.Printf("NotifyProgress error: %v\n", err)
+			}
 		}
 
 		time.Sleep(1 * time.Second)
