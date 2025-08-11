@@ -1,2 +1,3 @@
 # mcp-gateway
-An envoy-based MCP Gateway
+
+An Envoy-based MCP Gateway
