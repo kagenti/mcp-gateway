@@ -42,5 +42,8 @@ The MCP Discovery Controller is a kubernetes based controller that will watch fo
 **Responsibilities:**
 
 - Watching HTTPRoutes labelled as MCP routes
-- Updating the MCP Broker config 
-(note as we understand better the different config options we may move to an MCP (CRD) that can target a HTTPRoute to configure it as an MCP route)
+- Updating the MCP Broker config based on the HTTPRoute 
+
+>Note on HTTPRoute:
+
+Initially we could use annotations to indicate things like prefix, but as we understand better the different config options we may move to a sepcific MCP focused (CRD) API that could target a HTTPRoute to configure it as an MCP route.
