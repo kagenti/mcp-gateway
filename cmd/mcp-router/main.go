@@ -1,17 +1,21 @@
+// main implements the CLI for mcp-router
 package main
 
 import (
 	"log"
 	"net"
+	"os"
 
 	envoy_service_ext_proc_v3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
 )
 
+// ExtProcServer represents an Envoy external processor.
 type ExtProcServer struct {
 	envoy_service_ext_proc_v3.UnimplementedExternalProcessorServer
 }
 
+// Process handles Envoy external process routing
 func (s *ExtProcServer) Process(stream envoy_service_ext_proc_v3.ExternalProcessor_ProcessServer) error {
 	for {
 		req, err := stream.Recv()
@@ -51,7 +55,7 @@ func (s *ExtProcServer) Process(stream envoy_service_ext_proc_v3.ExternalProcess
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":9002")
+	lis, err := net.Listen("tcp", getEnv("SERVER_ADDRESS", "localhost:9002"))
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -63,4 +67,11 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }
