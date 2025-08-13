@@ -18,8 +18,6 @@ MCP=http://localhost:9091/mcp
 
 Run `DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector`
 
-Note that the 'slow' tool's updates do not appear in the @modelcontextprotocol/inspector window.
-
 ## Testing the MCP server with _curl_
 
 First, initialize the server:
