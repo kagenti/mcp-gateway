@@ -1,4 +1,4 @@
-# server1
+# server2
 
 A simple MCP server based on https://github.com/modelcontextprotocol/go-sdk
 with tools for time, HTTP header testing, and slow response testing.
@@ -17,8 +17,6 @@ MCP=http://localhost:9091/mcp
 ## Testing the MCP server with the @modelcontextprotocol/inspector
 
 Run `DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector`
-
-Note that the 'slow' tool's updates do not appear in the @modelcontextprotocol/inspector window.
 
 ## Testing the MCP server with _curl_
 

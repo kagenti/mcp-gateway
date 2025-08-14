@@ -34,3 +34,6 @@ go.work.sum
 .specstory
 .cursorindexingignore
 /bin/
+
+# Ignore Python bytecode cache
+**/__pycache__/
