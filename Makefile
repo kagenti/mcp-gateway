@@ -34,3 +34,20 @@ deps:
 update:
 	go mod tidy
 	go get -u ./...
+
+# Lint
+
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: golangci-lint
+golangci-lint:
+	golangci-lint run ./...
+
+.PHONY: lint
+lint: fmt vet golangci-lint
