@@ -16,7 +16,8 @@ func extractHelperSessionFromBackend(_ string) string {
 }
 
 // HandleResponseHeaders handles response headers for session ID reverse mapping
-func (s *ExtProcServer) HandleResponseHeaders(headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseHeaders(
+	headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
 	log.Println("[EXT-PROC] Processing response headers for session mapping...")
 
 	if headers == nil || headers.Headers == nil {
@@ -92,7 +93,8 @@ func (s *ExtProcServer) HandleResponseHeaders(headers *eppb.HttpHeaders) ([]*epp
 }
 
 // HandleResponseBody handles response bodies.
-func (s *ExtProcServer) HandleResponseBody(body *eppb.HttpBody) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseBody(
+	body *eppb.HttpBody) ([]*eppb.ProcessingResponse, error) {
 	log.Printf("[EXT-PROC] Processing response body... (size: %d, end_of_stream: %t)",
 		len(body.GetBody()), body.GetEndOfStream())
 
@@ -111,7 +113,9 @@ func (s *ExtProcServer) HandleResponseBody(body *eppb.HttpBody) ([]*eppb.Process
 }
 
 // HandleResponseTrailers handles response trailers.
-func (s *ExtProcServer) HandleResponseTrailers(_ *eppb.HttpTrailers) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseTrailers(
+	_ *eppb.HttpTrailers,
+) ([]*eppb.ProcessingResponse, error) {
 	log.Println("[EXT-PROC] Processing response trailers...")
 
 	return []*eppb.ProcessingResponse{
