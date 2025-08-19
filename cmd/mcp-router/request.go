@@ -79,7 +79,7 @@ func extractMCPToolName(data map[string]any) string {
 // e.g. if the toolName is 'server1-echo', return 'server1'
 // NOTE: The prefix and route target aren't necessarily the same value.
 // The prefix could be any string that maps to a server name.
-func getRouteTargetFromTool(toolName string) string {
+func getRouteTargetFromTool(_ string) string {
 	// TODO: Lookup server based on tool name prefix
 	return ""
 }
@@ -93,7 +93,7 @@ func stripServerPrefix(toolName string) (string, bool) {
 }
 
 // extractSessionFromContext extracts mcp-session-id from the stored request headers
-func (s *ExtProcServer) extractSessionFromContext(ctx context.Context) string {
+func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 	if s.requestHeaders == nil || s.requestHeaders.Headers == nil {
 		return ""
 	}

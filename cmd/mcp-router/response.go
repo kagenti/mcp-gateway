@@ -10,7 +10,7 @@ import (
 
 // extractHelperSessionFromBackend extracts the helper session ID from a backend session ID
 // Returns empty string if not a backend session ID
-func extractHelperSessionFromBackend(backendSessionID string) string {
+func extractHelperSessionFromBackend(_ string) string {
 	// TODO: check known server session prefixes
 	return ""
 }
@@ -111,7 +111,7 @@ func (s *ExtProcServer) HandleResponseBody(body *eppb.HttpBody) ([]*eppb.Process
 }
 
 // HandleResponseTrailers handles response trailers.
-func (s *ExtProcServer) HandleResponseTrailers(trailers *eppb.HttpTrailers) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseTrailers(_ *eppb.HttpTrailers) ([]*eppb.ProcessingResponse, error) {
 	log.Println("[EXT-PROC] Processing response trailers...")
 
 	return []*eppb.ProcessingResponse{
