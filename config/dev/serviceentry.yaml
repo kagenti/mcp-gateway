@@ -1,0 +1,20 @@
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: host-docker-internal
+  namespace: istio-system
+spec:
+  hosts:
+  - host.docker.internal
+  ports:
+  - number: 50051
+    name: grpc-ext-proc
+    protocol: GRPC
+  - number: 8080
+    name: http-broker
+    protocol: HTTP
+  - number: 9002
+    name: http-debug
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS

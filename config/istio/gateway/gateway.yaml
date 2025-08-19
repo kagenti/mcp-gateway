@@ -1,0 +1,24 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  labels:
+    istio: ingressgateway
+  name: mcp-gateway
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: mcp # deny all by default overridden by AuthPolicy on route
+      hostname: 'mcp.example.com' #public accessibly MCP host one used by client
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: mcps # deny all by default overridden by AuthPolicy on route
+      hostname: '*.mcp.example.com' #public accessibly MCP host (doesn't need dns as it is for rewritten hosts)
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All

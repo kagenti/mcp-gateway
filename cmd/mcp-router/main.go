@@ -56,7 +56,8 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 }
 
 func main() {
-	lis, err := net.Listen("tcp", getEnv("SERVER_ADDRESS", "localhost:9002"))
+	serverAddr := getEnv("SERVER_ADDRESS", "0.0.0.0:50051")
+	lis, err := net.Listen("tcp", serverAddr)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -64,7 +65,7 @@ func main() {
 	s := grpc.NewServer()
 	extProcV3.RegisterExternalProcessorServer(s, &ExtProcServer{})
 
-	log.Println("Ext-proc server starting on port 9002...")
+	log.Printf("Ext-proc server starting on %s...", serverAddr)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
