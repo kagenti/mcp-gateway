@@ -29,6 +29,7 @@ sequenceDiagram
         MCP Client->>Gateway: POST /mcp init
         Gateway->>MCP Router: POST /mcp init
         MCP Router->>Gateway: no routing needed
+        Gateway->>WASM: POST /mcp init
         WASM->>Authorino: Apply Auth
         Authorino->>MCP Client: 401 WWW-Authenticate with resource meta-data
         note left of Authorino: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/mcp
@@ -41,6 +42,7 @@ sequenceDiagram
         MCP Client->>Gateway: Bearer header set POST/mcp init
         Gateway->>MCP Router: POST /mcp init
         MCP Router->>Gateway: no routing needed
+        Gateway->>WASM: POST /mcp init
         WASM->>Authorino: Apply Auth
         Authorino->>WASM: 200
         Gateway->>MCP Broker: POST /mcp init
@@ -54,6 +56,7 @@ sequenceDiagram
   participant Gateway as Gateway
   participant MCP Broker as MCP Broker
   participant MCP Server as MCP Server
+  actor MCP Client(s)
 
   MCP Controller ->> Gateway: watch for new HTTPRoutes (labelled as MCP Server)
   MCP Controller ->> MCP Broker: update MCP Broker config 
@@ -134,6 +137,7 @@ sequenceDiagram
         MCP Router->>Gateway: set authority: <prefix>.<host>
         MCP Router->>Gateway: update body to remove prefix 
         MCP Router->>Gateway: set x-mcp-tool header 
+        Gateway->>WASM: POST /mcp tools/call
         WASM->>Authorino: Apply Auth
         Authorino->>WASM: 200
         Gateway->>MCP Server: POST /mcp tools/call
