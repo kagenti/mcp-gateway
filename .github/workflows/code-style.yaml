@@ -110,5 +110,5 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+      - run: echo '${{ toJSON(needs) }}' | tee /dev/stderr | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+
