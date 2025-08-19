@@ -3,15 +3,14 @@ name: Build Images
 on:
   workflow_dispatch:
   push:
-    branches: ['main', 'release-v*']
-  pull_request:
-    branches: ['*']
+    branches: [ main ]
+    tags: [ 'v*' ]
   merge_group:
     types: [ checks_requested ]
   
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: mcp-gateway
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -41,6 +40,8 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}   
+            type=raw,value=latest,enable={{is_default_branch}}
+
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,6 +55,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
