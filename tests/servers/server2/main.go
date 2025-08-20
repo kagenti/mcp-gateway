@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,44 +22,33 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-type contextKey string
-
-const (
-	// HeadersKey saves HTTP headers in request context
-	HeadersKey contextKey = "http-headers"
-)
-
-type mcpRecordHeaders struct {
-	Handler http.Handler
-}
-
 func main() {
 	hooks := &server.Hooks{}
 
 	// Add session lifecycle hooks
-	hooks.AddOnRegisterSession(func(ctx context.Context, session server.ClientSession) {
+	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		log.Printf("Client %s connected", session.SessionID())
 	})
 
-	hooks.AddOnUnregisterSession(func(ctx context.Context, session server.ClientSession) {
+	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
 		log.Printf("Client %s disconnected", session.SessionID())
 	})
 
 	// Add request hooks
-	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, message any) {
+	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
 		log.Printf("Processing %s request", method)
 	})
 
-	hooks.AddOnError(func(ctx context.Context, id any, method mcp.MCPMethod, message any, err error) {
+	hooks.AddOnError(func(_ context.Context, _ any, method mcp.MCPMethod, _ any, err error) {
 		log.Printf("Error in %s: %v", method, err)
 	})
 
 	// Create a new MCP server
 	s := server.NewMCPServer(
-		"Demo 🚀",
+		"Demo rocket",
 		"1.0.0",
 		server.WithHooks(hooks),
-		server.WithToolCapabilities(true), // @@@ false?
+		server.WithToolCapabilities(true),
 	)
 
 	// Add tool
@@ -83,6 +73,11 @@ func main() {
 		mcp.WithDescription("get HTTP headers"),
 	), headersToolHandler)
 
+	// Add auth1234 handler
+	s.AddTool(mcp.NewTool("auth1234",
+		mcp.WithDescription("check authorization header"),
+	), auth1234ToolHandler)
+
 	// Add slow handler
 	s.AddTool(mcp.NewTool("slow",
 		mcp.WithDescription("Delay for N seconds"),
@@ -91,11 +86,6 @@ func main() {
 			mcp.Description("number of seconds to wait"),
 		),
 	), slowHandler)
-
-	// Start the stdio server
-	// if err := server.ServeStdio(s); err != nil {
-	// 	fmt.Printf("Server error: %v\n", err)
-	// }
 
 	// Choose transport based on environment
 	transport := os.Getenv("MCP_TRANSPORT")
@@ -112,16 +102,15 @@ func main() {
 		// Define the HTTP server with interceptor to record HTTP headers
 		mux := http.NewServeMux()
 		httpServer := &http.Server{
-			Addr: ":" + port,
-			Handler: mcpRecordHeaders{
-				Handler: mux,
-			},
+			Addr:              ":" + port,
+			Handler:           mux,
+			ReadHeaderTimeout: 3 * time.Second,
 		}
 
-		streamableHttpServer := server.NewStreamableHTTPServer(s, server.WithStreamableHTTPServer(httpServer))
-		mux.Handle("/mcp", streamableHttpServer)
+		streamableHTTPServer := server.NewStreamableHTTPServer(s, server.WithStreamableHTTPServer(httpServer))
+		mux.Handle("/mcp", streamableHTTPServer)
 
-		err = streamableHttpServer.Start(":" + port)
+		err = streamableHTTPServer.Start(":" + port)
 	case "sse":
 		fmt.Printf("Serving SSE on http://localhost:%s\n", port)
 		sseServer := server.NewSSEServer(s)
@@ -145,7 +134,7 @@ func main() {
 	fmt.Print("Server completed\n")
 }
 
-func helloHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func helloHandler(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name, err := request.RequireString("name")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -154,24 +143,37 @@ func helloHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	return mcp.NewToolResultText(fmt.Sprintf("Hello, %s!", name)), nil
 }
 
-func timeHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func timeHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultText(time.Now().String()), nil
 }
 
-func headersToolHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func headersToolHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	content := make([]mcp.Content, 0)
-	headers, ok := ctx.Value(HeadersKey).(http.Header)
-	if ok {
-		for k, v := range headers {
-			content = append(content, &mcp.TextContent{
-				Type: "text",
-				Text: fmt.Sprintf("%s: %v", k, v),
-			})
-		}
+	for k, v := range req.Header {
+		content = append(content, &mcp.TextContent{
+			Type: "text",
+			Text: fmt.Sprintf("%s: %v", k, v),
+		})
 	}
 
 	return &mcp.CallToolResult{
 		Content: content}, nil
+}
+
+func auth1234ToolHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
+	auth := strings.ToLower(req.Header.Get("Authorization"))
+	if auth != "bearer 1234" {
+		return nil, fmt.Errorf("Requires Authorization: bearer 1234, got %q", auth)
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Text: "Success!",
+			},
+		},
+	}, nil
 }
 
 func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -179,7 +181,7 @@ func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	var progressToken mcp.ProgressToken = nil
+	var progressToken mcp.ProgressToken
 	if request.Params.Meta != nil {
 		progressToken = request.Params.Meta.ProgressToken
 	}
@@ -210,12 +212,4 @@ func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	return mcp.NewToolResultText("done"), nil
-}
-
-// ServeHTTP implements http.Handler.
-func (m mcpRecordHeaders) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	// Save the headers in the request context
-	newReq := req.WithContext(context.WithValue(req.Context(),
-		HeadersKey, req.Header))
-	m.Handler.ServeHTTP(rw, newReq)
 }
