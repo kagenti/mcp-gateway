@@ -107,7 +107,10 @@ func main() {
 			ReadHeaderTimeout: 3 * time.Second,
 		}
 
-		streamableHTTPServer := server.NewStreamableHTTPServer(s, server.WithStreamableHTTPServer(httpServer))
+		streamableHTTPServer := server.NewStreamableHTTPServer(
+			s,
+			server.WithStreamableHTTPServer(httpServer),
+		)
 		mux.Handle("/mcp", streamableHTTPServer)
 
 		err = streamableHTTPServer.Start(":" + port)
@@ -164,7 +167,7 @@ func auth1234ToolHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallT
 
 	auth := strings.ToLower(req.Header.Get("Authorization"))
 	if auth != "bearer 1234" {
-		return nil, fmt.Errorf("Requires Authorization: bearer 1234, got %q", auth)
+		return nil, fmt.Errorf("requires Authorization: bearer 1234, got %q", auth)
 	}
 
 	return &mcp.CallToolResult{

@@ -27,13 +27,21 @@ const (
 	HeadersKey contextKey = "http-headers"
 )
 
-var httpAddr = flag.String("http", "", "if set, use streamable HTTP at this address, instead of stdin/stdout")
+var httpAddr = flag.String(
+	"http",
+	"",
+	"if set, use streamable HTTP at this address, instead of stdin/stdout",
+)
 
 type hiArgs struct {
 	Name string `json:"name" jsonschema:"the name to say hi to"`
 }
 
-func sayHi(_ context.Context, _ *mcp.ServerSession, params *mcp.CallToolParamsFor[hiArgs]) (*mcp.CallToolResultFor[struct{}], error) {
+func sayHi(
+	_ context.Context,
+	_ *mcp.ServerSession,
+	params *mcp.CallToolParamsFor[hiArgs],
+) (*mcp.CallToolResultFor[struct{}], error) {
 	return &mcp.CallToolResultFor[struct{}]{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: "Hi " + params.Arguments.Name},
@@ -42,7 +50,11 @@ func sayHi(_ context.Context, _ *mcp.ServerSession, params *mcp.CallToolParamsFo
 }
 
 // A simple tool that returns the current time
-func timeTool(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+func timeTool(
+	_ context.Context,
+	_ *mcp.ServerSession,
+	_ *mcp.CallToolParamsFor[struct{}],
+) (*mcp.CallToolResultFor[struct{}], error) {
 	return &mcp.CallToolResultFor[struct{}]{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: time.Now().String()},
@@ -51,7 +63,11 @@ func timeTool(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[
 }
 
 // A simple tool that returns all HTTP headers it received
-func headersTool(ctx context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+func headersTool(
+	ctx context.Context,
+	_ *mcp.ServerSession,
+	_ *mcp.CallToolParamsFor[struct{}],
+) (*mcp.CallToolResultFor[struct{}], error) {
 	content := make([]mcp.Content, 0)
 	headers, ok := ctx.Value(HeadersKey).(http.Header)
 	if ok {
@@ -70,7 +86,11 @@ type slowArgs struct {
 }
 
 // A long-running tool that waits N seconds, notifying the client of progress
-func slowTool(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolParamsFor[slowArgs]) (*mcp.CallToolResultFor[struct{}], error) {
+func slowTool(
+	ctx context.Context,
+	ss *mcp.ServerSession,
+	params *mcp.CallToolParamsFor[slowArgs],
+) (*mcp.CallToolResultFor[struct{}], error) {
 	startTime := time.Now()
 	fmt.Printf("Slow tool will wait for %d seconds\n", params.Arguments.Seconds)
 	for {
@@ -79,7 +99,7 @@ func slowTool(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolPa
 			break
 		}
 
-		var progressToken string = ""
+		var progressToken string
 		if params.Meta != nil {
 			rawProgressToken := params.Meta["progressToken"]
 			switch v := rawProgressToken.(type) {
@@ -112,11 +132,18 @@ func slowTool(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolPa
 	}, nil
 }
 
-func promptHi(_ context.Context, _ *mcp.ServerSession, params *mcp.GetPromptParams) (*mcp.GetPromptResult, error) {
+func promptHi(
+	_ context.Context,
+	_ *mcp.ServerSession,
+	params *mcp.GetPromptParams,
+) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
 		Description: "Code review prompt",
 		Messages: []*mcp.PromptMessage{
-			{Role: "user", Content: &mcp.TextContent{Text: "Say hi to " + params.Arguments["name"]}},
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: "Say hi to " + params.Arguments["name"]},
+			},
 		},
 	}, nil
 }
@@ -178,7 +205,9 @@ func (m mcpRecordHeaders) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 // Simple middleware that just prints the method and parameters
-func rpcPrintMiddleware(next mcp.MethodHandler[*mcp.ServerSession]) mcp.MethodHandler[*mcp.ServerSession] {
+func rpcPrintMiddleware(
+	next mcp.MethodHandler[*mcp.ServerSession],
+) mcp.MethodHandler[*mcp.ServerSession] {
 	return func(
 		ctx context.Context,
 		session *mcp.ServerSession,
@@ -200,7 +229,11 @@ var embeddedResources = map[string]string{
 	"info": "This is the hello example server.",
 }
 
-func handleEmbeddedResource(_ context.Context, _ *mcp.ServerSession, params *mcp.ReadResourceParams) (*mcp.ReadResourceResult, error) {
+func handleEmbeddedResource(
+	_ context.Context,
+	_ *mcp.ServerSession,
+	params *mcp.ReadResourceParams,
+) (*mcp.ReadResourceResult, error) {
 	u, err := url.Parse(params.URI)
 	if err != nil {
 		return nil, err
