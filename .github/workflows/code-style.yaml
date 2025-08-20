@@ -1,0 +1,114 @@
+name: Code Style
+
+on:
+  pull_request:
+    branches: [ 'main',  ]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+concurrency:
+  group: code-style-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auto-format:
+    name: Auto-format and Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [ goimports, gofmt ]
+        include:
+          - tool: gofmt
+            options: -s
+          - tool: goimports
+            importpath: golang.org/x/tools/cmd/goimports@latest
+
+    steps:
+      - name: Set up Go (stable)
+        uses: actions/setup-go@v4
+        with:
+          go-version: stable
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install goimports
+        if: ${{ matrix.importpath != '' }}
+        run: |
+          cd "$(mktemp -d)"
+          GO111MODULE=on go install ${{ matrix.importpath }}
+
+      - name: Run ${{ matrix.tool }} ${{ matrix.options }}
+        shell: bash
+        run: >
+          ${{ matrix.tool }} ${{ matrix.options }} -w
+          $(find .
+          -path './docs' -prune
+          -o -name '*.deepcopy.go' -prune
+          -o -type f -name '*.go' -print)
+
+      - name: Verify ${{ matrix.tool }}
+        shell: bash
+        run: |
+          urlencode() { sed ':begin;$!N;s/\n/%0A/;tbegin'; }
+          if [[ $(git diff-index --name-only HEAD --) ]]; then
+            for x in $(git diff-index --name-only HEAD --); do
+              echo "::error file=$x::Please run ${{ matrix.tool }} ${{ matrix.options }}.%0A$(git diff $x | urlencode)"
+            done
+            echo "${{ github.repository }} is out of style. Please run ${{ matrix.tool }} ${{ matrix.options }}."
+            exit 1
+          fi
+          echo "${{ github.repository }} is formatted correctly."
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go (stable)
+        uses: actions/setup-go@v4
+        with:
+          go-version: stable
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - id: golangci_configuration
+        uses: andstor/file-existence-action@v1
+        with:
+          files: .golangci.yaml
+
+      - name: Run Go Lint (golangci-lint via Makefile)
+        if: steps.golangci_configuration.outputs.files_exists == 'true'
+        run: make run-lint
+
+      - name: Check EOF newline
+        shell: bash
+        run: |
+          set -e
+          echo "Checking for missing EOF newlines..."
+          LINT_FILES=$(git ls-files |
+            git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$' | cut -d: -f1 |
+            git check-attr --stdin linguist-vendored  | grep -Ev ': (set|true)$' | cut -d: -f1 |
+            grep -Ev '^(third_party/|.github|docs/)' |
+            grep -v '\.ai$' |
+            grep -v '\.svg$')
+
+          FAIL=0
+          for x in $LINT_FILES; do
+            if [[ -f "$x" && ! ( -s "$x" && -z "$(tail -c 1 "$x")" ) ]]; then
+              echo "Missing newline at end of file: $x"
+              FAIL=1
+            fi
+          done
+          exit $FAIL
+
+  required-checks:
+    name: Code Style Required Checks
+    needs: [ auto-format, lint ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo '${{ toJSON(needs) }}' | tee /dev/stderr | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+
