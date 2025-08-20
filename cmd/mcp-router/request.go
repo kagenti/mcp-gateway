@@ -109,7 +109,8 @@ func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 }
 
 // HandleRequestBody handles request bodies for MCP tool calls.
-func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]any) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleRequestBody(
+	ctx context.Context, data map[string]any) ([]*eppb.ProcessingResponse, error) {
 	log.Println("[EXT-PROC] Processing request body for MCP tool calls...")
 
 	// Extract tool name - only process tools/call
@@ -124,7 +125,10 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	// Determine routing based on tool prefix
 	routeTarget := getRouteTargetFromTool(toolName)
 	if routeTarget == "" {
-		log.Printf("[EXT-PROC] Tool name '%s' doesn't match any server prefix, continuing to helper", toolName)
+		log.Printf(
+			"[EXT-PROC] Tool name '%s' doesn't match any server prefix, continuing to helper",
+			toolName,
+		)
 		return s.createEmptyBodyResponse(), nil
 	}
 
@@ -167,8 +171,17 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 }
 
 // createRoutingResponse creates a response with routing headers and session mapping
-func (s *ExtProcServer) createRoutingResponse(toolName string, bodyBytes []byte, routeTarget, backendSession string) []*eppb.ProcessingResponse {
-	log.Printf("[EXT-PROC] 🔧 createRoutingResponse - streaming: %v, route: %s, session: %s", s.streaming, routeTarget, backendSession)
+func (s *ExtProcServer) createRoutingResponse(
+	toolName string,
+	bodyBytes []byte,
+	routeTarget, backendSession string,
+) []*eppb.ProcessingResponse {
+	log.Printf(
+		"[EXT-PROC] 🔧 createRoutingResponse - streaming: %v, route: %s, session: %s",
+		s.streaming,
+		routeTarget,
+		backendSession,
+	)
 
 	headers := []*basepb.HeaderValueOption{
 		{
@@ -221,7 +234,10 @@ func (s *ExtProcServer) createRoutingResponse(toolName string, bodyBytes []byte,
 			},
 		}
 		ret = addStreamedBodyResponse(ret, bodyBytes)
-		log.Printf("[EXT-PROC] Completed MCP processing with routing to %s (streaming)", routeTarget)
+		log.Printf(
+			"[EXT-PROC] Completed MCP processing with routing to %s (streaming)",
+			routeTarget,
+		)
 		return ret
 	}
 
@@ -250,7 +266,10 @@ func (s *ExtProcServer) createRoutingResponse(toolName string, bodyBytes []byte,
 	}
 }
 
-func addStreamedBodyResponse(responses []*eppb.ProcessingResponse, requestBodyBytes []byte) []*eppb.ProcessingResponse {
+func addStreamedBodyResponse(
+	responses []*eppb.ProcessingResponse,
+	requestBodyBytes []byte,
+) []*eppb.ProcessingResponse {
 	return append(responses, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestBody{
 			RequestBody: &eppb.BodyResponse{
@@ -291,7 +310,10 @@ func (s *ExtProcServer) createEmptyBodyResponse() []*eppb.ProcessingResponse {
 }
 
 // createErrorResponse creates an immediate error response with the specified status code
-func (s *ExtProcServer) createErrorResponse(message string, statusCode int32) []*eppb.ProcessingResponse {
+func (s *ExtProcServer) createErrorResponse(
+	message string,
+	statusCode int32,
+) []*eppb.ProcessingResponse {
 	log.Printf("[EXT-PROC] 🚫 Returning %d error: %s", statusCode, message)
 
 	return []*eppb.ProcessingResponse{
@@ -310,11 +332,14 @@ func (s *ExtProcServer) createErrorResponse(message string, statusCode int32) []
 }
 
 // HandleRequestHeaders handles request headers minimally.
-func (s *ExtProcServer) HandleRequestHeaders(headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleRequestHeaders(
+	headers *eppb.HttpHeaders,
+) ([]*eppb.ProcessingResponse, error) {
 	log.Printf("[EXT-PROC] 🔍 HandleRequestHeaders called - streaming: %v", s.streaming)
 	if headers != nil && headers.Headers != nil {
 		for _, header := range headers.Headers.Headers {
-			if strings.ToLower(header.Key) == "content-type" || strings.ToLower(header.Key) == "mcp-session-id" {
+			if strings.ToLower(header.Key) == "content-type" ||
+				strings.ToLower(header.Key) == "mcp-session-id" {
 				log.Printf("[EXT-PROC] 🔍 Header: %s = %s", header.Key, string(header.RawValue))
 			}
 		}
