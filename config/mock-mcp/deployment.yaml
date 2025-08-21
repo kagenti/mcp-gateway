@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mcp-test
+  name: mcp-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-test
+  template:
+    metadata:
+      labels:
+        app: mcp-test
+    spec:
+      containers:
+        - image: quay.io/maleck13/mcp-test:latest
+          imagePullPolicy: Always
+          name: mcp-test
+          ports:
+            - containerPort: 8081
+              protocol: TCP

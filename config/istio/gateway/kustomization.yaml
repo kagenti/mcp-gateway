@@ -1,0 +1,6 @@
+---
+namespace: gateway-system
+resources:
+- namespace.yaml
+- gateway.yaml
+- httproute.yaml
