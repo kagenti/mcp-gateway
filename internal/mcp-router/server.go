@@ -1,3 +1,4 @@
+// Package mcprouter ext proc process
 package mcprouter
 
 import (
@@ -6,11 +7,13 @@ import (
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
+// ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
 	streaming      bool
-	requestHeaders *extProcV3.HttpHeaders // Store headers for later use in body processing
+	requestHeaders *extProcV3.HttpHeaders
 }
 
+// Process function
 func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer) error {
 	for {
 		req, err := stream.Recv()

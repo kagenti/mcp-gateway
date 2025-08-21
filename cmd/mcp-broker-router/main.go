@@ -23,7 +23,10 @@ func getEnv(key, fallback string) string {
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, "Hello, World!") })
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, "Hello, World!")
+	})
 	httpSrv := &http.Server{
 		Addr:         getEnv("HTTP_ADDR", ":8080"),
 		Handler:      mux,
