@@ -20,14 +20,30 @@ import (
 	mcpRouter "github.com/kagenti/mcp-gateway/internal/mcp-router"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
+	"github.com/kagenti/mcp-gateway/pkg/controller"
 )
 
 var (
 	mcpConfig config.MCPServersConfig
 	mutex     sync.RWMutex
-
-	logger *slog.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger    *slog.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	scheme    = runtime.NewScheme()
 )
+
+func init() {
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = mcpv1alpha1.AddToScheme(scheme)
+	_ = gatewayv1.Install(scheme)
+}
 
 func main() {
 
@@ -37,12 +53,14 @@ func main() {
 		mcpConfigFile     string
 		loglevel          int
 		logFormat         string
+		controllerMode    bool
 	)
 	flag.StringVar(&mcpRouterAddrFlag, "mcp-router-address", "0.0.0.0:50051", "The address for mcp router")
 	flag.StringVar(&mcpBrokerAddrFlag, "mcp-broker-address", "0.0.0.0:8080", "The address for mcp broker")
 	flag.StringVar(&mcpConfigFile, "mcp-gateway-config", "./config/mcp-system/config.yaml", "where to locate the mcp server config")
 	flag.IntVar(&loglevel, "log-level", int(slog.LevelInfo), "set the log level 0=info, 4=warn , 8=error and -4=debug")
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
+	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.Parse()
 
 	slog.SetLogLoggerLevel(slog.Level(loglevel))
@@ -51,6 +69,14 @@ func main() {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	}
 
+	if controllerMode {
+		fmt.Println("Starting in controller mode...")
+		go func() {
+			if err := runController(); err != nil {
+				log.Fatalf("Controller failed: %v", err)
+			}
+		}()
+	}
 	LoadConfig(mcpConfigFile)
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
@@ -135,4 +161,40 @@ func LoadConfig(path string) {
 	for _, s := range mcpConfig.Servers {
 		logger.Debug("server config", "server name", s.Name, "server prefix", s.ToolPrefix, "enabled", s.Enabled, "backend url", s.URL, "routable host", s.Hostname)
 	}
+}
+
+func runController() error {
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	fmt.Println("Controller starting (health: :8081, metrics: :8082)...")
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:         scheme,
+		Metrics:        metricsserver.Options{BindAddress: ":8082"},
+		LeaderElection: false,
+		HealthProbeBindAddress: ":8081",
+	})
+	if err != nil {
+		return fmt.Errorf("unable to start manager: %w", err)
+	}
+
+	if err = (&controller.MCPGatewayReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create controller: %w", err)
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return fmt.Errorf("unable to set up health check: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return fmt.Errorf("unable to set up ready check: %w", err)
+	}
+
+	fmt.Println("Starting controller manager...")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		return fmt.Errorf("problem running manager: %w", err)
+	}
+
+	return nil
 }

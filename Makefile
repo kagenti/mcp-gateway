@@ -17,19 +17,35 @@ help: ## Display this help
 
 .PHONY: build clean mcp-broker-router
 
-
-
-# Build the broker and router 
+# Build the combined broker and router 
 mcp-broker-router:
 	go build -o bin/mcp-broker-router ./cmd/mcp-broker-router
+
+# Build all binaries
+build: mcp-broker-router
 
 # Clean build artifacts
 clean:
 	rm -rf bin/
 
-# Run the broker and router with debug loging
-run-mcp-broker-router: mcp-broker-router
-	./bin/mcp-broker-router --log-level=${LOG_LEVEL}  
+# Run the broker/router (standalone mode)
+run: mcp-broker-router
+	./bin/mcp-broker-router --log-level=${LOG_LEVEL}
+
+# Run the broker and router with debug logging (alias for backwards compatibility)
+run-mcp-broker-router: run
+
+# Run in controller mode (discovers MCP servers from Kubernetes)
+run-controller: mcp-broker-router
+	./bin/mcp-broker-router --controller
+
+# Install CRD
+install-crd: ## Install MCPGateway CRD
+	kubectl apply -f config/crd/mcpgateway.yaml
+
+# Deploy example MCPGateway
+deploy-example: install-crd ## Deploy example MCPGateway resource
+	kubectl apply -f config/samples/mcpgateway-calendar.yaml
 
 # Download dependencies
 deps:

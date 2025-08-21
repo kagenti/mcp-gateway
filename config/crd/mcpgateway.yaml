@@ -1,0 +1,105 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpgateways.mcp.kagenti.com
+spec:
+  group: mcp.kagenti.com
+  names:
+    kind: MCPGateway
+    listKind: MCPGatewayList
+    plural: mcpgateways
+    singular: mcpgateway
+    shortNames:
+    - mcpgw
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Ready
+      type: string
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+    - name: Targets
+      type: string
+      jsonPath: .spec.targetRefs[*].name
+    - name: Prefix
+      type: string
+      jsonPath: .spec.toolPrefix
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            required:
+            - targetRefs
+            properties:
+              targetRefs:
+                type: array
+                description: References to HTTPRoutes for MCP servers
+                minItems: 1
+                items:
+                  type: object
+                  required:
+                  - group
+                  - kind
+                  - name
+                  properties:
+                    group:
+                      type: string
+                      default: gateway.networking.k8s.io
+                      enum:
+                      - gateway.networking.k8s.io
+                      description: Group of the target resource
+                    kind:
+                      type: string
+                      default: HTTPRoute
+                      enum:
+                      - HTTPRoute
+                      description: Kind of the target resource
+                    name:
+                      type: string
+                      description: Name of the HTTPRoute
+                    namespace:
+                      type: string
+                      description: Namespace of the HTTPRoute (optional, defaults to same namespace)
+                    toolPrefix:
+                      type: string
+                      description: Tool prefix for this specific server (overrides spec-level toolPrefix)
+              toolPrefix:
+                type: string
+                description: Default prefix to add to all tools (can be overridden per targetRef)
+          status:
+            type: object
+            properties:
+              conditions:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - type
+                  - status
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
