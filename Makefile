@@ -21,7 +21,7 @@ all: router broker
 router:
 	go build -o bin/mcp-router ./cmd/mcp-router
 
-# Build the broker (simple HTTP server)
+# Build the broker (MCP broker with optional controller mode)
 broker:
 	go build -o bin/mcp-broker ./cmd/mcp-broker
 
@@ -36,9 +36,21 @@ clean:
 run-router: router
 	./bin/mcp-router
 
-# Run the broker
+# Run the broker (standalone mode)
 run-broker: broker
 	./bin/mcp-broker
+
+# Run the broker in controller mode
+run-controller: broker
+	./bin/mcp-broker --controller
+
+# Install CRD
+install-crd: ## Install MCPGateway CRD
+	kubectl apply -f config/crd/mcpgateway.yaml
+
+# Deploy example MCPGateway
+deploy-example: install-crd ## Deploy example MCPGateway resource
+	kubectl apply -f config/samples/mcpgateway-calendar.yaml
 
 # Download dependencies
 deps:
