@@ -3,6 +3,8 @@ package mcprouter
 
 import (
 	"log/slog"
+	"encoding/json"
+	// "github.com/kagenti/mcp-gateway/internal/config"
 
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -28,29 +30,62 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		// Log request details
 		switch r := req.Request.(type) {
 		case *extProcV3.ProcessingRequest_RequestHeaders:
-			s.Logger.Debug("[ext_proc] Process:", "Request Headers", r.RequestHeaders.Headers.Headers)
+			// Store headers for later use in body processing
+			s.requestHeaders = r.RequestHeaders
+			responses, _ := s.HandleRequestHeaders(s.requestHeaders)
+			for _, response := range responses {
+				slog.Info("Outgoing processing response: %+v", response)
+				if err := stream.Send(response); err != nil {
+					slog.Error("Error sending response: %v", err)
+					return err
+				}
+			}
+			// slog.Info("Request Headers: %+v", r.RequestHeaders)
+
+			
 		case *extProcV3.ProcessingRequest_RequestBody:
-			s.Logger.Debug("[ext_proc] Process:", "Request Body", string(r.RequestBody.Body))
+			var data map[string]any
+			if len(r.RequestBody.Body) > 0 {
+				if err := json.Unmarshal(r.RequestBody.Body, &data); err != nil {
+					slog.Error("Error unmarshalling request body: %v", err)
+				}
+			}
+			if data == nil {
+				for _, response := range s.createEmptyBodyResponse() {
+					slog.Info("Outgoing processing response: %+v", response)
+					if err := stream.Send(response); err != nil {
+						slog.Error("Error sending response: %v", err)
+						return err
+					}
+				}
+				continue
+			}
+			responses, _ := s.HandleRequestBody(stream.Context(), data, s.MCPConfig)
+			for _, response := range responses {
+				slog.Info("Outgoing processing response: %+v", response)
+				if err := stream.Send(response); err != nil {
+					slog.Error("Error sending response: %v", err)
+					return err
+				}
+			}
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
-			s.Logger.Debug("[ext_proc] Process:", "Response Headers", r.ResponseHeaders.Headers.Headers)
+			responses, _ := s.HandleResponseHeaders(r.ResponseHeaders)
+			for _, response := range responses {
+				slog.Info("Outgoing processing response: %+v", response)
+				if err := stream.Send(response); err != nil {
+					slog.Error("Error sending response: %v", err)
+					return err
+				}
+			}
 		case *extProcV3.ProcessingRequest_ResponseBody:
-			s.Logger.Debug("[ext_proc] Process:", "Response Body", string(r.ResponseBody.Body))
-		}
-
-		// Send simple response to continue processing
-		resp := &extProcV3.ProcessingResponse{
-			Response: &extProcV3.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &extProcV3.HeadersResponse{
-					Response: &extProcV3.CommonResponse{
-						Status: extProcV3.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
-
-		if err := stream.Send(resp); err != nil {
-			s.Logger.Error("Error sending response", "error", err)
-			return err
+			responses, _ := s.HandleResponseBody(r.ResponseBody)
+			for _, response := range responses {
+				slog.Info("Outgoing processing response: %+v", response)
+				if err := stream.Send(response); err != nil {
+					slog.Error("Error sending response: %v", err)
+					return err
+				}
+			}
 		}
 	}
 }
