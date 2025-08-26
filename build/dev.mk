@@ -33,7 +33,7 @@ dev-gateway-forward: ## Port forward the gateway to localhost:8888
 	@echo "Forwarding gateway to localhost:8888..."
 	@echo "You can now access the gateway at http://localhost:8888"
 	@echo "Try: curl -H 'Host: mcp.example.com' http://localhost:8888"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:80
+	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080
 
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway

@@ -41,7 +41,7 @@ inspect-mock-impl:
 inspect-gateway: # Open MCP Inspector for broker via gateway
 	@echo "Ensuring port-forward to gateway..."
 	@-pkill -f "kubectl.*port-forward.*mcp-gateway" || true
-	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:80 > /dev/null 2>&1 &
+	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 > /dev/null 2>&1 &
 	@sleep 2
 	@echo "Opening MCP Inspector for gateway at http://localhost:8888/mcp"
 	@echo "Note: This connects to the broker through the full gateway stack"
