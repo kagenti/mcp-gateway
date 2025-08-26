@@ -94,6 +94,8 @@ type mcpBrokerImpl struct {
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
+var log = logrus.WithField("component", "BROKER")
+
 // NewBroker creates a new MCPBroker
 func NewBroker() MCPBroker {
 	hooks := &server.Hooks{}
@@ -348,6 +350,45 @@ func (m *mcpBrokerImpl) createUpstreamSession(
 	retval.lastContact = time.Now()
 
 	return retval, nil
+}
+
+// ExchangeSession ensures an upstream session exists and returns its MCP session ID
+func (m *mcpBrokerImpl) ExchangeSession(
+    ctx context.Context,
+    authority string,
+    targetServer string,
+    gatewaySession string,
+) (string, error) {
+    if authority == "" {
+        log.Errorf("missing authority for session exchange; prefix=%s", targetServer)
+        return "", fmt.Errorf("missing authority")
+    }
+
+    host := upstreamMCPHost(authority)
+    if _, ok := m.mcpServers[host]; !ok {
+        log.Errorf("unknown upstream host for authority: %s", authority)
+        return "", fmt.Errorf("unknown host %q", authority)
+    }
+
+    // Ensure session map for this host exists
+    upstreamSessionMap, ok := m.serverSessions[host]
+    if !ok {
+        upstreamSessionMap = make(map[downstreamSessionID]*upstreamSessionState)
+        m.serverSessions[host] = upstreamSessionMap
+    }
+
+    ds := downstreamSessionID(gatewaySession)
+    sessionState, ok := upstreamSessionMap[ds]
+    if !ok {
+        var err error
+        sessionState, err = m.createUpstreamSession(ctx, host)
+        if err != nil {
+            return "", fmt.Errorf("failed to create upstream session: %w", err)
+        }
+        upstreamSessionMap[ds] = sessionState
+    }
+
+    return string(sessionState.sessionID), nil
 }
 
 func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSessionID) error {
