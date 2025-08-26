@@ -1,0 +1,14 @@
+---
+namespace: mcp-system
+resources:
+  - namespace.yaml
+  - service.yaml
+  - deployment.yaml
+
+configMapGenerator:
+  - name: mcp-gateway-config
+    files:
+      - config.yaml
+generatorOptions:
+  labels:
+    app: mcp-gateway
