@@ -1,8 +1,8 @@
 # Istio
 
-SAIL_VERSION = 1.26.3
+SAIL_VERSION = 1.27.0
 ISTIO_NAMESPACE = istio-system
-ISTIO_VERSION = 1.26.3
+ISTIO_VERSION = 1.27.0
 
 # istioctl tool
 ISTIOCTL = bin/istioctl

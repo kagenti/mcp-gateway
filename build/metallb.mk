@@ -1,6 +1,6 @@
 # MetalLB
 
-METALLB_VERSION = v0.14.5
+METALLB_VERSION = v0.15.2
 
 .PHONY: metallb-install
 metallb-install: $(YQ) # Install MetalLB load balancer
