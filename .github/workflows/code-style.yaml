@@ -43,11 +43,28 @@ jobs:
       - name: Run ${{ matrix.tool }} ${{ matrix.options }}
         shell: bash
         run: >
-          ${{ matrix.tool }} ${{ matrix.options }} -w
-          $(find .
-          -path './docs' -prune
-          -o -name '*.deepcopy.go' -prune
-          -o -type f -name '*.go' -print)
+          set -euo pipefail
+
+          TOOL="${{ matrix.tool }}"
+          OPTIONS="${{ matrix.options:- }}"
+
+          TMP_LIST="$(mktemp)"
+          find . \
+            -path ./docs -prune -o \
+            -name '*.deepcopy.go' -prune -o \
+            -type f -name '*.go' -print0 > "$TMP_LIST"
+
+          if [ ! -s "$TMP_LIST" ]; then
+            echo "No .go files found; nothing to do."
+            exit 0
+          fi
+          if ! xargs -0 -a "$TMP_LIST" -- ${TOOL} ${OPTIONS} -w; then
+            echo "${TOOL} failed on the following files:"
+            tr '\0' '\n' < "$TMP_LIST"
+            exit 1
+          fi
+
+          echo "${TOOL} completed successfully"
 
       - name: Verify ${{ matrix.tool }}
         shell: bash
@@ -74,14 +91,19 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+
+
       - id: golangci_configuration
         uses: andstor/file-existence-action@v1
         with:
-          files: .golangci.yaml
+          files: .golangci.yml
 
       - name: Run Go Lint (golangci-lint via Makefile)
         if: steps.golangci_configuration.outputs.files_exists == 'true'
-        run: make run-lint
+        run: make lint
 
       - name: Check EOF newline
         shell: bash
@@ -104,11 +126,5 @@ jobs:
           done
           exit $FAIL
 
-  required-checks:
-    name: Code Style Required Checks
-    needs: [ auto-format, lint ]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo '${{ toJSON(needs) }}' | tee /dev/stderr | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+  
 
