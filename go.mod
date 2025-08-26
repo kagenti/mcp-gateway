@@ -7,7 +7,7 @@ toolchain go1.24.4
 require (
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/mark3labs/mcp-go v0.38.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.11.0
 	google.golang.org/grpc v1.70.0
 )
 
