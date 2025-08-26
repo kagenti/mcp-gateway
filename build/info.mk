@@ -15,7 +15,7 @@ info-impl:
 	@echo "  Router:      grpc://localhost:9002 (run: make run-router)"
 	@echo "  Mock MCP:    http://localhost:8081/mcp (run: kubectl port-forward -n mcp-server svc/mcp-test 8081:8081)"
 	@if kubectl get svc -n keycloak keycloak >/dev/null 2>&1; then \
-		echo "  Keycloak:    http://localhost:8090 (run: make keycloak-forward)"; \
+		echo "  Keycloak:    http://localhost:8095 (run: make keycloak-forward)"; \
 		echo "               Admin: admin / admin"; \
 	fi
 	@echo ""

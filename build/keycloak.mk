@@ -25,7 +25,7 @@ keycloak-install-impl: $(HELM)
 	@echo ""
 	@echo "Keycloak installed!"
 	@echo "Admin credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
-	@echo "Run 'make keycloak-forward' to access at http://localhost:8090"
+	@echo "Run 'make keycloak-forward' to access at http://localhost:8095"
 
 .PHONY: keycloak-uninstall
 keycloak-uninstall: $(HELM) # Uninstall Keycloak
@@ -33,9 +33,9 @@ keycloak-uninstall: $(HELM) # Uninstall Keycloak
 	kubectl delete namespace $(KEYCLOAK_NAMESPACE)
 
 keycloak-forward-impl:
-	@echo "Forwarding Keycloak to http://localhost:8090"
+	@echo "Forwarding Keycloak to http://localhost:8095"
 	@echo "Login: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
-	kubectl port-forward -n $(KEYCLOAK_NAMESPACE) svc/keycloak 8090:80
+	kubectl port-forward -n $(KEYCLOAK_NAMESPACE) svc/keycloak 8095:80
 
 keycloak-status-impl:
 	@if kubectl get svc -n $(KEYCLOAK_NAMESPACE) keycloak >/dev/null 2>&1; then \
@@ -46,16 +46,16 @@ keycloak-status-impl:
 		echo "Status: Installed"; \
 		echo ""; \
 		echo "Admin Console:"; \
-		echo "  URL: http://localhost:8090 (run: make keycloak-forward)"; \
+		echo "  URL: http://localhost:8095 (run: make keycloak-forward)"; \
 		echo "  Username: $(KEYCLOAK_ADMIN_USER)"; \
 		echo "  Password: $(KEYCLOAK_ADMIN_PASSWORD)"; \
 		echo ""; \
 		echo "OIDC Endpoints:"; \
-		echo "  Discovery: http://localhost:8090/realms/master/.well-known/openid-configuration"; \
-		echo "  Token:     http://localhost:8090/realms/master/protocol/openid-connect/token"; \
-		echo "  Authorize: http://localhost:8090/realms/master/protocol/openid-connect/auth"; \
-		echo "  UserInfo:  http://localhost:8090/realms/master/protocol/openid-connect/userinfo"; \
-		echo "  JWKS:      http://localhost:8090/realms/master/protocol/openid-connect/certs"; \
+		echo "  Discovery: http://localhost:8095/realms/master/.well-known/openid-configuration"; \
+		echo "  Token:     http://localhost:8095/realms/master/protocol/openid-connect/token"; \
+		echo "  Authorize: http://localhost:8095/realms/master/protocol/openid-connect/auth"; \
+		echo "  UserInfo:  http://localhost:8095/realms/master/protocol/openid-connect/userinfo"; \
+		echo "  JWKS:      http://localhost:8095/realms/master/protocol/openid-connect/certs"; \
 		echo ""; \
 		echo "Test Client Configuration:"; \
 		echo "  Client ID: mcp-gateway"; \
@@ -72,8 +72,8 @@ keycloak-status-impl:
 .PHONY: keycloak-url
 keycloak-url: # Get Keycloak URLs
 	@echo "=== Keycloak URLs ==="
-	@echo "Admin Console (via port-forward): http://localhost:8090"
-	@echo "OIDC Discovery: http://localhost:8090/realms/master/.well-known/openid-configuration"
+	@echo "Admin Console (via port-forward): http://localhost:8095"
+	@echo "OIDC Discovery: http://localhost:8095/realms/master/.well-known/openid-configuration"
 	@echo ""
 	@echo "To access: make keycloak-forward"
 	@echo "Credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
