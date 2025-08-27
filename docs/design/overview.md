@@ -38,7 +38,7 @@ The MCP router is an envoy focused ext_proc component that is capable of parsing
 
 **Resposibilities:**
 
-- Parsing and validation of the MCP JSONRPC body
+- Parsing and validation of the MCP [JSON-RPC](https://www.jsonrpc.org/) body
 - Setting the key request headers: 
     - x-destination-mcp, x-mcp-tool, mcp-session-id
 - Watching for 404 reponses from MCP servers and invalidating the  session store.
