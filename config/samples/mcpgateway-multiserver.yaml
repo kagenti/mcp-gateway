@@ -1,0 +1,41 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPGateway
+metadata:
+  name: ai-assistant-tools
+  namespace: mcp-system
+spec:
+  # Multiple HTTPRoute references for different MCP servers
+  targetRefs:
+  # Weather service with explicit prefix
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: weather-route
+    namespace: mcp-system
+    toolPrefix: weather_
+  
+  # Calendar service  
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: calendar-route
+    toolPrefix: cal_
+  
+  # Search service - same namespace
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: search-route
+    toolPrefix: search_
+  
+  # Knowledge base service - uses default prefix
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: knowledge-route
+    # No toolPrefix - will use spec-level default
+  
+  # Documentation service - uses default prefix
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: docs-route
+    # No toolPrefix - will use spec-level default
+  
+  # Default prefix for targetRefs without explicit toolPrefix
+  toolPrefix: ai_
