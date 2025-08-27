@@ -10,7 +10,7 @@ MCP Gateway looks to build on top of the routing capabilities of Envoy with capa
 
 ### Vision
 
-Provide an envoy based integration that allows teams and platform engineers to be able to operate and collaborate to expose MCP servers via a gateway as secure and protected services just as they do with existing RESTFul based APIs.
+Provide an Envoy based integration that allows teams and platform engineers to be able to operate and collaborate to expose MCP servers via a gateway as secure and protected services just as they do with existing RESTFul based APIs.
 
 
 **Design Constraints**
