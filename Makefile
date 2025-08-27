@@ -43,9 +43,35 @@ run-controller: mcp-broker-router
 install-crd: ## Install MCPGateway CRD
 	kubectl apply -f config/crd/mcpgateway.yaml
 
+# Deploy mcp-gateway components
+deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
+	kubectl apply -k config/mcp-system/
+
+# Deploy only the broker/router
+deploy-broker: install-crd ## Deploy only the broker/router (without controller)
+	kubectl apply -f config/mcp-system/namespace.yaml
+	kubectl apply -f config/mcp-system/rbac.yaml
+	kubectl apply -f config/mcp-system/service.yaml
+	kubectl apply -f config/mcp-system/deployment-broker.yaml
+	kubectl apply -k config/mcp-system/ --dry-run=client -o yaml | kubectl apply -f - -l app=mcp-gateway
+
+# Deploy only the controller
+deploy-controller: install-crd ## Deploy only the controller
+	kubectl apply -f config/mcp-system/namespace.yaml
+	kubectl apply -f config/mcp-system/rbac.yaml
+	kubectl apply -f config/mcp-system/deployment-controller.yaml
+
 # Deploy example MCPGateway
 deploy-example: install-crd ## Deploy example MCPGateway resource
 	kubectl apply -f config/samples/mcpgateway-calendar.yaml
+
+# Build and push container image
+docker-build: ## Build container image locally
+	docker build -t mcp-gateway:local .
+
+# Build multi-platform image
+docker-buildx: ## Build multi-platform container image
+	docker buildx build --platform linux/amd64,linux/arm64 -t mcp-gateway:local .
 
 # Download dependencies
 deps:
