@@ -1,10 +1,7 @@
 package config
 
 type BrokerConfig struct {
-	Servers  []ServerConfig `json:"servers" yaml:"servers"`
-	Port     int            `json:"port,omitempty" yaml:"port,omitempty"`
-	BindAddr string         `json:"bindAddr,omitempty" yaml:"bindAddr,omitempty"`
-	LogLevel string         `json:"logLevel,omitempty" yaml:"logLevel,omitempty"`
+	Servers []ServerConfig `json:"servers" yaml:"servers"`
 }
 
 type ServerConfig struct {

@@ -93,9 +93,6 @@ servers:
     hostname: calendar.example.com
     enabled: true
     toolPrefix: "cal_"
-port: 8080
-bindAddr: "0.0.0.0"
-logLevel: info
 ```
 
 ### Kubernetes Configuration  

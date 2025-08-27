@@ -9,6 +9,3 @@ servers:
     hostname: server2.example.com
     enabled: true
     toolPrefix: "s2_"
-port: 8080
-bindAddr: "0.0.0.0"  # Address to bind to (0.0.0.0 for all interfaces, localhost for local only)
-logLevel: info

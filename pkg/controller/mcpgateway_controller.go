@@ -104,10 +104,7 @@ func (r *MCPGatewayReconciler) regenerateAggregatedConfig(ctx context.Context) (
 	}
 
 	brokerConfig := &config.BrokerConfig{
-		Port:     8080,
-		BindAddr: "0.0.0.0",
-		LogLevel: "info",
-		Servers:  []config.ServerConfig{},
+		Servers: []config.ServerConfig{},
 	}
 
 	for _, mcpGateway := range mcpGatewayList.Items {
