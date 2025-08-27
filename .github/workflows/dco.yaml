@@ -9,6 +9,8 @@ jobs:
   check:
     name: DCO 
     runs-on: ubuntu-latest
+    # This 'if' condition will only run the job if the actor is not dependabot[bot]
+    if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v5
       - name: Set up Python 3.x
