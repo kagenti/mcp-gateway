@@ -49,14 +49,19 @@ jobs:
    
       - name: Build and Push Image
         id: build-image
-        uses: docker/build-push-action@v5
+        uses: Wandalen/wretry.action@v3.8.0
         with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          action: docker/build-push-action@v5
+          with: |
+            context: .
+            file: ./Dockerfile
+            platforms: linux/amd64,linux/arm64
+            push: true
+            provenance: true
+            tags: ${{ steps.meta.outputs.tags }}
+            labels: ${{ steps.meta.outputs.labels }}
+          attempt_limit: 3          
+          attempt_delay: 15000      
+          time_out: 3600000         
 
      
