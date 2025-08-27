@@ -3,7 +3,9 @@ package broker
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kagenti/mcp-gateway/internal/tests/server2"
@@ -12,8 +14,14 @@ import (
 )
 
 const (
+	// MCPPort is the port the test server should listen on (TODO make dynamic?)
 	MCPPort = "8088"
+
+	// MCPAddr is the URL the client will use to contact the test server
 	MCPAddr = "http://localhost:8088/mcp"
+
+	// MCPAddrForgetAddr is the URL the client will use to force the server to forget a session
+	MCPAddrForgetAddr = "http://localhost:8088/admin/forget"
 )
 
 // TestMain starts an MCP server that we will run actual tests against
@@ -95,6 +103,68 @@ func TestToolCall(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
+			Arguments: map[string]any{
+				"name": "Fred",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Len(t, res.Content, 1)
+	require.IsType(t, mcp.TextContent{}, res.Content[0])
+	require.Equal(t, "Hello, Fred!", res.Content[0].(mcp.TextContent).Text)
+
+	err = broker.Close(context.Background(), "test-session-id")
+	require.NoError(t, err)
+}
+
+func TestToolCall404(t *testing.T) {
+	fmt.Fprintf(os.Stderr, "TestToolCall\n")
+
+	broker := NewBroker()
+	err := broker.RegisterServer(
+		context.Background(),
+		MCPAddr,
+		"testprefix-call",
+		"mcp_add_service_cluster",
+	)
+	require.NoError(t, err)
+
+	res, err := broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
+			Arguments: map[string]any{
+				"name": "Fred",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Len(t, res.Content, 1)
+	require.IsType(t, mcp.TextContent{}, res.Content[0])
+	require.Equal(t, "Hello, Fred!", res.Content[0].(mcp.TextContent).Text)
+
+	// Get the real upstream session ID from the downstream "test-session-id" session ID
+	require.IsType(t, &mcpBrokerImpl{}, broker)
+	brokerImpl := broker.(*mcpBrokerImpl)
+	upstreamSessionMap, ok := brokerImpl.serverSessions[MCPAddr]
+	require.True(t, ok)
+	upstreamSessionState, ok := upstreamSessionMap["test-session-id"]
+	require.True(t, ok)
+
+	// Tell the server to forget our broker's session ID
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", MCPAddrForgetAddr,
+		strings.NewReader(string(upstreamSessionState.sessionID)))
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Make the same call
+	res, err = broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
 			Arguments: map[string]any{

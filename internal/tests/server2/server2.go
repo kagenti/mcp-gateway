@@ -10,6 +10,7 @@ package server2
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -30,7 +31,8 @@ func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 
 	hooks := &server.Hooks{}
 
-	// Add session lifecycle hooks
+	// Note that AddOnRegisterSession is for GET, not POST, for a session.
+	// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		log.Printf("Client %s connected", session.SessionID())
 	})
@@ -111,6 +113,9 @@ func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 			server.WithStreamableHTTPServer(httpServer),
 		)
 		mux.Handle("/mcp", streamableHTTPServer)
+
+		// For testing session ID invalidation
+		mux.HandleFunc("/admin/forget", forgetFuncFactory(s))
 
 		return func() error {
 				fmt.Printf("Serving HTTPStreamable on http://localhost:%s/mcp\n", port)
@@ -222,4 +227,25 @@ func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	return mcp.NewToolResultText("done"), nil
+}
+
+func forgetFuncFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failure: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		sessionID := string(body)
+
+		// We can't check if the client exists
+		log.Printf("Client %s will be forcibly disconnected (if it exists)", sessionID)
+		mcpServer.UnregisterSession(req.Context(), sessionID)
+	}
 }
