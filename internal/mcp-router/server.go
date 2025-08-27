@@ -2,7 +2,7 @@
 package mcprouter
 
 import (
-	"log"
+	"log/slog"
 
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -13,6 +13,7 @@ type ExtProcServer struct {
 	MCPConfig      *config.MCPServersConfig
 	streaming      bool
 	requestHeaders *extProcV3.HttpHeaders
+	Logger         *slog.Logger
 }
 
 // Process function
@@ -20,20 +21,20 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			log.Printf("Error receiving request: %v", err)
+			s.Logger.Error("[ext_proc] Process: Error receiving request", "error", err)
 			return err
 		}
 
 		// Log request details
 		switch r := req.Request.(type) {
 		case *extProcV3.ProcessingRequest_RequestHeaders:
-			log.Printf("Request Headers: %+v", r.RequestHeaders.Headers.Headers)
+			s.Logger.Debug("[ext_proc] Process:", "Request Headers", r.RequestHeaders.Headers.Headers)
 		case *extProcV3.ProcessingRequest_RequestBody:
-			log.Printf("Request Body: %s", string(r.RequestBody.Body))
+			s.Logger.Debug("[ext_proc] Process:", "Request Body", string(r.RequestBody.Body))
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
-			log.Printf("Response Headers: %+v", r.ResponseHeaders.Headers.Headers)
+			s.Logger.Debug("[ext_proc] Process:", "Response Headers", r.ResponseHeaders.Headers.Headers)
 		case *extProcV3.ProcessingRequest_ResponseBody:
-			log.Printf("Response Body: %s", string(r.ResponseBody.Body))
+			s.Logger.Debug("[ext_proc] Process:", "Response Body", string(r.ResponseBody.Body))
 		}
 
 		// Send simple response to continue processing
@@ -48,7 +49,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		}
 
 		if err := stream.Send(resp); err != nil {
-			log.Printf("Error sending response: %v", err)
+			s.Logger.Error("Error sending response", "error", err)
 			return err
 		}
 	}

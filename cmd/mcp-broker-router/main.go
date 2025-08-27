@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ import (
 var (
 	mcpConfig config.MCPServersConfig
 	mutex     sync.RWMutex
+
+	logger *slog.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 )
 
 func main() {
@@ -32,15 +35,26 @@ func main() {
 		mcpRouterAddrFlag string
 		mcpBrokerAddrFlag string
 		mcpConfigFile     string
+		loglevel          int
+		logFormat         string
 	)
 	flag.StringVar(&mcpRouterAddrFlag, "mcp-router-address", "0.0.0.0:50051", "The address for mcp router")
 	flag.StringVar(&mcpBrokerAddrFlag, "mcp-broker-address", "0.0.0.0:8080", "The address for mcp broker")
 	flag.StringVar(&mcpConfigFile, "mcp-gateway-config", "./config/mcp-system/config.yaml", "where to locate the mcp server config")
+	flag.IntVar(&loglevel, "log-level", int(slog.LevelInfo), "set the log level 0=info, 4=warn , 8=error and -4=debug")
+	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
 	flag.Parse()
+
+	slog.SetLogLoggerLevel(slog.Level(loglevel))
+
+	if logFormat == "json" {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	}
+
 	LoadConfig(mcpConfigFile)
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
-		log.Println("mcp servers config changed ", in.Name)
+		logger.Info("mcp servers config changed ", "config file", in.Name)
 		mutex.Lock()
 		defer mutex.Unlock()
 		LoadConfig(mcpConfigFile)
@@ -57,12 +71,12 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[grpc] starting MCP Router listening on %s", grpcAddr)
+		logger.Info("[grpc] starting MCP Router", "listening", grpcAddr)
 		log.Fatal(routerServer.Serve(lis))
 	}()
 
 	go func() {
-		log.Printf("[http] starting MCP Broker listening on %s", brokerServer.Addr)
+		logger.Info("[http] starting MCP Broker", "listening", brokerServer.Addr)
 		if err := brokerServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[http] %v", err)
 		}
@@ -70,7 +84,7 @@ func main() {
 
 	<-stop
 	// handle shutdown
-	log.Printf("shutting down MCP Broker and MCP Router")
+	logger.Info("shutting down MCP Broker and MCP Router")
 	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownRelease()
 	if err := brokerServer.Shutdown(shutdownCtx); err != nil {
@@ -97,6 +111,7 @@ func setUpRouter() *grpc.Server {
 	grpcSrv := grpc.NewServer()
 	extProcV3.RegisterExternalProcessorServer(grpcSrv, &mcpRouter.ExtProcServer{
 		MCPConfig: &mcpConfig,
+		Logger:    logger,
 	})
 	return grpcSrv
 }
@@ -105,7 +120,7 @@ func setUpRouter() *grpc.Server {
 
 func LoadConfig(path string) {
 	viper.SetConfigFile(path)
-	log.Println("loading congfig from path", viper.ConfigFileUsed())
+	logger.Debug("loading congfig", "path", viper.ConfigFileUsed())
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatalf("Error reading config file: %s", err)
@@ -115,12 +130,9 @@ func LoadConfig(path string) {
 		log.Fatalf("Unable to decode server config into struct: %s", err)
 	}
 
-	log.Println("config loaded ")
+	logger.Debug("config successfully loaded ")
 
 	for _, s := range mcpConfig.Servers {
-		fmt.Println("server name", s.Name)
-		fmt.Println("server host", s.Hostname)
-		fmt.Println("server prefix", s.ToolPrefix)
-		fmt.Println("server backend", s.URL)
+		logger.Debug("server config", "server name", s.Name, "server prefix", s.ToolPrefix, "enabled", s.Enabled, "backend url", s.URL, "routable host", s.Hostname)
 	}
 }

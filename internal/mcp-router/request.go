@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"strings"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -49,26 +50,26 @@ func extractMCPToolName(data map[string]any) string {
 	// Extract params
 	paramsVal, ok := data["params"]
 	if !ok {
-		log.Println("[EXT-PROC] MCP tool call missing params field")
+		slog.Error("[EXT-PROC] MCP tool call missing params field")
 		return ""
 	}
 
 	paramsMap, ok := paramsVal.(map[string]interface{})
 	if !ok {
-		log.Println("[EXT-PROC] MCP tool call params is not an object")
+		slog.Error("[EXT-PROC] MCP tool call params is not an object")
 		return ""
 	}
 
 	// Extract tool name
 	nameVal, ok := paramsMap["name"]
 	if !ok {
-		log.Println("[EXT-PROC] MCP tool call missing name field in params")
+		slog.Error("[EXT-PROC] MCP tool call missing name field in params")
 		return ""
 	}
 
 	nameStr, ok := nameVal.(string)
 	if !ok {
-		log.Println("[EXT-PROC] MCP tool call name is not a string")
+		slog.Error("[EXT-PROC] MCP tool call name is not a string")
 		return ""
 	}
 
@@ -111,32 +112,30 @@ func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 // HandleRequestBody handles request bodies for MCP tool calls.
 func (s *ExtProcServer) HandleRequestBody(
 	ctx context.Context, data map[string]any) ([]*eppb.ProcessingResponse, error) {
-	log.Println("[EXT-PROC] Processing request body for MCP tool calls...")
+	slog.Debug("[EXT-PROC] HandleRequestBody Processing request body for MCP tool calls...")
 
 	// Extract tool name - only process tools/call
 	toolName := extractMCPToolName(data)
 	if toolName == "" {
-		log.Println("[EXT-PROC] No MCP tool name found or not tools/call, continuing to helper")
+		slog.Debug("[EXT-PROC] HandleRequestBody No MCP tool name found or not tools/call, continuing to helper")
 		return s.createEmptyBodyResponse(), nil
 	}
 
-	log.Printf("[EXT-PROC] Tool name: %s", toolName)
+	slog.Debug("[EXT-PROC] HandleRequestBody", "Tool name:", toolName)
 
 	// Determine routing based on tool prefix
 	routeTarget := getRouteTargetFromTool(toolName)
 	if routeTarget == "" {
-		log.Printf(
-			"[EXT-PROC] Tool name '%s' doesn't match any server prefix, continuing to helper",
-			toolName,
-		)
+		slog.Info(
+			"[EXT-PROC] HandleRequestBody Tool name  doesn't match any server prefix, continuing to helper", "tool", toolName)
 		return s.createEmptyBodyResponse(), nil
 	}
 
-	log.Printf("[EXT-PROC] Routing to: %s", routeTarget)
+	slog.Info("[EXT-PROC] HandleRequestBody Routing to", "target", routeTarget)
 
 	// Strip server prefix from tool name and modify request body
 	strippedToolName, _ := stripServerPrefix(toolName)
-	log.Printf("[EXT-PROC] Stripped tool name: %s", strippedToolName)
+	slog.Debug("[EXT-PROC]  HandleRequestBody", "Stripped tool name", strippedToolName)
 
 	// Create modified request body with stripped tool name
 	modifiedData := make(map[string]any)
@@ -146,12 +145,12 @@ func (s *ExtProcServer) HandleRequestBody(
 
 	if params, ok := modifiedData["params"].(map[string]interface{}); ok {
 		params["name"] = strippedToolName
-		log.Printf("[EXT-PROC] ✅ Updated tool name in request body: %s", strippedToolName)
+		slog.Debug("[EXT-PROC] HandleRequestBody Updated tool in request body", "toolname", strippedToolName)
 	}
 
 	requestBodyBytes, err := json.Marshal(modifiedData)
 	if err != nil {
-		log.Printf("[EXT-PROC] Failed to marshal modified request body: %v", err)
+		slog.Error("[EXT-PROC] HandleRequestBody Failed to marshal modified request body:", "error", err)
 		return s.createEmptyBodyResponse(), nil
 	}
 

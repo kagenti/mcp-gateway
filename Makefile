@@ -8,6 +8,9 @@ ifeq ($(ARCH),aarch64)
     ARCH = arm64
 endif
 
+
+LOG_LEVEL ?= -4
+
 .PHONY: help
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -24,9 +27,9 @@ mcp-broker-router:
 clean:
 	rm -rf bin/
 
-# Run the broker and router
+# Run the broker and router with debug loging
 run-mcp-broker-router: mcp-broker-router
-	./bin/mcp-broker-router
+	./bin/mcp-broker-router --log-level=${LOG_LEVEL}  
 
 # Download dependencies
 deps:
