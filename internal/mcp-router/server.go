@@ -5,10 +5,12 @@ import (
 	"log"
 
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/kagenti/mcp-gateway/internal/config"
 )
 
 // ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
+	MCPConfig      *config.MCPServersConfig
 	streaming      bool
 	requestHeaders *extProcV3.HttpHeaders
 }
