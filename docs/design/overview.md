@@ -68,7 +68,7 @@ The MCP Broker is a backend service configured with other MCP servers that acts 
 
 **Overview**
 
-The MCP Discovery Controller is a kubernetes based controller that will watch for resources and discover new MCP servers to form configuration for the other components.
+The MCP Discovery Controller is a Kubernetes-based controller that will watch for resources and discover new MCP servers to form configuration for the other components.
 
 **Responsibilities:**
 
