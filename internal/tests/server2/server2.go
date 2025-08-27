@@ -241,6 +241,10 @@ func forgetFuncFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *h
 			http.Error(w, fmt.Sprintf("Failure: %v", err), http.StatusInternalServerError)
 			return
 		}
+		err = req.Body.Close()
+		if err != nil {
+			log.Printf("/admin/forget failed to close: %v\n", err)
+		}
 
 		sessionID := string(body)
 

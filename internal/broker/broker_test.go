@@ -120,7 +120,10 @@ func TestToolCall(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestToolCall404(t *testing.T) {
+// TestToolCallAfterMCPDisconnect tests the case where the server disconnects the session.
+// **Currently this test does not test broker function, as the broker doesn't do long-running connections.*
+// This does test the ability of the test server to handle the /admin/forget API.
+func TestToolCallAfterMCPDisconnect(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestToolCall\n")
 
 	broker := NewBroker()

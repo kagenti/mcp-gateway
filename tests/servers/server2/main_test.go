@@ -60,6 +60,9 @@ func TestSlow(t *testing.T) {
 	res, err = slowHandler(context.Background(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
+				// Note that although seconds is an int, it is passed
+				// as 0 by the MCP inspector.  This test follows the same
+				// convention.  TODO: Verify the libraries are following the spec.
 				"seconds": "0",
 			},
 		},
