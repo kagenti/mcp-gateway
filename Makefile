@@ -37,7 +37,7 @@ run-mcp-broker-router: run
 
 # Run in controller mode (discovers MCP servers from Kubernetes)
 run-controller: mcp-broker-router
-	./bin/mcp-broker-router --controller
+	./bin/mcp-broker-router --controller --log-level=${LOG_LEVEL}
 
 # Install CRD
 install-crd: ## Install MCPGateway CRD
