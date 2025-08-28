@@ -2,8 +2,10 @@
 namespace: mcp-system
 resources:
   - namespace.yaml
+  - rbac.yaml
   - service.yaml
-  - deployment.yaml
+  - deployment-broker.yaml
+  - deployment-controller.yaml
 
 configMapGenerator:
   - name: mcp-gateway-config

@@ -1,3 +1,4 @@
+// Package controller provides Kubernetes controllers
 package controller
 
 import (
@@ -16,12 +17,18 @@ import (
 	"github.com/kagenti/mcp-gateway/pkg/config"
 )
 
+// ConfigMapWriter writes ConfigMaps
 type ConfigMapWriter struct {
 	Client client.Client
 	Scheme *runtime.Scheme
 }
 
-func (w *ConfigMapWriter) WriteAggregatedConfig(ctx context.Context, namespace, name string, brokerConfig *config.BrokerConfig) error {
+// WriteAggregatedConfig writes aggregated config
+func (w *ConfigMapWriter) WriteAggregatedConfig(
+	ctx context.Context,
+	namespace, name string,
+	brokerConfig *config.BrokerConfig,
+) error {
 	yamlData, err := yaml.Marshal(brokerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config to YAML: %w", err)
@@ -51,16 +58,17 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(ctx context.Context, namespace, 
 	}
 
 	// Only update if data or labels have changed
-	if !equality.Semantic.DeepEqual(existing.Data, configMap.Data) || 
+	if !equality.Semantic.DeepEqual(existing.Data, configMap.Data) ||
 		!equality.Semantic.DeepEqual(existing.Labels, configMap.Labels) {
 		existing.Data = configMap.Data
 		existing.Labels = configMap.Labels
 		return w.Client.Update(ctx, existing)
 	}
-	
+
 	return nil
 }
 
+// NewConfigMapWriter creates a ConfigMapWriter
 func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMapWriter {
 	return &ConfigMapWriter{
 		Client: client,

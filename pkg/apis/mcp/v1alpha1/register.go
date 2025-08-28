@@ -1,3 +1,4 @@
+// Package v1alpha1 contains API types
 package v1alpha1
 
 import (
@@ -7,16 +8,22 @@ import (
 )
 
 const (
+	// GroupName is the API group
 	GroupName = "mcp.kagenti.com"
-	Version   = "v1alpha1"
+	// Version is the API version
+	Version = "v1alpha1"
 )
 
 var (
+	// SchemeGroupVersion is the group version
 	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: Version}
-	SchemeBuilder      = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme        = SchemeBuilder.AddToScheme
+	// SchemeBuilder adds types to the scheme
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	// AddToScheme adds types to the scheme
+	AddToScheme = SchemeBuilder.AddToScheme
 )
 
+// Resource returns the group resource
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
 }

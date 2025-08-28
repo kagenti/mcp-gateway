@@ -117,7 +117,9 @@ func (s *ExtProcServer) HandleRequestBody(
 	// Extract tool name - only process tools/call
 	toolName := extractMCPToolName(data)
 	if toolName == "" {
-		slog.Debug("[EXT-PROC] HandleRequestBody No MCP tool name found or not tools/call, continuing to helper")
+		slog.Debug(
+			"[EXT-PROC] HandleRequestBody No MCP tool name found or not tools/call, continuing to helper",
+		)
 		return s.createEmptyBodyResponse(), nil
 	}
 
@@ -127,7 +129,10 @@ func (s *ExtProcServer) HandleRequestBody(
 	routeTarget := getRouteTargetFromTool(toolName)
 	if routeTarget == "" {
 		slog.Info(
-			"[EXT-PROC] HandleRequestBody Tool name  doesn't match any server prefix, continuing to helper", "tool", toolName)
+			"[EXT-PROC] HandleRequestBody Tool name  doesn't match any server prefix, continuing to helper",
+			"tool",
+			toolName,
+		)
 		return s.createEmptyBodyResponse(), nil
 	}
 
@@ -145,12 +150,20 @@ func (s *ExtProcServer) HandleRequestBody(
 
 	if params, ok := modifiedData["params"].(map[string]interface{}); ok {
 		params["name"] = strippedToolName
-		slog.Debug("[EXT-PROC] HandleRequestBody Updated tool in request body", "toolname", strippedToolName)
+		slog.Debug(
+			"[EXT-PROC] HandleRequestBody Updated tool in request body",
+			"toolname",
+			strippedToolName,
+		)
 	}
 
 	requestBodyBytes, err := json.Marshal(modifiedData)
 	if err != nil {
-		slog.Error("[EXT-PROC] HandleRequestBody Failed to marshal modified request body:", "error", err)
+		slog.Error(
+			"[EXT-PROC] HandleRequestBody Failed to marshal modified request body:",
+			"error",
+			err,
+		)
 		return s.createEmptyBodyResponse(), nil
 	}
 
