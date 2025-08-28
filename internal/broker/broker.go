@@ -180,10 +180,31 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpHost string) erro
 
 	delete(m.mcpServers, upstreamMCPHost(mcpHost))
 
-	// TODO: Clean up any connections to these upstream servers.
+	// Find tools registered to this server
+	toolsToDelete := make([]string, 0)
+	for toolName, upstreamToolInfo := range m.toolMapping {
+		if upstreamToolInfo.host == upstreamMCPHost(mcpHost) {
+			toolsToDelete = append(toolsToDelete, string(toolName))
+		}
+	}
+	m.listeningMCPServer.DeleteTools(toolsToDelete...)
 
-	// TODO: Remove tools from federated list using
-	// m.listeningMCPServer.DeleteTools(...)
+	// Close any connections to the upstream server
+	mapping, ok := m.serverSessions[upstreamMCPHost(mcpHost)]
+	if ok {
+		for downstreamSessionID, upstreamSessionState := range mapping {
+			err := upstreamSessionState.client.Close()
+			if err != nil {
+				slog.Warn(
+					"Could not close upstream session",
+					"mcpHost",
+					mcpHost,
+					"sessionID",
+					downstreamSessionID,
+				)
+			}
+		}
+	}
 
 	return nil
 }
@@ -196,12 +217,6 @@ func (m *mcpBrokerImpl) CallTool(
 	// First, identify the upstream MCP server
 	upstreamToolInfo, ok := m.toolMapping[toolName(request.Params.Name)]
 	if !ok {
-		// TODO Restore this as debug logging
-		// fmt.Printf("tool names (%d) are:\n", len(m.toolMapping))
-		// for name := range m.toolMapping {
-		// 	fmt.Printf("  %q\n", name)
-		// }
-
 		return nil, fmt.Errorf("unknown tool %q", request.Params.Name)
 	}
 
