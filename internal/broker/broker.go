@@ -159,13 +159,19 @@ func (m *mcpBrokerImpl) RegisterServer(
 		slog.Info("Federating tool", "mcpHost", mcpHost, "federated name", newTool.Name)
 		tools = append(tools, server.ServerTool{
 			Tool: newTool,
+			Handler: func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return mcp.NewToolResultError("Kagenti MCP Broker doesn't forward tool calls"), nil
+			},
+			/* UNCOMMENT THIS TO TURN THE BROKER INTO A STAND-ALONE GATEWAY
 			Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				result, err := m.CallTool(ctx,
 					downstreamSessionID(request.GetString("Mcp-Session-Id", "")),
 					request,
 				)
 				return result, err
-			}})
+			}
+			*/
+		})
 	}
 	m.listeningMCPServer.AddTools(tools...)
 
