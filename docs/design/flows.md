@@ -20,6 +20,80 @@ sequenceDiagram
         
 ```
 
+## Tools/Call (no auth)
+
+```mermaid
+sequenceDiagram
+        title MCP Tool Call (auth)
+        actor MCP Client
+        MCP Client->>Gateway: POST /mcp 
+        note right of MCP Client: method: tools/call
+        Gateway->>MCP Router: POST /mcp
+        note left of MCP Router: method: tools/call <br/> gateway-session-id present <br/> payload validated
+        MCP Router->>Session Cache: get mcp-session-id from  gateway-session-id/server-name
+        Session Cache->>MCP Router: no session found
+        MCP Router->>MCP Server: initialize with client headers
+        MCP Server->>MCP Router: initialize response OK
+        MCP Router->>Session Cache: store mcp-session-id under gateway-session-id/server-name
+        MCP Router->>Gateway: set header mcp-session-id
+        MCP Router->>Gateway: set header authority: <configured host>
+        MCP Router->>Gateway: update body to remove prefix 
+        MCP Router->>Gateway: set header x-mcp-tool header 
+        Gateway->>MCP Server: Route <configured host> Post /mcp tools/call
+        MCP Server->>MCP Client: tools/call response
+
+```
+
+## Discovery
+
+```mermaid
+sequenceDiagram
+  participant MCP Controller as MCP Controller
+  participant Gateway as Gateway
+  participant MCP Broker as MCP Broker
+  participant MCP Server as MCP Server
+  actor MCP Client(s)
+
+  MCP Controller ->> Gateway: watch for new MCPServer resoruces
+  note right of MCP Controller:  MCPServer resources <br/> target HTTPRoutes
+  MCP Controller ->> MCP Broker: update MCP Router config 
+  MCP Controller ->> MCP Router: update MCP Broker config 
+  note right of MCP Controller:  This is a configmap mounted as volume MVP
+  MCP Broker ->> MCP Server: initialize call
+  MCP Server ->> MCP Broker: initialized response
+  note right of MCP Broker: Broker validates MCP version <br/> and capabilities meet min requirements
+  MCP Broker ->> MCP Server: initialized
+  MCP Broker ->> MCP Server: tools/list
+  MCP Server ->> MCP Broker: tools/list response
+  Note left of MCP Server: tools/list response is cached by <br/> broker under id (name, namespace, prefix)? from configmap <br/> ready for aggregated tools/list
+  MCP Broker ->> MCP Server: register for tools/list changed notifications
+
+```
+
+## Aggregated Tools/List (no auth)
+
+```mermaid
+sequenceDiagram
+  actor MCP Client
+  participant Gateway as Gateway
+  participant MCP Router as MCP Router
+  participant MCP Broker as MCP Broker
+  
+  MCP Client->>Gateway: tools/list (with auth bearer token)
+  Gateway->>MCP Router: tools/list
+  MCP Router->>Gateway: nothing to do
+  Gateway->>MCP Broker: tools/list
+  MCP Broker->>MCP Client: aggregated tools/list response
+  note left of MCP Broker: list is built via discovery phase
+
+
+```
+
+
+## Auth
+
+Below are some attempts with Auth in the mix. Still need some refinement of these flows
+
 ## MCP Gateway request Auth required (initialize for example)
 
 ```mermaid
@@ -49,58 +123,6 @@ sequenceDiagram
         MCP Broker->>MCP Client: init response 200
 ```        
 
-## Discovery
-```mermaid
-sequenceDiagram
-  participant MCP Controller as MCP Controller
-  participant Gateway as Gateway
-  participant MCP Broker as MCP Broker
-  participant MCP Server as MCP Server
-  actor MCP Client(s)
-
-  MCP Controller ->> Gateway: watch for new HTTPRoutes (labelled as MCP Server)
-  MCP Controller ->> MCP Broker: update MCP Broker config 
-  note right of MCP Controller:  configmap mounted into MCP Broker for MVP
-  MCP Broker ->> MCP Server: (ServiceAcc auth) initialize call
-  MCP Server ->> MCP Broker: initialized response
-  note right of MCP Broker: Broker validates MCP version <br/> and capabilities meet minimum
-  MCP Broker ->> MCP Server: initialized
-  MCP Broker ->> MCP Server: tools/list
-  MCP Server ->> MCP Broker: tools/list response
-  Note left of MCP Server: tools/list response is cached by <br/> broker under id (name, namespace, prefix)? from configmap <br/> ready for aggregated tools/list
-  MCP Broker ->> MCP Server: register for notifications
-  Note left of MCP Server: below represents a tools/list cache reset
-  MCP Server ->> MCP Broker: notification /tools/list_changed
-  MCP Broker ->> MCP Server: tools/list
-  MCP Server ->> MCP Broker: tools/list response
-  note right of MCP Broker: cache updated
-  MCP Broker ->> MCP Client(s): registered clients: notification tools/list_changed
-
-
-```
-
-Open Questions
-
-- In order to do an initialize and tools/list with an external server we will need some form of Auth (service account?).
-- If the MCP server is internal and exposed via the Gateway then we may be able to talk directly to it
-
-## Aggregated Tools/List (no auth)
-
-```mermaid
-sequenceDiagram
-  actor MCP Client
-  participant Gateway as Gateway
-  participant MCP Router as MCP Router
-  participant MCP Broker as MCP Broker
-  
-  MCP Client->>Gateway: tools/list (with auth bearer token)
-  Gateway->>MCP Router: tools/list
-  MCP Router->>Gateway: nothing to do
-  Gateway->>MCP Broker: tools/list
-  MCP Broker->>MCP Client: aggregated tools/list response
-  note left of MCP Broker: list is built via discovery phase
-
-```
 
 ## MCP Server Tool Call with Auth
 
