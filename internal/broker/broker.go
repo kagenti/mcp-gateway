@@ -4,11 +4,13 @@ package broker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // downstreamSessionID is for session IDs the gateway uses with its own clients
@@ -64,6 +66,9 @@ type MCPBroker interface {
 
 	// Cleanup any upstream connections being held open on behalf of downstreamSessionID
 	Close(ctx context.Context, downstreamSession downstreamSessionID) error
+
+	// MCPServer gets an MCP server that federates the upstreams known to this MCPBroker
+	MCPServer() *server.MCPServer
 }
 
 // mcpBrokerImpl implements MCPBroker
@@ -81,6 +86,9 @@ type mcpBrokerImpl struct {
 
 	// toolMapping tracks the unique gateway'ed tool name to its upstream MCP server implementation
 	toolMapping map[toolName]*upstreamToolInfo
+
+	// listeningMCPServer returns an actual listening MCP server that federates registered MCP servers
+	listeningMCPServer *server.MCPServer
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
@@ -88,11 +96,37 @@ var _ MCPBroker = &mcpBrokerImpl{}
 
 // NewBroker creates a new MCPBroker
 func NewBroker() MCPBroker {
+	hooks := &server.Hooks{}
+
+	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
+		// Note that AddOnRegisterSession is for GET, not POST, for a session.
+		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
+		slog.Info("Client connected", "sessionID", session.SessionID())
+	})
+
+	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
+		slog.Info("Client disconnected", "sessionID", session.SessionID())
+	})
+
+	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
+		slog.Info("Processing %s request", "method", method)
+	})
+
+	hooks.AddOnError(func(_ context.Context, _ any, method mcp.MCPMethod, _ any, err error) {
+		slog.Info("Error in %s: %v", "method", method, "error", err)
+	})
+
 	return &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
 		serverSessions: map[upstreamMCPHost]map[downstreamSessionID]*upstreamSessionState{},
 		mcpServers:     map[upstreamMCPHost]*upstreamMCP{},
 		toolMapping:    map[toolName]*upstreamToolInfo{},
+		listeningMCPServer: server.NewMCPServer(
+			"Kagenti MCP Broker",
+			"0.0.1",
+			server.WithHooks(hooks),
+			server.WithToolCapabilities(true),
+		),
 	}
 }
 
@@ -103,18 +137,38 @@ func (m *mcpBrokerImpl) RegisterServer(
 	prefix string,
 	envoyClusterName string,
 ) error {
+	slog.Info("Registering server", "mcpHost", mcpHost, "prefix", prefix)
+
 	upstream := &upstreamMCP{
 		upstreamMCP:  upstreamMCPHost(mcpHost),
 		prefix:       prefix,
 		envoyCluster: envoyClusterName,
 	}
 
-	err := m.discoverTools(ctx, upstream)
+	newTools, err := m.discoverTools(ctx, upstream)
 	if err != nil {
+		slog.Info("Failed to discover tools", "mcpHost", mcpHost, "error", err)
 		return err
 	}
+	slog.Info("Discovered tools", "mcpHost", mcpHost, "num tools", len(newTools))
 
 	m.mcpServers[upstreamMCPHost(mcpHost)] = upstream
+
+	tools := make([]server.ServerTool, 0)
+	for _, newTool := range newTools {
+		slog.Info("Federating tool", "mcpHost", mcpHost, "federated name", newTool.Name)
+		tools = append(tools, server.ServerTool{
+			Tool: newTool,
+			Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, err := m.CallTool(ctx,
+					downstreamSessionID(request.GetString("Mcp-Session-Id", "")),
+					request,
+				)
+				return result, err
+			}})
+	}
+	m.listeningMCPServer.AddTools(tools...)
+
 	return nil
 }
 
@@ -127,6 +181,9 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpHost string) erro
 	delete(m.mcpServers, upstreamMCPHost(mcpHost))
 
 	// TODO: Clean up any connections to these upstream servers.
+
+	// TODO: Remove tools from federated list using
+	// m.listeningMCPServer.DeleteTools(...)
 
 	return nil
 }
@@ -177,12 +234,12 @@ func (m *mcpBrokerImpl) discoverTools(
 	ctx context.Context,
 	upstream *upstreamMCP,
 	options ...transport.StreamableHTTPCOption,
-) error {
+) ([]mcp.Tool, error) {
 	httpTransportClient, err := client.NewStreamableHttpClient(
 		string(upstream.upstreamMCP),
 		options...)
 	if err != nil {
-		return fmt.Errorf("failed to create streamable client: %w", err)
+		return nil, fmt.Errorf("failed to create streamable client: %w", err)
 	}
 
 	resInit, err := httpTransportClient.Initialize(ctx, mcp.InitializeRequest{
@@ -196,37 +253,46 @@ func (m *mcpBrokerImpl) discoverTools(
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize MCP client: %w", err)
+		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
 	upstream.initializeResult = resInit
 
 	resTools, err := httpTransportClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		return fmt.Errorf("failed to list tools: %w", err)
+		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
 	upstream.toolsResult = resTools
 
 	upstream.lastContact = time.Now()
+	err = httpTransportClient.Close()
 
-	m.populateToolMapping(upstream)
+	newTools := m.populateToolMapping(upstream)
 
 	// TODO probe resources other than tools
 
 	// Don't keep open the probe
 	// TODO: Keep it open and monitor for tool changes?
-	return httpTransportClient.Close()
+	return newTools, err
 }
 
 // populateToolMapping creates maps tools to names that this gateway recognizes
-func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) {
+// and returns a list of the new uniquely prefixed tools
+func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
+	retval := make([]mcp.Tool, 0)
 	for _, tool := range upstream.toolsResult.Tools {
 		gatewayToolName := toolName(fmt.Sprintf("%s-%s", upstream.prefix, tool.Name))
+
+		gatewayTool := tool // Note: shallow
+		gatewayTool.Name = string(gatewayToolName)
+		retval = append(retval, gatewayTool)
+
 		m.toolMapping[gatewayToolName] = &upstreamToolInfo{
 			host:     upstream.upstreamMCP,
 			toolName: tool.Name,
 		}
 	}
+	return retval
 }
 
 func (m *mcpBrokerImpl) createUpstreamSession(
@@ -279,4 +345,9 @@ func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSes
 	}
 
 	return lastErr
+}
+
+// MCPServer is a listening MCP server that federates the endpoints
+func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
+	return m.listeningMCPServer
 }
