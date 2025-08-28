@@ -1,3 +1,4 @@
+// Package cache provides session caching functionality for gateway session IDs and MCP session IDs.
 package cache
 
 import (
@@ -6,61 +7,53 @@ import (
 	"sync"
 )
 
+// sessionInitialiser is a function that initializes a new MCP session for a given server and gateway session.
 type sessionInitialiser func(ctx context.Context, serverName string, gwSessionID string) (mvpSessionID string, err error)
 
-type Cache struct{
-	sessions map[key]string
+// Cache manages MCP session ID mappings between gateway sessions ID and MCP server sessions IDs.
+type Cache struct {
+	sessions    sync.Map
 	initSession sessionInitialiser
-	mu sync.RWMutex
 }
 
-type key struct{
+type key struct {
 	serverName string
-	gw string
+	gw         string
 }
 
+// New creates a new Cache instance with the provided session initializer function.
 func New(initSession sessionInitialiser) *Cache {
 	return &Cache{
-		sessions: make(map[key]string),
 		initSession: initSession,
 	}
 }
 
-
-func(c *Cache) GetOrInit(ctx context.Context, serverName string, gwSessionID string)(mvpSessionID string, err error){
+// GetOrInit retrieves an existing session or initializes a new one for the given server and gateway session.
+func (c *Cache) GetOrInit(ctx context.Context, serverName string, gwSessionID string) (
+	mvpSessionID string, err error) {
 	k := key{serverName: serverName, gw: gwSessionID}
-	
-	// Check if session already exists
-	c.mu.RLock()
-	if sessionID, exists := c.sessions[k]; exists {
-		c.mu.RUnlock()
-		return sessionID, nil
-	}
-	c.mu.RUnlock()
 
-	// Need to create new session - acquire write lock
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Double-check if it was created while waiting
-	if sessionID, exists := c.sessions[k]; exists {
-		return sessionID, nil
+	// Check if session ID already exists
+	if sessionID, exists := c.sessions.Load(k); exists {
+		return sessionID.(string), nil
 	}
 
-	// Create new session
+	// Create new session if no session ID exists
 	sessionID, err := c.initSession(ctx, serverName, gwSessionID)
 	if err != nil {
 		return "", fmt.Errorf("failed to initialize MCP session: %w", err)
 	}
 
-	// Store session id 
-	c.sessions[k] = sessionID
+	// Store session ID, or get existing if another goroutine made the initialisation in the meantime
+	if actual, loaded := c.sessions.LoadOrStore(k, sessionID); loaded {
+		return actual.(string), nil
+	}
+
 	return sessionID, nil
 }
 
-	func (c *Cache) Invalidate(serverName string, gwSessionID string) {
-		k := key{serverName: serverName, gw: gwSessionID}
-		c.mu.Lock()
-		delete(c.sessions, k)
-		c.mu.Unlock()
-	}
+// Invalidate removes the session from the cache for the given server and gateway session.
+func (c *Cache) Invalidate(serverName string, gwSessionID string) {
+	k := key{serverName: serverName, gw: gwSessionID}
+	c.sessions.Delete(k)
+}
