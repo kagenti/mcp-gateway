@@ -58,6 +58,7 @@ jobs:
             echo "No .go files found; nothing to do."
             exit 0
           fi
+          
           if ! xargs -0 -a "$TMP_LIST" -- ${TOOL} ${OPTIONS} -w; then
             echo "${TOOL} failed on the following files:"
             tr '\0' '\n' < "$TMP_LIST"
