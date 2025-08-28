@@ -22,7 +22,6 @@ type ExtProcServer struct {
 	SessionCache   *cache.Cache
 	streaming      bool
 	requestHeaders *extProcV3.HttpHeaders
-	Logger         *slog.Logger
 }
 
 // SetupSessionCache initializes the session cache with broker's real MCP initialization logic
@@ -33,29 +32,19 @@ func (s *ExtProcServer) SetupSessionCache() {
 		authority string,
 		gwSessionID string,
 	) (string, error) {
-		s.Logger.Info(
-			"Creating real MCP session via broker createUpstreamSession",
-			"server", serverName,
-			"authority", authority,
-			"gwSession", gwSessionID,
-		)
 
-		// Use the provided authority directly (no config lookup needed)
+		// Checks if the authority is provided
 		if authority == "" {
+			slog.Error("no authority provided for server", "server", serverName)
 			return "", fmt.Errorf("no authority provided for server: %s", serverName)
 		}
 
-		// Use broker's CreateSession method
+		// Creates a MCP session
 		sessionID, err := s.Broker.CreateSession(ctx, authority)
 		if err != nil {
-			return "", fmt.Errorf("failed to create session via broker: %w", err)
+			return "", fmt.Errorf("failed to create session: %w", err)
 		}
-		s.Logger.Info(
-			"Created real MCP session via broker",
-			"sessionID", sessionID,
-			"server", serverName,
-			"authority", authority,
-		)
+		slog.Info("Created MCP session ", "sessionID", sessionID, "server", serverName, "host", authority)
 		return sessionID, nil
 	})
 }
@@ -65,7 +54,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			s.Logger.Error("[ext_proc] Process: Error receiving request", "error", err)
+			slog.Error("[ext_proc] Process: Error receiving request", "error", err)
 			return err
 		}
 
@@ -76,13 +65,13 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			s.requestHeaders = r.RequestHeaders
 			responses, _ := s.HandleRequestHeaders(s.requestHeaders)
 			for _, response := range responses {
-				slog.Info(fmt.Sprintf("Outgoing processing response: %+v", response))
+				slog.Info(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					slog.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
 				}
 			}
-			// slog.Info("Request Headers: %+v", r.RequestHeaders)
+			continue
 
 		case *extProcV3.ProcessingRequest_RequestBody:
 			var data map[string]any
@@ -93,7 +82,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			}
 			if data == nil {
 				for _, response := range s.createEmptyBodyResponse() {
-					slog.Info(fmt.Sprintf("Outgoing processing response: %+v", response))
+					slog.Info(fmt.Sprintf("No MCP data found, sending pass-through instructions to Envoy: %+v", response))
 					if err := stream.Send(response); err != nil {
 						slog.Error(fmt.Sprintf("Error sending response: %v", err))
 						return err
@@ -103,30 +92,35 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			}
 			responses, _ := s.HandleRequestBody(stream.Context(), data, s.MCPConfig)
 			for _, response := range responses {
-				slog.Info(fmt.Sprintf("Outgoing processing response: %+v", response))
+				slog.Info(fmt.Sprintf("Sending MCP routing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					slog.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
 				}
 			}
+			continue
+
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
 			responses, _ := s.HandleResponseHeaders(r.ResponseHeaders)
 			for _, response := range responses {
-				slog.Info(fmt.Sprintf("Outgoing processing response: %+v", response))
+				slog.Info(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					slog.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
 				}
 			}
+			continue
 		case *extProcV3.ProcessingRequest_ResponseBody:
 			responses, _ := s.HandleResponseBody(r.ResponseBody)
 			for _, response := range responses {
-				slog.Info(fmt.Sprintf("Outgoing processing response: %+v", response))
+				slog.Info(fmt.Sprintf("Sending response body processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					slog.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
 				}
 			}
+			continue
 		}
 	}
+
 }

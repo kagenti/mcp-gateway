@@ -198,7 +198,6 @@ func setUpRouter() *grpc.Server {
 	// Create the ExtProcServer instance
 	server := &mcpRouter.ExtProcServer{
 		MCPConfig: &mcpConfig,
-		Logger:    logger,
 		Broker:    broker.NewBroker(),
 	}
 
