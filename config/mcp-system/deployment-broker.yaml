@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-broker-router
+  namespace: mcp-system
+  labels:
+    app: mcp-broker-router
+    component: broker-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-broker-router
+      component: broker-router
+  template:
+    metadata:
+      labels:
+        app: mcp-broker-router
+        component: broker-router
+    spec:
+      serviceAccountName: mcp-broker-router
+      volumes:
+        - name: config-volume
+          configMap:
+            name: mcp-gateway-config
+      containers:
+        - name: mcp-broker-router
+          image: ghcr.io/kagenti/mcp-gateway:latest
+          imagePullPolicy: Always
+          command:
+            - ./mcp_gateway
+            - --mcp-gateway-config=/config/config.yaml
+            - --mcp-broker-address=0.0.0.0:8080
+            - --mcp-router-address=0.0.0.0:50051
+            - --log-level=0  # info level
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

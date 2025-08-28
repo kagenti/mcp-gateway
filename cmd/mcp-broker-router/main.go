@@ -35,7 +35,7 @@ import (
 var (
 	mcpConfig config.MCPServersConfig
 	mutex     sync.RWMutex
-	logger    *slog.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger    = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	scheme    = runtime.NewScheme()
 )
 
@@ -55,10 +55,30 @@ func main() {
 		logFormat         string
 		controllerMode    bool
 	)
-	flag.StringVar(&mcpRouterAddrFlag, "mcp-router-address", "0.0.0.0:50051", "The address for mcp router")
-	flag.StringVar(&mcpBrokerAddrFlag, "mcp-broker-address", "0.0.0.0:8080", "The address for mcp broker")
-	flag.StringVar(&mcpConfigFile, "mcp-gateway-config", "./config/mcp-system/config.yaml", "where to locate the mcp server config")
-	flag.IntVar(&loglevel, "log-level", int(slog.LevelInfo), "set the log level 0=info, 4=warn , 8=error and -4=debug")
+	flag.StringVar(
+		&mcpRouterAddrFlag,
+		"mcp-router-address",
+		"0.0.0.0:50051",
+		"The address for mcp router",
+	)
+	flag.StringVar(
+		&mcpBrokerAddrFlag,
+		"mcp-broker-address",
+		"0.0.0.0:8080",
+		"The address for mcp broker",
+	)
+	flag.StringVar(
+		&mcpConfigFile,
+		"mcp-gateway-config",
+		"./config/mcp-system/config.yaml",
+		"where to locate the mcp server config",
+	)
+	flag.IntVar(
+		&loglevel,
+		"log-level",
+		int(slog.LevelInfo),
+		"set the log level 0=info, 4=warn , 8=error and -4=debug",
+	)
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.Parse()
@@ -76,7 +96,15 @@ func main() {
 				log.Fatalf("Controller failed: %v", err)
 			}
 		}()
+		// Controller doesn't need to run broker/router
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt)
+		<-stop
+		logger.Info("shutting down controller")
+		return
 	}
+
+	// Only load config and run broker/router in standalone mode
 	LoadConfig(mcpConfigFile)
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
@@ -90,7 +118,7 @@ func main() {
 	brokerServer := setUpBroker(mcpBrokerAddrFlag)
 	routerServer := setUpRouter()
 
-	grpcAddr := fmt.Sprintf(mcpRouterAddrFlag)
+	grpcAddr := mcpRouterAddrFlag
 	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
 		log.Fatalf("[grpc] listen error: %v", err)
@@ -159,7 +187,19 @@ func LoadConfig(path string) {
 	logger.Debug("config successfully loaded ")
 
 	for _, s := range mcpConfig.Servers {
-		logger.Debug("server config", "server name", s.Name, "server prefix", s.ToolPrefix, "enabled", s.Enabled, "backend url", s.URL, "routable host", s.Hostname)
+		logger.Debug(
+			"server config",
+			"server name",
+			s.Name,
+			"server prefix",
+			s.ToolPrefix,
+			"enabled",
+			s.Enabled,
+			"backend url",
+			s.URL,
+			"routable host",
+			s.Hostname,
+		)
 	}
 }
 
@@ -168,9 +208,9 @@ func runController() error {
 
 	fmt.Println("Controller starting (health: :8081, metrics: :8082)...")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:         scheme,
-		Metrics:        metricsserver.Options{BindAddress: ":8082"},
-		LeaderElection: false,
+		Scheme:                 scheme,
+		Metrics:                metricsserver.Options{BindAddress: ":8082"},
+		LeaderElection:         false,
 		HealthProbeBindAddress: ":8081",
 	})
 	if err != nil {

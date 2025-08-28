@@ -21,10 +21,13 @@ import (
 )
 
 const (
+	// ConfigNamespace is the namespace for config
 	ConfigNamespace = "mcp-system"
-	ConfigName      = "mcp-gateway-config"
+	// ConfigName is the name of the config
+	ConfigName = "mcp-gateway-config"
 )
 
+// ServerInfo holds server information
 type ServerInfo struct {
 	Endpoint           string
 	Hostname           string
@@ -33,6 +36,7 @@ type ServerInfo struct {
 	HTTPRouteNamespace string
 }
 
+// MCPGatewayReconciler reconciles MCPGateway resources
 type MCPGatewayReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -45,7 +49,11 @@ type MCPGatewayReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
-func (r *MCPGatewayReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+// Reconcile reconciles an MCPGateway resource
+func (r *MCPGatewayReconciler) Reconcile(
+	ctx context.Context,
+	req reconcile.Request,
+) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("Reconciling MCPGateway", "name", req.Name, "namespace", req.Namespace)
 
@@ -74,7 +82,9 @@ func (r *MCPGatewayReconciler) Reconcile(ctx context.Context, req reconcile.Requ
 	return r.regenerateAggregatedConfig(ctx)
 }
 
-func (r *MCPGatewayReconciler) regenerateAggregatedConfig(ctx context.Context) (reconcile.Result, error) {
+func (r *MCPGatewayReconciler) regenerateAggregatedConfig(
+	ctx context.Context,
+) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 
 	mcpGatewayList := &mcpv1alpha1.MCPGatewayList{}
@@ -124,7 +134,11 @@ func (r *MCPGatewayReconciler) regenerateAggregatedConfig(ctx context.Context) (
 		}
 
 		for _, serverInfo := range serverInfos {
-			serverName := fmt.Sprintf("%s/%s", serverInfo.HTTPRouteNamespace, serverInfo.HTTPRouteName)
+			serverName := fmt.Sprintf(
+				"%s/%s",
+				serverInfo.HTTPRouteNamespace,
+				serverInfo.HTTPRouteName,
+			)
 			brokerConfig.Servers = append(brokerConfig.Servers, config.ServerConfig{
 				Name:       serverName,
 				URL:        serverInfo.Endpoint,
@@ -146,7 +160,10 @@ func (r *MCPGatewayReconciler) regenerateAggregatedConfig(ctx context.Context) (
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *MCPGatewayReconciler) writeAggregatedConfig(ctx context.Context, brokerConfig *config.BrokerConfig) error {
+func (r *MCPGatewayReconciler) writeAggregatedConfig(
+	ctx context.Context,
+	brokerConfig *config.BrokerConfig,
+) error {
 	writer := NewConfigMapWriter(r.Client, r.Scheme)
 	return writer.WriteAggregatedConfig(ctx, ConfigNamespace, ConfigName, brokerConfig)
 }
@@ -160,21 +177,34 @@ func isReady(mcpGateway *mcpv1alpha1.MCPGateway) bool {
 	return false
 }
 
-func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(ctx context.Context, mcpGateway *mcpv1alpha1.MCPGateway) ([]ServerInfo, error) {
+func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
+	ctx context.Context,
+	mcpGateway *mcpv1alpha1.MCPGateway,
+) ([]ServerInfo, error) {
 	var serverInfos []ServerInfo
 
 	for _, targetRef := range mcpGateway.Spec.TargetRefs {
 		// Validate group and kind
 		if targetRef.Group != "gateway.networking.k8s.io" {
-			return nil, fmt.Errorf("invalid targetRef group %q: only gateway.networking.k8s.io is supported", targetRef.Group)
+			return nil, fmt.Errorf(
+				"invalid targetRef group %q: only gateway.networking.k8s.io is supported",
+				targetRef.Group,
+			)
 		}
 		if targetRef.Kind != "HTTPRoute" {
-			return nil, fmt.Errorf("invalid targetRef kind %q: only HTTPRoute is supported", targetRef.Kind)
+			return nil, fmt.Errorf(
+				"invalid targetRef kind %q: only HTTPRoute is supported",
+				targetRef.Kind,
+			)
 		}
 
 		namespace := mcpGateway.Namespace
 		if targetRef.Namespace != "" && targetRef.Namespace != namespace {
-			return nil, fmt.Errorf("cross-namespace reference to %s/%s not allowed without ReferenceGrant support", targetRef.Namespace, targetRef.Name)
+			return nil, fmt.Errorf(
+				"cross-namespace reference to %s/%s not allowed without ReferenceGrant support",
+				targetRef.Namespace,
+				targetRef.Name,
+			)
 		}
 
 		httpRoute := &gatewayv1.HTTPRoute{}
@@ -186,11 +216,20 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(ctx context.Context
 			if errors.IsNotFound(err) {
 				return nil, fmt.Errorf("HTTPRoute %s/%s not found", namespace, targetRef.Name)
 			}
-			return nil, fmt.Errorf("failed to get HTTPRoute %s/%s: %w", namespace, targetRef.Name, err)
+			return nil, fmt.Errorf(
+				"failed to get HTTPRoute %s/%s: %w",
+				namespace,
+				targetRef.Name,
+				err,
+			)
 		}
 
 		if len(httpRoute.Spec.Rules) == 0 || len(httpRoute.Spec.Rules[0].BackendRefs) == 0 {
-			return nil, fmt.Errorf("HTTPRoute %s/%s has no backend references", namespace, targetRef.Name)
+			return nil, fmt.Errorf(
+				"HTTPRoute %s/%s has no backend references",
+				namespace,
+				targetRef.Name,
+			)
 		}
 
 		backendRef := httpRoute.Spec.Rules[0].BackendRefs[0]
@@ -217,7 +256,12 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(ctx context.Context
 			port = int32(*backendRef.Port)
 		}
 
-		endpoint := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", backendRef.Name, backendNamespace, port)
+		endpoint := fmt.Sprintf(
+			"http://%s.%s.svc.cluster.local:%d",
+			backendRef.Name,
+			backendNamespace,
+			port,
+		)
 
 		toolPrefix := targetRef.ToolPrefix
 		if toolPrefix == "" {
@@ -226,8 +270,12 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(ctx context.Context
 
 		// Extract hostname from HTTPRoute
 		if len(httpRoute.Spec.Hostnames) != 1 {
-			return nil, fmt.Errorf("HTTPRoute %s/%s must have exactly one hostname for MCP backend routing, found %d",
-				namespace, targetRef.Name, len(httpRoute.Spec.Hostnames))
+			return nil, fmt.Errorf(
+				"HTTPRoute %s/%s must have exactly one hostname for MCP backend routing, found %d",
+				namespace,
+				targetRef.Name,
+				len(httpRoute.Spec.Hostnames),
+			)
 		}
 		hostname := string(httpRoute.Spec.Hostnames[0])
 
@@ -243,7 +291,12 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(ctx context.Context
 	return serverInfos, nil
 }
 
-func (r *MCPGatewayReconciler) updateStatus(ctx context.Context, mcpGateway *mcpv1alpha1.MCPGateway, ready bool, message string) error {
+func (r *MCPGatewayReconciler) updateStatus(
+	ctx context.Context,
+	mcpGateway *mcpv1alpha1.MCPGateway,
+	ready bool,
+	message string,
+) error {
 	condition := metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionFalse,
@@ -272,6 +325,7 @@ func (r *MCPGatewayReconciler) updateStatus(ctx context.Context, mcpGateway *mcp
 	return r.Status().Update(ctx, mcpGateway)
 }
 
+// SetupWithManager sets up the reconciler
 func (r *MCPGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcpv1alpha1.MCPGateway{}).
