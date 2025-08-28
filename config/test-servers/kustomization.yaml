@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: mcp-test
+
+resources:
+  - namespace.yaml
+  - server1-deployment.yaml
+  - server1-service.yaml
+  - server1-httproute.yaml
+  - server2-deployment.yaml
+  - server2-service.yaml
+  - server2-httproute.yaml
+  - server3-deployment.yaml
+  - server3-service.yaml
+  - server3-httproute.yaml
+

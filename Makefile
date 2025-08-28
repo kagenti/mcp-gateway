@@ -63,7 +63,26 @@ deploy-controller: install-crd ## Deploy only the controller
 
 # Deploy example MCPGateway
 deploy-example: install-crd ## Deploy example MCPGateway resource
-	kubectl apply -f config/samples/mcpgateway-calendar.yaml
+	kubectl apply -f config/samples/mcpgateway-test-servers.yaml
+
+# Build test server Docker images
+build-test-servers: ## Build test server Docker images locally
+	@echo "Building test server images..."
+	cd tests/servers/server1 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
+	cd tests/servers/server2 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
+	cd tests/servers/server3 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
+
+# Load test server images into Kind cluster
+kind-load-test-servers: build-test-servers ## Load test server images into Kind cluster
+	@echo "Loading test server images into Kind cluster..."
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
+
+# Deploy test servers
+deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing
+	@echo "Deploying test MCP servers..."
+	kubectl apply -k config/test-servers/
 
 # Build and push container image
 docker-build: ## Build container image locally
@@ -114,7 +133,7 @@ tools: ## Install all required tools (kind, helm, kustomize, yq, istioctl) to ./
 	@echo "All tools ready!"
 
 .PHONY: local-env-setup
-local-env-setup: ## Setup local Kind cluster with Istio, Gateway API, MetalLB, Keycloak, and Kuadrant
+local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP Gateway, and test servers
 	@echo "========================================="
 	@echo "Starting MCP Gateway Environment Setup"
 	@echo "========================================="
@@ -128,6 +147,9 @@ local-env-setup: ## Setup local Kind cluster with Istio, Gateway API, MetalLB, K
 	$(MAKE) deploy-gateway
 	$(MAKE) keycloak-install
 	$(MAKE) kuadrant-install
+	$(MAKE) deploy
+	$(MAKE) deploy-test-servers
+	$(MAKE) deploy-example
 
 .PHONY: local-env-teardown
 local-env-teardown: ## Tear down the local Kind cluster
@@ -159,9 +181,6 @@ urls: ## Show all available service URLs
 status: ## Show status of all MCP components
 	@$(MAKE) -s -f build/inspect.mk status-impl
 
-.PHONY: inspect-mock
-inspect-mock: ## Open MCP Inspector for mock server
-	@$(MAKE) -s -f build/inspect.mk inspect-mock-impl
 
 ##@ Tools
 

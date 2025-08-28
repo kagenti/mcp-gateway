@@ -24,17 +24,59 @@ urls-impl:
 inspect-broker: ## Open MCP Inspector for local broker
 	@echo "Opening MCP Inspector for broker at http://localhost:8080/mcp"
 	@echo ""
-	@npx @modelcontextprotocol/inspector http://localhost:8080/mcp
+	@DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:8080/mcp
 
 # Open MCP Inspector for mock server implementation
-inspect-mock-impl:
-	@echo "Ensuring port-forward to mock server..."
-	@-pkill -f "kubectl.*port-forward.*mcp-test" || true
-	@kubectl -n mcp-server port-forward svc/mcp-test 8081:8081 > /dev/null 2>&1 &
-	@sleep 2
-	@echo "Opening MCP Inspector for mock server at http://localhost:8081/mcp"
-	@echo ""
-	@npx @modelcontextprotocol/inspector http://localhost:8081/mcp
+# Inspect test servers
+.PHONY: inspect-server1
+inspect-server1: ## Open MCP Inspector for test server 1
+	@echo "Setting up port-forward to test server 1..."
+	@kubectl -n mcp-test port-forward svc/mcp-test-server1 9090:9090 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+		sleep 2; \
+		echo "Opening MCP Inspector for test server 1 at http://localhost:9090/mcp"; \
+		echo "Available tools: hi, time, slow, headers"; \
+		echo ""; \
+		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9090/mcp"; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		echo ""; \
+		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9090/mcp; \
+		kill $$PF_PID 2>/dev/null || true
+
+.PHONY: inspect-server2
+inspect-server2: ## Open MCP Inspector for test server 2
+	@echo "Setting up port-forward to test server 2..."
+	@kubectl -n mcp-test port-forward svc/mcp-test-server2 9091:9090 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+		sleep 2; \
+		echo "Opening MCP Inspector for test server 2 at http://localhost:9091/mcp"; \
+		echo "Available tools: similar to server1, different implementation"; \
+		echo ""; \
+		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9091/mcp"; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		echo ""; \
+		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9091/mcp; \
+		kill $$PF_PID 2>/dev/null || true
+
+.PHONY: inspect-server3
+inspect-server3: ## Open MCP Inspector for test server 3
+	@echo "Setting up port-forward to test server 3..."
+	@kubectl -n mcp-test port-forward svc/mcp-test-server3 9092:9090 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+		sleep 2; \
+		echo "Opening MCP Inspector for test server 3 at http://localhost:9092/mcp"; \
+		echo "Available tools: time, add, dozen, pi, get_weather, slow"; \
+		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9092/mcp"; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		echo ""; \
+		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9092/mcp; \
+		kill $$PF_PID 2>/dev/null || true
+
+# Legacy alias for compatibility
+inspect-mock-impl: inspect-server1
 
 # Open MCP Inspector for gateway (broker via gateway)
 .PHONY: inspect-gateway

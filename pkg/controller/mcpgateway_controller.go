@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -246,23 +247,6 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 			return nil, fmt.Errorf("backend reference is not a Service: %s", kind)
 		}
 
-		backendNamespace := namespace
-		if backendRef.Namespace != nil {
-			backendNamespace = string(*backendRef.Namespace)
-		}
-
-		port := int32(80)
-		if backendRef.Port != nil {
-			port = int32(*backendRef.Port)
-		}
-
-		endpoint := fmt.Sprintf(
-			"http://%s.%s.svc.cluster.local:%d",
-			backendRef.Name,
-			backendNamespace,
-			port,
-		)
-
 		toolPrefix := targetRef.ToolPrefix
 		if toolPrefix == "" {
 			toolPrefix = mcpGateway.Spec.ToolPrefix
@@ -278,6 +262,20 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 			)
 		}
 		hostname := string(httpRoute.Spec.Hostnames[0])
+
+		protocol := "http"
+		if httpRoute.Spec.ParentRefs != nil {
+			for _, parentRef := range httpRoute.Spec.ParentRefs {
+				if parentRef.SectionName != nil &&
+					strings.Contains(string(*parentRef.SectionName), "https") {
+					protocol = "https"
+					break
+				}
+			}
+		}
+
+		// to think about: service vs ingress via GW API
+		endpoint := fmt.Sprintf("%s://%s/mcp", protocol, hostname)
 
 		serverInfos = append(serverInfos, ServerInfo{
 			Endpoint:           endpoint,

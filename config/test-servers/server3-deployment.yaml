@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-test-server3
+  labels:
+    app: mcp-test-server3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-test-server3
+  template:
+    metadata:
+      labels:
+        app: mcp-test-server3
+    spec:
+      containers:
+      - name: mcp-test-server3
+        image: ghcr.io/kagenti/mcp-gateway/test-server3:latest
+        imagePullPolicy: IfNotPresent
+        command: ["fastmcp", "run", "server.py", "--transport", "http"]
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: LOG_LEVEL
+          value: "info"
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+
