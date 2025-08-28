@@ -36,16 +36,25 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=auto
           labels: |
             org.opencontainers.image.version=${{ github.ref_name }}
           tags: |
+            type=ref,event=branch
+            type=ref,event=pr
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}   
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Print Docker metadata for debugging (simple)
+      - name: Print Docker metadata for debugging (detailed)
         run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+          echo "Is default branch: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}"
           echo "Generated Tags: ${{ steps.meta.outputs.tags }}"
           echo "Generated Labels: ${{ steps.meta.outputs.labels }}"
 
@@ -54,16 +63,13 @@ jobs:
 
       - name: Build and Push Image
         id: build-image
-        uses: Wandalen/wretry.action@v3.8.0
+        uses: docker/build-push-action@v5
         with:
-          action: docker/build-push-action@v5
-          attempt_limit: 3
-          attempt_delay: 15000
-          time_out: 3600000
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: false
           provenance: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+

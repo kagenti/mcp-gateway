@@ -1,10 +1,11 @@
-FROM golang:1.23 AS builder
+FROM golang:1.24 AS builder
 
 WORKDIR /workspace
 
 
 COPY cmd/mcp-broker-router/main.go cmd/mcp-broker-router/main.go
 COPY internal/ internal/
+COPY pkg/ ./pkg/
 
 COPY go.mod go.mod
 COPY go.sum go.sum
