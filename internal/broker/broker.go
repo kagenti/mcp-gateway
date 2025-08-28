@@ -69,6 +69,9 @@ type MCPBroker interface {
 
 	// MCPServer gets an MCP server that federates the upstreams known to this MCPBroker
 	MCPServer() *server.MCPServer
+
+	// CreateSession creates a new MCP session for the given authority/host
+	CreateSession(ctx context.Context, authority string) (string, error)
 }
 
 // mcpBrokerImpl implements MCPBroker
@@ -94,20 +97,19 @@ type mcpBrokerImpl struct {
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
-var log = logrus.WithField("component", "BROKER")
-
 // NewBroker creates a new MCPBroker
 func NewBroker() MCPBroker {
 	hooks := &server.Hooks{}
 
+	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
+		slog.Info("Client disconnected", "sessionID", session.SessionID())
+	})
+
+	// Enhanced session registration to log gateway session assignment
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		// Note that AddOnRegisterSession is for GET, not POST, for a session.
 		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
-		slog.Info("Client connected", "sessionID", session.SessionID())
-	})
-
-	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
-		slog.Info("Client disconnected", "sessionID", session.SessionID())
+		slog.Info("Gateway client connected with session", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
@@ -352,43 +354,16 @@ func (m *mcpBrokerImpl) createUpstreamSession(
 	return retval, nil
 }
 
-// ExchangeSession ensures an upstream session exists and returns its MCP session ID
-func (m *mcpBrokerImpl) ExchangeSession(
-    ctx context.Context,
-    authority string,
-    targetServer string,
-    gatewaySession string,
-) (string, error) {
-    if authority == "" {
-        log.Errorf("missing authority for session exchange; prefix=%s", targetServer)
-        return "", fmt.Errorf("missing authority")
-    }
+// CreateSession creates a new MCP session for the given authority - wrapper for createUpstreamSession
+func (m *mcpBrokerImpl) CreateSession(ctx context.Context, authority string) (string, error) {
+	host := upstreamMCPHost(authority)
 
-    host := upstreamMCPHost(authority)
-    if _, ok := m.mcpServers[host]; !ok {
-        log.Errorf("unknown upstream host for authority: %s", authority)
-        return "", fmt.Errorf("unknown host %q", authority)
-    }
+	sessionState, err := m.createUpstreamSession(ctx, host)
+	if err != nil {
+		return "", fmt.Errorf("failed to create session: %w", err)
+	}
 
-    // Ensure session map for this host exists
-    upstreamSessionMap, ok := m.serverSessions[host]
-    if !ok {
-        upstreamSessionMap = make(map[downstreamSessionID]*upstreamSessionState)
-        m.serverSessions[host] = upstreamSessionMap
-    }
-
-    ds := downstreamSessionID(gatewaySession)
-    sessionState, ok := upstreamSessionMap[ds]
-    if !ok {
-        var err error
-        sessionState, err = m.createUpstreamSession(ctx, host)
-        if err != nil {
-            return "", fmt.Errorf("failed to create upstream session: %w", err)
-        }
-        upstreamSessionMap[ds] = sessionState
-    }
-
-    return string(sessionState.sessionID), nil
+	return string(sessionState.sessionID), nil
 }
 
 func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSessionID) error {

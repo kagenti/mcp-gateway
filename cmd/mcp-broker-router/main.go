@@ -194,10 +194,18 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 
 func setUpRouter() *grpc.Server {
 	grpcSrv := grpc.NewServer()
-	extProcV3.RegisterExternalProcessorServer(grpcSrv, &mcpRouter.ExtProcServer{
+
+	// Create the ExtProcServer instance
+	server := &mcpRouter.ExtProcServer{
 		MCPConfig: &mcpConfig,
 		Logger:    logger,
-	})
+		Broker:    broker.NewBroker(),
+	}
+
+	// Setup the session cache with proper initialization
+	server.SetupSessionCache()
+
+	extProcV3.RegisterExternalProcessorServer(grpcSrv, server)
 	return grpcSrv
 }
 

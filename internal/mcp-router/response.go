@@ -1,6 +1,7 @@
 package mcprouter
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -51,7 +52,7 @@ func (s *ExtProcServer) HandleResponseHeaders(
 		}, nil
 	}
 
-	slog.Info("[EXT-PROC] Response backend session: %s", mcpSessionID)
+	slog.Info(fmt.Sprintf("[EXT-PROC] Response backend session: %s", mcpSessionID))
 
 	// Check if this is a backend session that needs mapping back to helper session
 	helperSession := extractHelperSessionFromBackend(mcpSessionID)
@@ -67,7 +68,9 @@ func (s *ExtProcServer) HandleResponseHeaders(
 		}, nil
 	}
 
-	slog.Info("[EXT-PROC] Mapping backend session back to helper session: %s", helperSession)
+	slog.Info(
+		fmt.Sprintf("[EXT-PROC] Mapping backend session back to helper session: %s", helperSession),
+	)
 
 	// Return response with updated session header
 	return []*eppb.ProcessingResponse{
@@ -95,12 +98,12 @@ func (s *ExtProcServer) HandleResponseHeaders(
 // HandleResponseBody handles response bodies.
 func (s *ExtProcServer) HandleResponseBody(
 	body *eppb.HttpBody) ([]*eppb.ProcessingResponse, error) {
-	slog.Info("[EXT-PROC] Processing response body... (size: %d, end_of_stream: %t)",
-		len(body.GetBody()), body.GetEndOfStream())
+	slog.Info(fmt.Sprintf("[EXT-PROC] Processing response body... (size: %d, end_of_stream: %t)",
+		len(body.GetBody()), body.GetEndOfStream()))
 
 	// slog the response body content if it's not too large
 	if len(body.GetBody()) > 0 && len(body.GetBody()) < 1000 {
-		slog.Info("[EXT-PROC] Response body content: %s", string(body.GetBody()))
+		slog.Info(fmt.Sprintf("[EXT-PROC] Response body content: %s", string(body.GetBody())))
 	}
 
 	return []*eppb.ProcessingResponse{
