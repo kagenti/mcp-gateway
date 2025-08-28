@@ -101,6 +101,7 @@ lint: fmt vet golangci-lint
 
 test-unit:
 	echo "blah blah blah test"
+	go test ./...
 
 .PHONY: tools
 tools: ## Install all required tools (kind, helm, kustomize, yq, istioctl) to ./bin/
