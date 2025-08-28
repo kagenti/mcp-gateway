@@ -7,7 +7,7 @@ on:
     tags: [ 'v*' ]
   merge_group:
     types: [ checks_requested ]
-  
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -36,32 +36,34 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.version=${{ github.ref_name }}
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}   
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Print Docker metadata for debugging (simple)
+        run: |
+          echo "Generated Tags: ${{ steps.meta.outputs.tags }}"
+          echo "Generated Labels: ${{ steps.meta.outputs.labels }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-   
       - name: Build and Push Image
         id: build-image
         uses: Wandalen/wretry.action@v3.8.0
         with:
           action: docker/build-push-action@v5
-          with: |
-            context: .
-            file: ./Dockerfile
-            platforms: linux/amd64,linux/arm64
-            push: true
-            provenance: true
-            tags: ${{ steps.meta.outputs.tags }}
-            labels: ${{ steps.meta.outputs.labels }}
-          attempt_limit: 3          
-          attempt_delay: 15000      
-          time_out: 3600000         
-
-     
+          attempt_limit: 3
+          attempt_delay: 15000
+          time_out: 3600000
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

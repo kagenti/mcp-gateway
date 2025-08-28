@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
 
           TOOL="${{ matrix.tool }}"
-          OPTIONS="${{ matrix.options:- }}"
+          OPTIONS="${{ matrix.options || '' }}"
 
           TMP_LIST="$(mktemp)"
           find . \
