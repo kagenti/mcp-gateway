@@ -43,16 +43,17 @@ jobs:
       - name: Run ${{ matrix.tool }} ${{ matrix.options }}
         shell: bash
         run: >
+          TMP_LIST="$(mktemp)"
+          
           set -euo pipefail
 
-          TOOL="${{ matrix.tool }}"
-          OPTIONS="${{ matrix.options || '' }}"
-
-          TMP_LIST="$(mktemp)"
           find . \
             -path ./docs -prune -o \
             -name '*.deepcopy.go' -prune -o \
             -type f -name '*.go' -print0 > "$TMP_LIST"
+          
+          TOOL="${{ matrix.tool }}"
+          OPTIONS="${{ matrix.options || '' }}"
 
           if [ ! -s "$TMP_LIST" ]; then
             echo "No .go files found; nothing to do."
