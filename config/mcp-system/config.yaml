@@ -1,0 +1,16 @@
+servers:
+  - name: mcp-system/weather-route
+    url: http://weather2-service.mcp-system.svc.cluster.local:8080
+    toolPrefix: weather_
+    enabled: true
+    hostname: kbase.example.com
+  - name: mcp-system/calendar-route
+    url: http://calendar-service.mcp-system.svc.cluster.local:8080
+    toolPrefix: cal_
+    enabled: true
+    hostname: kbase.example.com
+  - name: kb-system/kbase-route
+    url: http://kbase-service.kb-system.svc.cluster.local:8080
+    toolPrefix: ai_ # Used default prefix
+    enabled: false
+    hostname: kbase.example.com

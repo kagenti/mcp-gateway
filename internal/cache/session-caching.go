@@ -29,12 +29,7 @@ func New(initSession sessionInitialiser) *Cache {
 }
 
 // GetOrInit retrieves an existing session or initializes a new one for the given server and gateway session.
-func (c *Cache) GetOrInit(
-	ctx context.Context,
-	serverName string,
-	authority string,
-	gwSessionID string,
-) (mvpSessionID string, err error) {
+func (c *Cache) GetOrInit(ctx context.Context, serverName string, authority string, gwSessionID string) (mcpSessionID string, err error) {
 	k := key{serverName: serverName, gw: gwSessionID}
 
 	// Check if session ID already exists

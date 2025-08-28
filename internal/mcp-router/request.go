@@ -27,33 +27,6 @@ type ServerInfo struct {
 	URL        string
 }
 
-// extractMCPMethod safely extracts the method from MCP JSON-RPC request
-func extractMCPMethod(data map[string]any) string {
-	// Check if this is a JSON-RPC request
-	jsonrpcVal, ok := data["jsonrpc"]
-	if !ok {
-		return ""
-	}
-
-	jsonrpcStr, ok := jsonrpcVal.(string)
-	if !ok || jsonrpcStr != "2.0" {
-		return ""
-	}
-
-	// Extract method field
-	methodVal, ok := data["method"]
-	if !ok {
-		return ""
-	}
-
-	methodStr, ok := methodVal.(string)
-	if !ok {
-		return ""
-	}
-
-	return methodStr
-}
-
 // extractMCPToolName safely extracts the tool name from MCP tool call request
 func extractMCPToolName(data map[string]any) string {
 	// Check if this is a JSON-RPC request
@@ -116,10 +89,10 @@ func getServerInfo(toolName string, config *config.MCPServersConfig) *ServerInfo
 	if routeTarget == "" {
 		return nil
 	}
-	slog.Info("Route target", "routeTarget", routeTarget)
+	slog.Info("[EXT-PROC] Route target", "routeTarget", routeTarget)
 	expectedPrefix := routeTarget + "_"
 
-	slog.Info("Expected prefix", "expectedPrefix", expectedPrefix)
+	slog.Info("[EXT-PROC] Expected prefix", "expectedPrefix", expectedPrefix)
 
 	if config != nil {
 		for _, server := range config.Servers {
@@ -138,9 +111,9 @@ func getServerInfo(toolName string, config *config.MCPServersConfig) *ServerInfo
 }
 
 // Returns the stripped tool name and whether stripping was needed
-// e.g. weather_get_forecast returns get_forecast, true
 func stripServerPrefix(toolName string, _ *config.MCPServersConfig) (string, bool) {
 	// Extract route target for prefix stripping
+	slog.Info("TOOL NAME", "toolName", toolName)
 	routeTarget := strings.Split(toolName, "_")[0]
 	strippedToolName := strings.TrimPrefix(toolName, routeTarget+"_")
 	slog.Info("Stripped tool name", "tool", strippedToolName, "originalPrefix", routeTarget)
@@ -164,38 +137,8 @@ func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 }
 
 // HandleRequestBody handles request bodies for MCP requests.
-func (s *ExtProcServer) HandleRequestBody(
-	ctx context.Context,
-	data map[string]any,
-	config *config.MCPServersConfig,
-) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]any, config *config.MCPServersConfig) ([]*eppb.ProcessingResponse, error) {
 	slog.Info(" Processing request body for MCP requests...")
-
-	// Extract method from MCP request
-	method := extractMCPMethod(data)
-	if method == "" {
-		slog.Debug(
-			"[EXT-PROC] HandleRequestBody No MCP method found, continuing to default backend",
-		)
-		return s.createEmptyBodyResponse(), nil
-	}
-
-	slog.Info("[EXT-PROC] HandleRequestBody method", "method", method)
-
-	// Handle initialization requests - route to broker (default backend)
-	if method == "initialize" {
-		slog.Info("[EXT-PROC] HandleRequestBody initialization request, routing to broker")
-		return s.createEmptyBodyResponse(), nil
-	}
-
-	// Handle tool calls - route to specific servers based on prefix
-	if method != "tools/call" {
-		slog.Debug(
-			"[EXT-PROC] HandleRequestBody method not tools/call, continuing to default backend",
-			"method", method,
-		)
-		return s.createEmptyBodyResponse(), nil
-	}
 
 	// Extract tool name for routing
 	toolName := extractMCPToolName(data)
