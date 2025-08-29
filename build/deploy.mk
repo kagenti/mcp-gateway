@@ -22,11 +22,3 @@ deploy-mcp-router: # Deploy MCP router to cluster
 .PHONY: deploy-mcp-broker
 deploy-mcp-broker: # Deploy MCP broker to cluster
 	@echo "TODO: Add deployment manifest for mcp-broker"
-
-.PHONY: deploy-mock-mcp
-deploy-mock-mcp: $(KUSTOMIZE) ## Deploy mock MCP server for testing
-	$(KUSTOMIZE) build config/mock-mcp | kubectl apply -f -
-
-.PHONY: undeploy-mock-mcp
-undeploy-mock-mcp: $(KUSTOMIZE) # Remove mock MCP server
-	- $(KUSTOMIZE) build config/mock-mcp | kubectl delete -f -

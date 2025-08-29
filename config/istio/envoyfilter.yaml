@@ -36,4 +36,4 @@ spec:
               response_trailer_mode: 'SKIP'
             grpc_service:
               envoy_grpc:
-                cluster_name: outbound|50051||mcp-router.mcp-system.svc.cluster.local
+                cluster_name: outbound|50051||mcp-gateway.mcp-system.svc.cluster.local

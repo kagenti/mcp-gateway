@@ -28,7 +28,7 @@ spec:
           configMap:
             name: mcp-gateway-config
       containers:
-        - image: quay.io/maleck13/mcp-gateway:latest
+        - image: ghcr.io/kagenti/mcp-gateway:latest
           imagePullPolicy: Always
           name: mcp-gateway
           volumeMounts:

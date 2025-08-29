@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-test-server2
+  labels:
+    app: mcp-test-server2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-test-server2
+  template:
+    metadata:
+      labels:
+        app: mcp-test-server2
+    spec:
+      containers:
+      - name: mcp-test-server2
+        image: ghcr.io/kagenti/mcp-gateway/test-server2:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9090
+          name: http
+        env:
+        - name: MCP_TRANSPORT
+          value: "http"
+        - name: PORT
+          value: "9090"
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+
