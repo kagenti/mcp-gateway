@@ -10,8 +10,16 @@ dev-envoyfilter: # Configure EnvoyFilter to use local MCP router
 # Create a service that points to host for broker
 .PHONY: dev-broker-service
 dev-broker-service: # Create service pointing to local MCP broker
-	@echo "Creating service pointing to host.docker.internal:8080..."
+	@echo "Swapping broker service to point to host.docker.internal:8080..."
+	kubectl delete -f config/mcp-system/broker-service.yaml
 	kubectl apply -f config/dev/broker-service.yaml
+
+# Create a service that points to host for broker
+.PHONY: dev-broker-service-in-cluster
+dev-broker-service-in-cluster: # Create service pointing to local MCP broker
+	@echo "Swapping service to point to 8080 in cluster..."
+	kubectl delete -f config/dev/broker-service.yaml
+	kubectl apply -f config/mcp-system/broker-service.yaml
 
 # Setup for local development
 .PHONY: dev-setup
@@ -31,8 +39,8 @@ dev-reset: # Reset to in-cluster service configuration
 .PHONY: dev-gateway-forward
 dev-gateway-forward: ## Port forward the gateway to localhost:8888
 	@echo "Forwarding gateway to localhost:8888..."
-	@echo "You can now access the gateway at http://localhost:8888"
-	@echo "Try: curl -H 'Host: mcp.example.com' http://localhost:8888"
+	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:8888"
+	@echo "Try: curl -H http://mcp.127-0-0-1.sslip.io:8888"
 	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080
 
 # Watch logs from the gateway
@@ -45,10 +53,9 @@ dev-logs-gateway: # Watch logs from the Istio gateway
 dev-test: # Test MCP request through the gateway
 	@echo "Testing MCP request through gateway..."
 	curl -X POST \
-		-H "Host: mcp.example.com" \
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' \
-		http://localhost:8888/mcp
+		http://mcp.127-0-0-1.sslip.io:8888/mcp
 
 # Clean up port forwards
 .PHONY: dev-stop-forward

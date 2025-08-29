@@ -8,7 +8,7 @@ import (
 )
 
 // sessionInitialiser is a function that initializes a new MCP session for a given server and gateway session.
-type sessionInitialiser func(ctx context.Context, serverName string, gwSessionID string) (mvpSessionID string, err error)
+type sessionInitialiser func(ctx context.Context, serverName string, authority string, gwSessionID string) (mcpSessionID string, err error)
 
 // Cache manages MCP session ID mappings between gateway sessions ID and MCP server sessions IDs.
 type Cache struct {
@@ -29,8 +29,7 @@ func New(initSession sessionInitialiser) *Cache {
 }
 
 // GetOrInit retrieves an existing session or initializes a new one for the given server and gateway session.
-func (c *Cache) GetOrInit(ctx context.Context, serverName string, gwSessionID string) (
-	mvpSessionID string, err error) {
+func (c *Cache) GetOrInit(ctx context.Context, serverName string, authority string, gwSessionID string) (mcpSessionID string, err error) {
 	k := key{serverName: serverName, gw: gwSessionID}
 
 	// Check if session ID already exists
@@ -39,7 +38,7 @@ func (c *Cache) GetOrInit(ctx context.Context, serverName string, gwSessionID st
 	}
 
 	// Create new session if no session ID exists
-	sessionID, err := c.initSession(ctx, serverName, gwSessionID)
+	sessionID, err := c.initSession(ctx, serverName, authority, gwSessionID)
 	if err != nil {
 		return "", fmt.Errorf("failed to initialize MCP session: %w", err)
 	}

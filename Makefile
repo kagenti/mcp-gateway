@@ -61,6 +61,12 @@ deploy-controller: install-crd ## Deploy only the controller
 	kubectl apply -f config/mcp-system/rbac.yaml
 	kubectl apply -f config/mcp-system/deployment-controller.yaml
 
+# Build & load router/broker/controller image into the Kind cluster
+build-and-load-image:
+	@echo "Building and loading image into Kind cluster..."
+	docker build -t ghcr.io/kagenti/mcp-gateway:latest .
+	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+
 # Deploy example MCPGateway
 deploy-example: install-crd ## Deploy example MCPGateway resource
 	kubectl apply -f config/samples/mcpgateway-test-servers.yaml
@@ -140,6 +146,7 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	$(MAKE) tools
 	$(MAKE) kind-delete-cluster
 	$(MAKE) kind-create-cluster
+	$(MAKE) build-and-load-image
 	$(MAKE) gateway-api-install
 	$(MAKE) istio-install
 	$(MAKE) metallb-install
