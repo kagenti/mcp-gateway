@@ -158,6 +158,15 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	slog.Debug("[EXT-PROC] HandleRequestBody", "Tool name:", toolName)
 
 	// Get hostname for routing based on tool prefix
+	url := serverInfo.URL
+	if url == "" {
+		slog.Info(
+			"[EXT-PROC] HandleRequestBody Tool name doesn't match any configured server prefix",
+			"tool",
+			toolName,
+		)
+		return s.createEmptyBodyResponse(), nil
+	}
 	hostname := serverInfo.Hostname
 	if hostname == "" {
 		slog.Info(
@@ -211,7 +220,7 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	// Use cache to get or create upstream MCP session
 	var upstreamSession string
 	if s.SessionCache != nil {
-		us, err := s.SessionCache.GetOrInit(ctx, serverName, hostname, helperSession)
+		us, err := s.SessionCache.GetOrInit(ctx, serverName, url, helperSession)
 		if err != nil {
 			slog.Error("Failed to get session from cache", "error", err)
 			return s.createErrorResponse("Session lookup failed", 502), nil
