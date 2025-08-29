@@ -306,7 +306,7 @@ func (m *mcpBrokerImpl) discoverTools(
 func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
 	retval := make([]mcp.Tool, 0)
 	for _, tool := range upstream.toolsResult.Tools {
-		gatewayToolName := toolName(fmt.Sprintf("%s-%s", upstream.prefix, tool.Name))
+		gatewayToolName := toolName(fmt.Sprintf("%s%s", upstream.prefix, tool.Name))
 
 		gatewayTool := tool // Note: shallow
 		gatewayTool.Name = string(gatewayToolName)
