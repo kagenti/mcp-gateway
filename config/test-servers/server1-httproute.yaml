@@ -9,7 +9,7 @@ spec:
   - name: mcp-gateway
     namespace: gateway-system
   hostnames:
-  - 'server1.mcp.example.com'
+  - 'server1.mcp.127-0-0-1.sslip.io'
   rules:
   - matches:
     - path:

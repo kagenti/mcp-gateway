@@ -4,5 +4,7 @@ resources:
   - namespace.yaml
   - rbac.yaml
   - service.yaml
+  - broker-service.yaml
   - deployment-broker.yaml
   - deployment-controller.yaml
+  - httproute.yaml
