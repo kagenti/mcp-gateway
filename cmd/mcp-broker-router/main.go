@@ -16,8 +16,10 @@ import (
 
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/fsnotify/fsnotify"
+	"github.com/kagenti/mcp-gateway/internal/broker"
 	config "github.com/kagenti/mcp-gateway/internal/config"
 	mcpRouter "github.com/kagenti/mcp-gateway/internal/mcp-router"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -115,7 +117,26 @@ func main() {
 	})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
-	brokerServer := setUpBroker(mcpBrokerAddrFlag)
+
+	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
+	for _, server := range mcpConfig.Servers {
+		err := broker.RegisterServer(context.Background(),
+			server.URL,
+			server.ToolPrefix,
+			"TODO_envoy_cluster") // The broker doesn't need this (for now), the router will
+		if err != nil {
+			slog.Warn(
+				"Could not register upstream MCP",
+				"upstream",
+				server.URL,
+				"name",
+				server.Name,
+				"error",
+				err,
+			)
+		}
+	}
+
 	routerServer := setUpRouter()
 
 	grpcAddr := mcpRouterAddrFlag
@@ -132,7 +153,7 @@ func main() {
 	go func() {
 		logger.Info("[http] starting MCP Broker", "listening", brokerServer.Addr)
 		if err := brokerServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[http] %v", err)
+			log.Fatalf("[http] Cannot start broker: %v", err)
 		}
 	}()
 
@@ -147,10 +168,11 @@ func main() {
 	routerServer.GracefulStop()
 }
 
-func setUpBroker(address string) *http.Server {
+func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = fmt.Fprint(w, "Hello, World!")
+		_, _ = fmt.Fprint(w, "Hello, World!  BTW, the MCP server is on /mcp")
 	})
 	httpSrv := &http.Server{
 		Addr:         address,
@@ -158,7 +180,16 @@ func setUpBroker(address string) *http.Server {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	return httpSrv
+
+	broker := broker.NewBroker()
+
+	streamableHTTPServer := server.NewStreamableHTTPServer(
+		broker.MCPServer(),
+		server.WithStreamableHTTPServer(httpSrv),
+	)
+	mux.Handle("/mcp", streamableHTTPServer)
+
+	return httpSrv, broker
 }
 
 func setUpRouter() *grpc.Server {
