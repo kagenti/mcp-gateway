@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -263,19 +262,26 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 		}
 		hostname := string(httpRoute.Spec.Hostnames[0])
 
-		protocol := "http"
-		if httpRoute.Spec.ParentRefs != nil {
-			for _, parentRef := range httpRoute.Spec.ParentRefs {
-				if parentRef.SectionName != nil &&
-					strings.Contains(string(*parentRef.SectionName), "https") {
-					protocol = "https"
-					break
-				}
-			}
+		// Get the service details for constructing the internal URL
+		backendNamespace := namespace
+		if backendRef.Namespace != nil {
+			backendNamespace = string(*backendRef.Namespace)
 		}
 
-		// to think about: service vs ingress via GW API
-		endpoint := fmt.Sprintf("%s://%s/mcp", protocol, hostname)
+		serviceName := string(backendRef.Name)
+		servicePort := 80
+		if backendRef.Port != nil {
+			servicePort = int(*backendRef.Port)
+		}
+
+		// Use service URL for the broker (internal Kubernetes access)
+		// The broker runs inside the cluster and needs to access services directly
+		endpoint := fmt.Sprintf(
+			"http://%s.%s.svc.cluster.local:%d/mcp",
+			serviceName,
+			backendNamespace,
+			servicePort,
+		)
 
 		serverInfos = append(serverInfos, ServerInfo{
 			Endpoint:           endpoint,
