@@ -26,6 +26,45 @@ type StartupFunc func() error
 // ShutdownFunc is used for functions that stop running servers
 type ShutdownFunc func() error
 
+var (
+	testTools = map[string]server.ServerTool{
+		"hello_world": {
+			Tool: mcp.NewTool("hello_world",
+				mcp.WithDescription("Say hello to someone"),
+				mcp.WithString("name",
+					mcp.Required(),
+					mcp.Description("Name of the person to greet"),
+				),
+			),
+			Handler: helloHandler,
+		},
+		"time": {
+			Tool: mcp.NewTool("time",
+				mcp.WithDescription("Get the current time")),
+			Handler: timeHandler,
+		},
+		"headers": {
+			Tool: mcp.NewTool("headers",
+				mcp.WithDescription("get HTTP headers")),
+			Handler: headersToolHandler,
+		},
+		"auth1234": {
+			Tool: mcp.NewTool("auth1234",
+				mcp.WithDescription("check authorization header")),
+			Handler: auth1234ToolHandler,
+		},
+		"slow": {
+			Tool: mcp.NewTool("slow",
+				mcp.WithDescription("Delay for N seconds"),
+				mcp.WithString("seconds",
+					mcp.Required(),
+					mcp.Description("number of seconds to wait"),
+				)),
+			Handler: slowHandler,
+		},
+	}
+)
+
 // RunServer create a server that can be started and stopped
 func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 
@@ -58,41 +97,9 @@ func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 		server.WithToolCapabilities(true),
 	)
 
-	// Add tool
-	tool := mcp.NewTool("hello_world",
-		mcp.WithDescription("Say hello to someone"),
-		mcp.WithString("name",
-			mcp.Required(),
-			mcp.Description("Name of the person to greet"),
-		),
-	)
-
-	// Add tool handler
-	s.AddTool(tool, helloHandler)
-
-	// Add time handler
-	s.AddTool(mcp.NewTool("time",
-		mcp.WithDescription("Get the current time"),
-	), timeHandler)
-
-	// Add headers handler
-	s.AddTool(mcp.NewTool("headers",
-		mcp.WithDescription("get HTTP headers"),
-	), headersToolHandler)
-
-	// Add auth1234 handler
-	s.AddTool(mcp.NewTool("auth1234",
-		mcp.WithDescription("check authorization header"),
-	), auth1234ToolHandler)
-
-	// Add slow handler
-	s.AddTool(mcp.NewTool("slow",
-		mcp.WithDescription("Delay for N seconds"),
-		mcp.WithString("seconds",
-			mcp.Required(),
-			mcp.Description("number of seconds to wait"),
-		),
-	), slowHandler)
+	for _, tool := range testTools {
+		s.AddTools(tool)
+	}
 
 	if port == "" {
 		port = "8080"
@@ -116,6 +123,8 @@ func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 
 		// For testing session ID invalidation
 		mux.HandleFunc("/admin/forget", forgetFuncFactory(s))
+		mux.HandleFunc("/admin/deleteTool", deleteToolFactory(s))
+		mux.HandleFunc("/admin/addTool", addToolFactory(s))
 
 		return func() error {
 				fmt.Printf("Serving HTTPStreamable on http://localhost:%s/mcp\n", port)
@@ -251,5 +260,68 @@ func forgetFuncFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *h
 		// We can't check if the client exists
 		log.Printf("Client %s will be forcibly disconnected (if it exists)", sessionID)
 		mcpServer.UnregisterSession(req.Context(), sessionID)
+	}
+}
+
+func addToolFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failure: %v", err), http.StatusInternalServerError)
+			return
+		}
+		err = req.Body.Close()
+		if err != nil {
+			log.Printf("/admin/forget failed to close: %v\n", err)
+		}
+
+		tool, ok := testTools[string(body)]
+		if !ok {
+			http.Error(w, fmt.Sprintf("Unknown tool %q", body), http.StatusNotFound)
+			return
+		}
+
+		log.Printf("Adding tool %q\n", body)
+		mcpServer.AddTools(tool)
+	}
+}
+
+func deleteToolFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(
+				w,
+				fmt.Sprintf("MCP Tool delete needs tool name body: %v", err),
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		err = req.Body.Close()
+		if err != nil {
+			log.Printf("/admin/forget failed to close: %v\n", err)
+		}
+
+		toolName := string(body)
+		_, ok := testTools[string(body)]
+		if !ok {
+			http.Error(w, fmt.Sprintf("Unknown tool %q", toolName), http.StatusNotFound)
+			return
+		}
+
+		// mcpServer does not return an error or let us check if a tool doesn't exist,
+		// so we always return OK
+		log.Printf("Deleting tool %q\n", toolName)
+		mcpServer.DeleteTools(toolName)
 	}
 }
