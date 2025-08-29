@@ -5,8 +5,7 @@ urls-impl:
 	@echo "=== MCP Gateway URLs ==="
 	@echo ""
 	@echo "Gateway (via port-forward):"
-	@echo "  http://localhost:8888"
-	@echo "  Host header required: mcp.example.com"
+	@echo "  http://mcp.127-0-0-1.sslip.io:8888"
 	@echo ""
 	@echo "Local Services:"
 	@echo "  Broker: http://localhost:8080"
@@ -16,15 +15,15 @@ urls-impl:
 	@echo "  http://localhost:8081/mcp"
 	@echo ""
 	@echo "Test commands:"
-	@echo "  curl -H 'Host: mcp.example.com' http://localhost:8888/"
+	@echo "  curl http://mcp.127-0-0-1.sslip.io:8888/"
 	@echo "  curl http://localhost:8080/"
 
 # Open MCP Inspector for the broker
 .PHONY: inspect-broker
 inspect-broker: ## Open MCP Inspector for local broker
-	@echo "Opening MCP Inspector for broker at http://localhost:8080/mcp"
+	@echo "Opening MCP Inspector for broker at http://localhost:8888/mcp"
 	@echo ""
-	@DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:8080/mcp
+	@DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:8888/mcp
 
 # Open MCP Inspector for mock server implementation
 # Inspect test servers
@@ -85,10 +84,10 @@ inspect-gateway: # Open MCP Inspector for broker via gateway
 	@-pkill -f "kubectl.*port-forward.*mcp-gateway" || true
 	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 > /dev/null 2>&1 &
 	@sleep 2
-	@echo "Opening MCP Inspector for gateway at http://localhost:8888/mcp"
+	@echo "Opening MCP Inspector for gateway at http://mcp.127-0-0-1.sslip.io:8888/mcp"
 	@echo "Note: This connects to the broker through the full gateway stack"
 	@echo ""
-	@npx @modelcontextprotocol/inspector http://localhost:8888/mcp --header "Host: mcp.example.com"
+	@npx @modelcontextprotocol/inspector http://mcp.127-0-0-1.sslip.io:8888/mcp
 
 # Show status of all MCP components implementation
 status-impl:

@@ -113,7 +113,6 @@ func getServerInfo(toolName string, config *config.MCPServersConfig) *ServerInfo
 // Returns the stripped tool name and whether stripping was needed
 func stripServerPrefix(toolName string, _ *config.MCPServersConfig) (string, bool) {
 	// Extract route target for prefix stripping
-	slog.Info("TOOL NAME", "toolName", toolName)
 	routeTarget := strings.Split(toolName, "_")[0]
 	strippedToolName := strings.TrimPrefix(toolName, routeTarget+"_")
 	slog.Info("Stripped tool name", "tool", strippedToolName, "originalPrefix", routeTarget)

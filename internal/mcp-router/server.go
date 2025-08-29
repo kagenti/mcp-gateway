@@ -35,11 +35,11 @@ func (s *ExtProcServer) SetupSessionCache() {
 
 		// Checks if the authority is provided
 		if authority == "" {
-			slog.Error("no authority provided for server", "server", serverName)
 			return "", fmt.Errorf("no authority provided for server: %s", serverName)
 		}
 
 		// Creates a MCP session
+		slog.Info("No mcp session id found for", "serverName", serverName, "gateway session", gwSessionID)
 		sessionID, err := s.Broker.CreateSession(ctx, authority)
 		if err != nil {
 			return "", fmt.Errorf("failed to create session: %w", err)
