@@ -18,12 +18,27 @@ urls-impl:
 	@echo "  curl http://mcp.127-0-0-1.sslip.io:8888/"
 	@echo "  curl http://localhost:8080/"
 
-# Open MCP Inspector for the broker
+# Open MCP Inspector for the broker via gateway
 .PHONY: inspect-broker
-inspect-broker: ## Open MCP Inspector for local broker
-	@echo "Opening MCP Inspector for broker at http://localhost:8888/mcp"
-	@echo ""
-	@DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:8888/mcp
+inspect-broker: ## Open MCP Inspector for broker via gateway
+	@echo "Setting up port-forward to gateway..."
+	@-pkill -f "kubectl.*port-forward.*mcp-gateway-istio" || true
+	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+		sleep 2; \
+		echo "Opening MCP Inspector for broker via gateway"; \
+		echo "URL: http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
+		echo ""; \
+		echo "Opening browser automatically..."; \
+		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp" 2>/dev/null || \
+		xdg-open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp" 2>/dev/null || \
+		echo "Please open: http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
+		echo ""; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		echo ""; \
+		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector; \
+		kill $$PF_PID 2>/dev/null || true
 
 # Open MCP Inspector for mock server implementation
 # Inspect test servers
