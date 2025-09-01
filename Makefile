@@ -69,7 +69,17 @@ build-and-load-image:
 
 # Deploy example MCPServer
 deploy-example: install-crd ## Deploy example MCPServer resource
+	@echo "Waiting for test servers to be ready..."
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server1 --timeout=60s
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server2 --timeout=60s
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server3 --timeout=60s
+	@echo "All test servers ready, deploying MCPServer resource..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
+	@echo "Waiting for controller to process MCPServer..."
+	@sleep 3
+	@echo "Restarting broker to ensure all connections..."
+	kubectl rollout restart deployment/mcp-broker-router -n mcp-system
+	@kubectl rollout status deployment/mcp-broker-router -n mcp-system --timeout=60s
 
 # Build test server Docker images
 build-test-servers: ## Build test server Docker images locally
