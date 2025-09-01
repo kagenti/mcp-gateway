@@ -1,0 +1,45 @@
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: mcp-auth-policy
+  namespace: mcp-system
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-route
+  defaults:
+    when:
+      - predicate: "!request.path.contains('/.well-known')"
+    rules:
+      authentication:
+        "keycloak":
+          jwt:
+            issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+      authorization:
+        allow-all-authenticated:
+          opa:
+            rego: 'allow = true' # allow all authenticated requests, no scope check
+      response:
+        unauthorized:
+          code: 401
+          headers:
+            'WWW-Authenticate':
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+          body:
+            value: |
+              {
+                "error": "Forbidden",
+                "message": "Access denied."
+              }
+        unauthenticated:
+          code: 401
+          headers:
+            'WWW-Authenticate':
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+          body:
+            value: |
+              {
+                "error": "Forbidden",
+                "message": "Access denied."
+              }
