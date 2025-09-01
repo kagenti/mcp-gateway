@@ -4,49 +4,25 @@ An Envoy-based gateway for Model Context Protocol (MCP) servers, enabling aggreg
 
 ## Architecture
 
-MCP Gateway uses a single unified binary (`mcp-broker-router`) that combines:
-- **Broker** (port 8080): Manages sessions and aggregates tools from multiple MCP servers
-- **Router** (port 50051): Envoy external processor for parsing and routing MCP requests  
-- **Controller** (optional): Kubernetes controller for dynamic MCP server discovery for generating broker/router configuration dynamically
+See [./docs/design/overview.md](./docs/design/overview.md)
 
-## Quick Start
+## Quick Start with mcp-inspector
+
+Set up a local kind cluster with the Broker, Router & Controller running.
+These components are built during the make target into a single image and loaded into the cluster.
+Also sets up an Istio Gateway API Gateway, and HTTPRoutes for test mcp servers, which are added to the broker/router.
 
 ```bash
-# Setup (automatically installs required tools to ./bin/)
-make local-env-setup        # Create Kind cluster with Istio, Gateway API, MetalLB, Keycloak, Kuadrant & mcp-gateway
-
-# Running the Gateway
-
-## Standalone Mode (file-based config)
-make run                    # Uses config/mcp-system/config.yaml
-
-## Controller Mode (Kubernetes-based discovery)  
-make install-crd            # Install MCPGateway CRD
-make run-controller         # Run with controller enabled
-
-# Local Development
-make dev                    # Configure cluster to use local services
-make dev-gateway-forward    # Forward gateway to localhost:8888
-make dev-test               # Test the gateway
-
-# Inspection & Debugging
-make info                   # Show setup info and useful commands
-make urls                   # Show all service URLs
-make status                 # Check component status
-make logs                   # Tail gateway logs
-make debug-envoy            # Enable debug logging
-make inspect-mock           # Open MCP Inspector for mock server
-
-# Services
-make keycloak-forward       # Access Keycloak at localhost:8095
-make kuadrant-status        # Check Kuadrant operator status
-
-# Cleanup
-make dev-stop               # Stop local processes
-make local-env-teardown     # Destroy cluster
+make local-env-setup
 ```
 
-Run `make help` to see all available commands.
+Run the mcp-inspector and connect to the gateway (This also port forwards to the gateway)
+
+```bash
+make inspect-gateway
+```
+
+Open http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
 
 ## Running Modes
 
@@ -122,23 +98,4 @@ spec:
 --mcp-broker-address    # HTTP broker address (default: 0.0.0.0:8080)
 --mcp-gateway-config    # Config file path (default: ./config/mcp-system/config.yaml)
 --controller            # Enable Kubernetes controller mode
-```
-
-## Development
-
-See [CLAUDE.md](CLAUDE.md) for detailed development documentation.
-
-### Building
-
-```bash
-make build               # Build the unified binary
-make clean               # Clean build artifacts
-```
-
-### Code Quality
-
-```bash
-make lint                # Run all linters
-make fmt                 # Format code
-make vet                 # Run go vet
 ```

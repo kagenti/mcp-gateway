@@ -4,20 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/kagenti/mcp-gateway/internal/config"
 )
 
 const (
-	toolHeader    = "x-mcp-toolname"
-	serverHeader  = "x-mcp-server"
-	sessionHeader = "mcp-session-id"
+	toolHeader      = "x-mcp-toolname"
+	sessionHeader   = "mcp-session-id"
+	authorityHeader = ":authority"
 )
+
+// ServerInfo contains routing information for an MCP server
+type ServerInfo struct {
+	ServerName string
+	Hostname   string
+	ToolPrefix string
+	URL        string
+}
 
 // extractMCPToolName safely extracts the tool name from MCP tool call request
 func extractMCPToolName(data map[string]any) string {
@@ -76,21 +84,39 @@ func extractMCPToolName(data map[string]any) string {
 	return nameStr
 }
 
-// determines which server to route to based on tool name prefix
-// e.g. if the toolName is 'server1-echo', return 'server1'
-// NOTE: The prefix and route target aren't necessarily the same value.
-// The prefix could be any string that maps to a server name.
-func getRouteTargetFromTool(_ string) string {
-	// TODO: Lookup server based on tool name prefix
-	return ""
+func getServerInfo(toolName string, config *config.MCPServersConfig) *ServerInfo {
+	routeTarget := strings.Split(toolName, "_")[0]
+	if routeTarget == "" {
+		return nil
+	}
+	slog.Info("[EXT-PROC] Route target", "routeTarget", routeTarget)
+	expectedPrefix := routeTarget + "_"
+
+	slog.Info("[EXT-PROC] Expected prefix", "expectedPrefix", expectedPrefix)
+
+	if config != nil {
+		for _, server := range config.Servers {
+			if server.Enabled && server.ToolPrefix == expectedPrefix {
+				return &ServerInfo{
+					ServerName: server.Name,
+					Hostname:   server.Hostname,
+					ToolPrefix: server.ToolPrefix,
+					URL:        server.URL,
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // Returns the stripped tool name and whether stripping was needed
-// e.g. server1-echo returns echo, true
-func stripServerPrefix(toolName string) (string, bool) {
-	// TODO: Iterate through known server prefixes to see if the tool name matches,
-	//       then strip it
-	return toolName, false
+func stripServerPrefix(toolName string, _ *config.MCPServersConfig) (string, bool) {
+	// Extract route target for prefix stripping
+	routeTarget := strings.Split(toolName, "_")[0]
+	strippedToolName := strings.TrimPrefix(toolName, routeTarget+"_")
+	slog.Info("Stripped tool name", "tool", strippedToolName, "originalPrefix", routeTarget)
+	return strippedToolName, true
 }
 
 // extractSessionFromContext extracts mcp-session-id from the stored request headers
@@ -109,38 +135,52 @@ func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 	return ""
 }
 
-// HandleRequestBody handles request bodies for MCP tool calls.
-func (s *ExtProcServer) HandleRequestBody(
-	ctx context.Context, data map[string]any) ([]*eppb.ProcessingResponse, error) {
-	slog.Debug("[EXT-PROC] HandleRequestBody Processing request body for MCP tool calls...")
+// HandleRequestBody handles request bodies for MCP requests.
+func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]any, config *config.MCPServersConfig) ([]*eppb.ProcessingResponse, error) {
+	slog.Info(" Processing request body for MCP requests...")
 
-	// Extract tool name - only process tools/call
+	// Extract tool name for routing
 	toolName := extractMCPToolName(data)
 	if toolName == "" {
 		slog.Debug(
-			"[EXT-PROC] HandleRequestBody No MCP tool name found or not tools/call, continuing to helper",
+			"[EXT-PROC] HandleRequestBody No tool name found in tools/call request",
 		)
+		return s.createEmptyBodyResponse(), nil
+	}
+
+	serverInfo := getServerInfo(toolName, config)
+	if serverInfo == nil {
+		slog.Info("Tool name doesn't match any configured server prefix", "tool", toolName)
 		return s.createEmptyBodyResponse(), nil
 	}
 
 	slog.Debug("[EXT-PROC] HandleRequestBody", "Tool name:", toolName)
 
-	// Determine routing based on tool prefix
-	routeTarget := getRouteTargetFromTool(toolName)
-	if routeTarget == "" {
+	// Get hostname for routing based on tool prefix
+	url := serverInfo.URL
+	if url == "" {
 		slog.Info(
-			"[EXT-PROC] HandleRequestBody Tool name  doesn't match any server prefix, continuing to helper",
+			"[EXT-PROC] HandleRequestBody Tool name doesn't match any configured server prefix",
+			"tool",
+			toolName,
+		)
+		return s.createEmptyBodyResponse(), nil
+	}
+	hostname := serverInfo.Hostname
+	if hostname == "" {
+		slog.Info(
+			"[EXT-PROC] HandleRequestBody Tool name doesn't match any configured server prefix",
 			"tool",
 			toolName,
 		)
 		return s.createEmptyBodyResponse(), nil
 	}
 
-	slog.Info("[EXT-PROC] HandleRequestBody Routing to", "target", routeTarget)
+	serverName := serverInfo.ServerName
 
 	// Strip server prefix from tool name and modify request body
-	strippedToolName, _ := stripServerPrefix(toolName)
-	slog.Debug("[EXT-PROC]  HandleRequestBody", "Stripped tool name", strippedToolName)
+	strippedToolName, _ := stripServerPrefix(toolName, config)
+	slog.Info("Stripped tool name", "tool", strippedToolName)
 
 	// Create modified request body with stripped tool name
 	modifiedData := make(map[string]any)
@@ -170,30 +210,37 @@ func (s *ExtProcServer) HandleRequestBody(
 	// Get Helper session ID
 	helperSession := s.extractSessionFromContext(ctx)
 	if helperSession == "" {
-		log.Println("[EXT-PROC] ❌ No mcp-session-id found in headers")
+		slog.Info("No mcp-session-id found in headers")
 		return s.createErrorResponse("No session ID found", 400), nil
 	}
 
-	log.Printf("[EXT-PROC] Helper session: %s", helperSession)
+	slog.Info("Helper session", "session", helperSession)
 
-	// TODO: Lookup session mapping
-	backendSession := "PLACEHOLDER"
+	// Use cache to get or create upstream MCP session
+	var upstreamSession string
+	if s.SessionCache != nil {
+		us, err := s.SessionCache.GetOrInit(ctx, serverName, url, helperSession)
+		if err != nil {
+			slog.Error("Failed to get session from cache", "error", err)
+			return s.createErrorResponse("Session lookup failed", 502), nil
+		}
+		upstreamSession = us
+		slog.Info("Got session from cache", "session", upstreamSession)
+	} else {
+		slog.Warn("Session cache not configured; proceeding without upstream session")
+	}
 
-	return s.createRoutingResponse(toolName, requestBodyBytes, routeTarget, backendSession), nil
+	return s.createRoutingResponse(
+		toolName, requestBodyBytes, hostname, serverName, upstreamSession,
+	), nil
 }
 
 // createRoutingResponse creates a response with routing headers and session mapping
 func (s *ExtProcServer) createRoutingResponse(
 	toolName string,
 	bodyBytes []byte,
-	routeTarget, backendSession string,
+	hostname, serverName, backendSession string,
 ) []*eppb.ProcessingResponse {
-	log.Printf(
-		"[EXT-PROC] 🔧 createRoutingResponse - streaming: %v, route: %s, session: %s",
-		s.streaming,
-		routeTarget,
-		backendSession,
-	)
 
 	headers := []*basepb.HeaderValueOption{
 		{
@@ -202,10 +249,11 @@ func (s *ExtProcServer) createRoutingResponse(
 				RawValue: []byte(toolName),
 			},
 		},
+
 		{
 			Header: &basepb.HeaderValue{
-				Key:      serverHeader,
-				RawValue: []byte(routeTarget),
+				Key:      authorityHeader,
+				RawValue: []byte(hostname),
 			},
 		},
 	}
@@ -230,7 +278,7 @@ func (s *ExtProcServer) createRoutingResponse(
 	})
 
 	if s.streaming {
-		log.Printf("[EXT-PROC] 🚀 Using streaming mode - returning header response first")
+		slog.Info("Using streaming mode - returning header response first")
 		ret := []*eppb.ProcessingResponse{
 			{
 				Response: &eppb.ProcessingResponse_RequestHeaders{
@@ -246,16 +294,13 @@ func (s *ExtProcServer) createRoutingResponse(
 			},
 		}
 		ret = addStreamedBodyResponse(ret, bodyBytes)
-		log.Printf(
-			"[EXT-PROC] Completed MCP processing with routing to %s (streaming)",
-			routeTarget,
-		)
+		slog.Info("Completed MCP processing with routing (streaming)", "target", serverName)
 		return ret
 	}
 
 	// For non-streaming: Set headers in RequestBody response with ClearRouteCache
-	log.Printf("[EXT-PROC] 📦 Using non-streaming mode - setting headers in body response")
-	log.Printf("[EXT-PROC] Completed MCP processing with routing to %s", routeTarget)
+	slog.Info("Using non-streaming mode - setting headers in body response")
+	slog.Info("Completed MCP processing with routing", "target", serverName)
 	return []*eppb.ProcessingResponse{
 		{
 			Response: &eppb.ProcessingResponse_RequestBody{
@@ -326,7 +371,7 @@ func (s *ExtProcServer) createErrorResponse(
 	message string,
 	statusCode int32,
 ) []*eppb.ProcessingResponse {
-	log.Printf("[EXT-PROC] 🚫 Returning %d error: %s", statusCode, message)
+	slog.Error("Returning error", "statusCode", statusCode, "message", message)
 
 	return []*eppb.ProcessingResponse{
 		{
@@ -347,12 +392,12 @@ func (s *ExtProcServer) createErrorResponse(
 func (s *ExtProcServer) HandleRequestHeaders(
 	headers *eppb.HttpHeaders,
 ) ([]*eppb.ProcessingResponse, error) {
-	log.Printf("[EXT-PROC] 🔍 HandleRequestHeaders called - streaming: %v", s.streaming)
+	slog.Info("HandleRequestHeaders called", "streaming", s.streaming)
 	if headers != nil && headers.Headers != nil {
 		for _, header := range headers.Headers.Headers {
 			if strings.ToLower(header.Key) == "content-type" ||
 				strings.ToLower(header.Key) == "mcp-session-id" {
-				log.Printf("[EXT-PROC] 🔍 Header: %s = %s", header.Key, string(header.RawValue))
+				slog.Info("Header", "key", header.Key, "value", string(header.RawValue))
 			}
 		}
 	}

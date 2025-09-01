@@ -9,8 +9,7 @@ run:
 formatters:
   enable:
     - goimports
-    - golines # checks if code is formatted, and fixes long lines
-
+    
 linters:
   enable:
     - errcheck

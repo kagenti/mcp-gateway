@@ -247,6 +247,22 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 			return nil, fmt.Errorf("backend reference is not a Service: %s", kind)
 		}
 
+		// Determine service namespace, default to HTTPRoute namespace
+		serviceNamespace := httpRoute.Namespace
+		if backendRef.Namespace != nil {
+			serviceNamespace = string(*backendRef.Namespace)
+		}
+
+		// Construct full service DNS name
+		serviceDNSName := fmt.Sprintf("%s.%s.svc.cluster.local", backendRef.Name, serviceNamespace)
+
+		var nameAndEndpoint string
+		if backendRef.Port != nil {
+			nameAndEndpoint = fmt.Sprintf("%s:%d", serviceDNSName, *backendRef.Port)
+		} else {
+			nameAndEndpoint = serviceDNSName
+		}
+
 		toolPrefix := targetRef.ToolPrefix
 		if toolPrefix == "" {
 			toolPrefix = mcpGateway.Spec.ToolPrefix
@@ -275,7 +291,7 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 		}
 
 		// to think about: service vs ingress via GW API
-		endpoint := fmt.Sprintf("%s://%s/mcp", protocol, hostname)
+		endpoint := fmt.Sprintf("%s://%s/mcp", protocol, nameAndEndpoint)
 
 		serverInfos = append(serverInfos, ServerInfo{
 			Endpoint:           endpoint,

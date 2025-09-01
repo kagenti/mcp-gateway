@@ -104,7 +104,7 @@ func TestToolCall(t *testing.T) {
 
 	res, err := broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
+			Name: "testprefix-callhello_world", // Note that this is the gateway tool name, not the upstream tool name
 			Arguments: map[string]any{
 				"name": "Fred",
 			},
@@ -137,7 +137,7 @@ func TestToolCallAfterMCPDisconnect(t *testing.T) {
 
 	res, err := broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
+			Name: "testprefix-callhello_world", // Note that this is the gateway tool name, not the upstream tool name
 			Arguments: map[string]any{
 				"name": "Fred",
 			},
@@ -169,7 +169,7 @@ func TestToolCallAfterMCPDisconnect(t *testing.T) {
 	// Make the same call
 	res, err = broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name: "testprefix-call-hello_world", // Note that this is the gateway tool name, not the upstream tool name
+			Name: "testprefix-callhello_world", // Note that this is the gateway tool name, not the upstream tool name
 			Arguments: map[string]any{
 				"name": "Fred",
 			},

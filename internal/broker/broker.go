@@ -69,6 +69,9 @@ type MCPBroker interface {
 
 	// MCPServer gets an MCP server that federates the upstreams known to this MCPBroker
 	MCPServer() *server.MCPServer
+
+	// CreateSession creates a new MCP session for the given authority/host
+	CreateSession(ctx context.Context, authority string) (string, error)
 }
 
 // mcpBrokerImpl implements MCPBroker
@@ -98,14 +101,15 @@ var _ MCPBroker = &mcpBrokerImpl{}
 func NewBroker() MCPBroker {
 	hooks := &server.Hooks{}
 
+	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
+		slog.Info("Client disconnected", "sessionID", session.SessionID())
+	})
+
+	// Enhanced session registration to log gateway session assignment
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		// Note that AddOnRegisterSession is for GET, not POST, for a session.
 		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
-		slog.Info("Client connected", "sessionID", session.SessionID())
-	})
-
-	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
-		slog.Info("Client disconnected", "sessionID", session.SessionID())
+		slog.Info("Gateway client connected with session", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
@@ -302,7 +306,7 @@ func (m *mcpBrokerImpl) discoverTools(
 func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
 	retval := make([]mcp.Tool, 0)
 	for _, tool := range upstream.toolsResult.Tools {
-		gatewayToolName := toolName(fmt.Sprintf("%s-%s", upstream.prefix, tool.Name))
+		gatewayToolName := toolName(fmt.Sprintf("%s%s", upstream.prefix, tool.Name))
 
 		gatewayTool := tool // Note: shallow
 		gatewayTool.Name = string(gatewayToolName)
@@ -348,6 +352,18 @@ func (m *mcpBrokerImpl) createUpstreamSession(
 	retval.lastContact = time.Now()
 
 	return retval, nil
+}
+
+// CreateSession creates a new MCP session for the given authority - wrapper for createUpstreamSession
+func (m *mcpBrokerImpl) CreateSession(ctx context.Context, authority string) (string, error) {
+	host := upstreamMCPHost(authority)
+
+	sessionState, err := m.createUpstreamSession(ctx, host)
+	if err != nil {
+		return "", fmt.Errorf("failed to create session: %w", err)
+	}
+
+	return string(sessionState.sessionID), nil
 }
 
 func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSessionID) error {
