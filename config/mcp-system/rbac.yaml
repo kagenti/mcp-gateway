@@ -17,10 +17,10 @@ metadata:
   name: mcp-controller
 rules:
   - apiGroups: ["mcp.kagenti.com"]
-    resources: ["mcpgateways"]
+    resources: ["mcpservers"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["mcp.kagenti.com"]
-    resources: ["mcpgateways/status"]
+    resources: ["mcpservers/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes"]

@@ -47,7 +47,7 @@ make run-controller
 ```
 
 In controller mode:
-- Watches `MCPGateway` custom resources
+- Watches `MCPServer` custom resources
 - Discovers servers via `HTTPRoute` references
 - Generates aggregated configuration in `ConfigMap`, for use by the broker/router
 - Exposes health endpoints on `:8081` and metrics on `:8082`
@@ -71,12 +71,23 @@ servers:
     toolPrefix: "cal_"
 ```
 
-### Kubernetes Configuration  
-Create MCPGateway resources that reference HTTPRoutes:
+### Kubernetes Configuration
+
+#### MCPServer Resource
+
+The `MCPServer` is a Kubernetes Custom Resource that defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway. It enables discovery and federation of tools from multiple backend MCP servers through Gateway API `HTTPRoute` references, providing a declarative way to configure which MCP servers should be accessible through the gateway.
+
+Each `MCPServer` resource:
+- References one or more HTTPRoutes that point to backend MCP services
+- Configures tool prefixes to avoid naming conflicts when federating tools
+- Enables the controller to automatically discover and configure the broker with available MCP servers
+- Maintains status conditions to indicate whether the servers are successfully discovered, valid and ready
+
+Create `MCPServer` resources that reference HTTPRoutes:
 
 ```yaml
 apiVersion: mcp.kagenti.com/v1alpha1
-kind: MCPGateway
+kind: MCPServer
 metadata:
   name: ai-tools
 spec:

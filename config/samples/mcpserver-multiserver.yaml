@@ -1,5 +1,5 @@
 apiVersion: mcp.kagenti.com/v1alpha1
-kind: MCPGateway
+kind: MCPServer
 metadata:
   name: ai-assistant-tools
   namespace: mcp-system

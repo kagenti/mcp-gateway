@@ -6,28 +6,39 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=mcpgw
+// +kubebuilder:resource:scope=Namespaced,shortName=mcpsrv
 
-// MCPGateway defines the configuration for an MCP Gateway
-type MCPGateway struct {
+// MCPServer defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway.
+// It enables discovery and federation of tools from multiple backend MCP servers through HTTPRoute references,
+// providing a declarative way to configure which MCP servers should be accessible through the gateway.
+type MCPServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MCPGatewaySpec   `json:"spec,omitempty"`
-	Status MCPGatewayStatus `json:"status,omitempty"`
+	Spec   MCPServerSpec   `json:"spec,omitempty"`
+	Status MCPServerStatus `json:"status,omitempty"`
 }
 
-// MCPGatewaySpec defines the desired state of MCPGateway
-type MCPGatewaySpec struct {
-	// TargetRefs references the HTTPRoutes for MCP servers
+// MCPServerSpec defines the desired state of MCPServer.
+// It specifies which HTTPRoutes point to MCP servers and how their tools should be federated.
+type MCPServerSpec struct {
+	// TargetRefs specifies HTTPRoutes that point to backend MCP servers.
+	// Each referenced HTTPRoute should have backend services that implement the MCP protocol.
+	// The controller will discover the backend services from these HTTPRoutes and configure
+	// the broker to federate tools from those MCP servers.
 	TargetRefs []TargetReference `json:"targetRefs"`
 
-	// ToolPrefix is the default prefix to add to all tools (can be overridden per targetRef)
+	// ToolPrefix is the default prefix to add to all federated tools from referenced servers.
+	// This helps avoid naming conflicts when aggregating tools from multiple sources.
+	// For example, if two servers both provide a 'search' tool, prefixes like 'server1_' and 'server2_'
+	// ensure they can coexist as 'server1_search' and 'server2_search'.
+	// Can be overridden per targetRef.
 	// +optional
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 }
 
-// TargetReference identifies an API object to reference, following Gateway API patterns
+// TargetReference identifies an HTTPRoute that points to MCP servers.
+// It follows Gateway API patterns for cross-resource references.
 type TargetReference struct {
 	// Group is the group of the target resource.
 	// +kubebuilder:default=gateway.networking.k8s.io
@@ -51,17 +62,20 @@ type TargetReference struct {
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 }
 
-// MCPGatewayStatus defines the observed state of MCPGateway
-type MCPGatewayStatus struct {
-	// Conditions represent the latest available observations
+// MCPServerStatus represents the observed state of the MCPServer resource.
+// It contains conditions that indicate whether the referenced servers have been
+// successfully discovered and are ready for use.
+type MCPServerStatus struct {
+	// Conditions represent the latest available observations of the MCPServer's state.
+	// Common conditions include 'Ready' to indicate if all referenced servers are accessible.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// MCPGatewayList contains a list of MCPGateway
-type MCPGatewayList struct {
+// MCPServerList contains a list of MCPServer
+type MCPServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MCPGateway `json:"items"`
+	Items           []MCPServer `json:"items"`
 }

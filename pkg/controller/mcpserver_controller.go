@@ -37,45 +37,45 @@ type ServerInfo struct {
 	HTTPRouteNamespace string
 }
 
-// MCPGatewayReconciler reconciles MCPGateway resources
-type MCPGatewayReconciler struct {
+// MCPServerReconciler reconciles MCPServer resources
+type MCPServerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpgateways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpgateways/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
-// Reconcile reconciles an MCPGateway resource
-func (r *MCPGatewayReconciler) Reconcile(
+// Reconcile reconciles an MCPServer resource
+func (r *MCPServerReconciler) Reconcile(
 	ctx context.Context,
 	req reconcile.Request,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling MCPGateway", "name", req.Name, "namespace", req.Namespace)
+	log.Info("Reconciling MCPServer", "name", req.Name, "namespace", req.Namespace)
 
-	mcpGateway := &mcpv1alpha1.MCPGateway{}
-	err := r.Get(ctx, req.NamespacedName, mcpGateway)
+	mcpServer := &mcpv1alpha1.MCPServer{}
+	err := r.Get(ctx, req.NamespacedName, mcpServer)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			log.Info("MCPGateway resource not found, regenerating aggregated config")
+			log.Info("MCPServer resource not found, regenerating aggregated config")
 			return r.regenerateAggregatedConfig(ctx)
 		}
-		log.Error(err, "Failed to get MCPGateway")
+		log.Error(err, "Failed to get MCPServer")
 		return reconcile.Result{}, err
 	}
 
-	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpGateway)
+	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
 	if err != nil {
 		log.Error(err, "Failed to discover servers from HTTPRoutes")
-		return reconcile.Result{}, r.updateStatus(ctx, mcpGateway, false, err.Error())
+		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
 	}
 
-	if err := r.updateStatus(ctx, mcpGateway, true, fmt.Sprintf("MCPGateway successfully reconciled with %d servers", len(serverInfos))); err != nil {
+	if err := r.updateStatus(ctx, mcpServer, true, fmt.Sprintf("MCPServer successfully reconciled with %d servers", len(serverInfos))); err != nil {
 		log.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -83,19 +83,19 @@ func (r *MCPGatewayReconciler) Reconcile(
 	return r.regenerateAggregatedConfig(ctx)
 }
 
-func (r *MCPGatewayReconciler) regenerateAggregatedConfig(
+func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	ctx context.Context,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
 
-	mcpGatewayList := &mcpv1alpha1.MCPGatewayList{}
-	if err := r.List(ctx, mcpGatewayList); err != nil {
-		log.Error(err, "Failed to list MCPGateways")
+	mcpServerList := &mcpv1alpha1.MCPServerList{}
+	if err := r.List(ctx, mcpServerList); err != nil {
+		log.Error(err, "Failed to list MCPServers")
 		return reconcile.Result{}, err
 	}
 
-	if len(mcpGatewayList.Items) == 0 {
-		log.Info("No MCPGateways found, deleting ConfigMap if it exists")
+	if len(mcpServerList.Items) == 0 {
+		log.Info("No MCPServers found, deleting ConfigMap if it exists")
 		configMap := &corev1.ConfigMap{}
 		err := r.Get(ctx, types.NamespacedName{
 			Name:      ConfigName,
@@ -118,19 +118,19 @@ func (r *MCPGatewayReconciler) regenerateAggregatedConfig(
 		Servers: []config.ServerConfig{},
 	}
 
-	for _, mcpGateway := range mcpGatewayList.Items {
-		if !isReady(&mcpGateway) {
-			log.Info("Skipping MCPGateway that is not ready",
-				"name", mcpGateway.Name,
-				"namespace", mcpGateway.Namespace)
+	for _, mcpServer := range mcpServerList.Items {
+		if !isReady(&mcpServer) {
+			log.Info("Skipping MCPServer that is not ready",
+				"name", mcpServer.Name,
+				"namespace", mcpServer.Namespace)
 			continue
 		}
 
-		serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, &mcpGateway)
+		serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, &mcpServer)
 		if err != nil {
 			log.Error(err, "Failed to discover server endpoints",
-				"name", mcpGateway.Name,
-				"namespace", mcpGateway.Namespace)
+				"name", mcpServer.Name,
+				"namespace", mcpServer.Namespace)
 			continue
 		}
 
@@ -161,7 +161,7 @@ func (r *MCPGatewayReconciler) regenerateAggregatedConfig(
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *MCPGatewayReconciler) writeAggregatedConfig(
+func (r *MCPServerReconciler) writeAggregatedConfig(
 	ctx context.Context,
 	brokerConfig *config.BrokerConfig,
 ) error {
@@ -169,8 +169,8 @@ func (r *MCPGatewayReconciler) writeAggregatedConfig(
 	return writer.WriteAggregatedConfig(ctx, ConfigNamespace, ConfigName, brokerConfig)
 }
 
-func isReady(mcpGateway *mcpv1alpha1.MCPGateway) bool {
-	for _, condition := range mcpGateway.Status.Conditions {
+func isReady(mcpServer *mcpv1alpha1.MCPServer) bool {
+	for _, condition := range mcpServer.Status.Conditions {
 		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
 			return true
 		}
@@ -178,13 +178,13 @@ func isReady(mcpGateway *mcpv1alpha1.MCPGateway) bool {
 	return false
 }
 
-func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
+func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 	ctx context.Context,
-	mcpGateway *mcpv1alpha1.MCPGateway,
+	mcpServer *mcpv1alpha1.MCPServer,
 ) ([]ServerInfo, error) {
 	var serverInfos []ServerInfo
 
-	for _, targetRef := range mcpGateway.Spec.TargetRefs {
+	for _, targetRef := range mcpServer.Spec.TargetRefs {
 		// Validate group and kind
 		if targetRef.Group != "gateway.networking.k8s.io" {
 			return nil, fmt.Errorf(
@@ -199,7 +199,7 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 			)
 		}
 
-		namespace := mcpGateway.Namespace
+		namespace := mcpServer.Namespace
 		if targetRef.Namespace != "" && targetRef.Namespace != namespace {
 			return nil, fmt.Errorf(
 				"cross-namespace reference to %s/%s not allowed without ReferenceGrant support",
@@ -265,7 +265,7 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 
 		toolPrefix := targetRef.ToolPrefix
 		if toolPrefix == "" {
-			toolPrefix = mcpGateway.Spec.ToolPrefix
+			toolPrefix = mcpServer.Spec.ToolPrefix
 		}
 
 		// Extract hostname from HTTPRoute
@@ -305,9 +305,9 @@ func (r *MCPGatewayReconciler) discoverServersFromHTTPRoutes(
 	return serverInfos, nil
 }
 
-func (r *MCPGatewayReconciler) updateStatus(
+func (r *MCPServerReconciler) updateStatus(
 	ctx context.Context,
-	mcpGateway *mcpv1alpha1.MCPGateway,
+	mcpServer *mcpv1alpha1.MCPServer,
 	ready bool,
 	message string,
 ) error {
@@ -325,23 +325,23 @@ func (r *MCPGatewayReconciler) updateStatus(
 	}
 
 	found := false
-	for i, cond := range mcpGateway.Status.Conditions {
+	for i, cond := range mcpServer.Status.Conditions {
 		if cond.Type == condition.Type {
-			mcpGateway.Status.Conditions[i] = condition
+			mcpServer.Status.Conditions[i] = condition
 			found = true
 			break
 		}
 	}
 	if !found {
-		mcpGateway.Status.Conditions = append(mcpGateway.Status.Conditions, condition)
+		mcpServer.Status.Conditions = append(mcpServer.Status.Conditions, condition)
 	}
 
-	return r.Status().Update(ctx, mcpGateway)
+	return r.Status().Update(ctx, mcpServer)
 }
 
 // SetupWithManager sets up the reconciler
-func (r *MCPGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&mcpv1alpha1.MCPGateway{}).
+		For(&mcpv1alpha1.MCPServer{}).
 		Complete(r)
 }
