@@ -6,19 +6,19 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=mcpgw
+// +kubebuilder:resource:scope=Namespaced,shortName=mcpsrv
 
-// MCPGateway defines the configuration for an MCP Gateway
-type MCPGateway struct {
+// MCPServer defines the configuration for an MCP Server
+type MCPServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MCPGatewaySpec   `json:"spec,omitempty"`
-	Status MCPGatewayStatus `json:"status,omitempty"`
+	Spec   MCPServerSpec   `json:"spec,omitempty"`
+	Status MCPServerStatus `json:"status,omitempty"`
 }
 
-// MCPGatewaySpec defines the desired state of MCPGateway
-type MCPGatewaySpec struct {
+// MCPServerSpec defines the desired state of MCPServer
+type MCPServerSpec struct {
 	// TargetRefs references the HTTPRoutes for MCP servers
 	TargetRefs []TargetReference `json:"targetRefs"`
 
@@ -51,17 +51,17 @@ type TargetReference struct {
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 }
 
-// MCPGatewayStatus defines the observed state of MCPGateway
-type MCPGatewayStatus struct {
+// MCPServerStatus defines the observed state of MCPServer
+type MCPServerStatus struct {
 	// Conditions represent the latest available observations
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// MCPGatewayList contains a list of MCPGateway
-type MCPGatewayList struct {
+// MCPServerList contains a list of MCPServer
+type MCPServerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MCPGateway `json:"items"`
+	Items           []MCPServer `json:"items"`
 }

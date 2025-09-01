@@ -47,7 +47,7 @@ make run-controller
 ```
 
 In controller mode:
-- Watches `MCPGateway` custom resources
+- Watches `MCPServer` custom resources
 - Discovers servers via `HTTPRoute` references
 - Generates aggregated configuration in `ConfigMap`, for use by the broker/router
 - Exposes health endpoints on `:8081` and metrics on `:8082`
@@ -72,11 +72,11 @@ servers:
 ```
 
 ### Kubernetes Configuration  
-Create MCPGateway resources that reference HTTPRoutes:
+Create MCPServer resources that reference HTTPRoutes:
 
 ```yaml
 apiVersion: mcp.kagenti.com/v1alpha1
-kind: MCPGateway
+kind: MCPServer
 metadata:
   name: ai-tools
 spec:

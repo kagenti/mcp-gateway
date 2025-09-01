@@ -40,8 +40,8 @@ run-controller: mcp-broker-router
 	./bin/mcp-broker-router --controller --log-level=${LOG_LEVEL}
 
 # Install CRD
-install-crd: ## Install MCPGateway CRD
-	kubectl apply -f config/crd/mcpgateway.yaml
+install-crd: ## Install MCPServer CRD
+	kubectl apply -f config/crd/mcpserver.yaml
 
 # Deploy mcp-gateway components
 deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
@@ -67,9 +67,9 @@ build-and-load-image:
 	docker build -t ghcr.io/kagenti/mcp-gateway:latest .
 	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
 
-# Deploy example MCPGateway
-deploy-example: install-crd ## Deploy example MCPGateway resource
-	kubectl apply -f config/samples/mcpgateway-test-servers.yaml
+# Deploy example MCPServer
+deploy-example: install-crd ## Deploy example MCPServer resource
+	kubectl apply -f config/samples/mcpserver-test-servers.yaml
 
 # Build test server Docker images
 build-test-servers: ## Build test server Docker images locally
