@@ -34,6 +34,7 @@ spec:
     schema:
       openAPIV3Schema:
         type: object
+        description: MCPServer defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway. It enables discovery and federation of tools from multiple backend MCP servers through HTTPRoute references.
         properties:
           apiVersion:
             type: string
@@ -43,12 +44,13 @@ spec:
             type: object
           spec:
             type: object
+            description: Spec defines the desired state of the MCPServer resource
             required:
             - targetRefs
             properties:
               targetRefs:
                 type: array
-                description: References to HTTPRoutes for MCP servers
+                description: TargetRefs specifies HTTPRoutes that point to backend MCP servers. Each referenced HTTPRoute should have backend services that implement the MCP protocol.
                 minItems: 1
                 items:
                   type: object
@@ -80,12 +82,14 @@ spec:
                       description: Tool prefix for this specific server (overrides spec-level toolPrefix)
               toolPrefix:
                 type: string
-                description: Default prefix to add to all tools (can be overridden per targetRef)
+                description: ToolPrefix is the default prefix to add to all federated tools from referenced servers. This helps avoid naming conflicts when aggregating tools from multiple sources. Can be overridden per targetRef.
           status:
             type: object
+            description: Status represents the observed state of the MCPServer resource
             properties:
               conditions:
                 type: array
+                description: Conditions represent the latest available observations of the MCPServer's state
                 items:
                   type: object
                   required:

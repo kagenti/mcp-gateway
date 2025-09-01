@@ -71,8 +71,19 @@ servers:
     toolPrefix: "cal_"
 ```
 
-### Kubernetes Configuration  
-Create MCPServer resources that reference HTTPRoutes:
+### Kubernetes Configuration
+
+#### MCPServer Resource
+
+The `MCPServer` is a Kubernetes Custom Resource that defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway. It enables discovery and federation of tools from multiple backend MCP servers through Gateway API `HTTPRoute` references, providing a declarative way to configure which MCP servers should be accessible through the gateway.
+
+Each `MCPServer` resource:
+- References one or more HTTPRoutes that point to backend MCP services
+- Configures tool prefixes to avoid naming conflicts when federating tools
+- Enables the controller to automatically discover and configure the broker with available MCP servers
+- Maintains status conditions to indicate whether the servers are successfully discovered, valid and ready
+
+Create `MCPServer` resources that reference HTTPRoutes:
 
 ```yaml
 apiVersion: mcp.kagenti.com/v1alpha1
