@@ -8,6 +8,8 @@ ifeq ($(ARCH),aarch64)
     ARCH = arm64
 endif
 
+# Use `export BUILD_FLAGS=--load` for Podman
+BUILDFLAGS = $(BUILD_FLAGS)
 
 LOG_LEVEL ?= -4
 
@@ -64,7 +66,7 @@ deploy-controller: install-crd ## Deploy only the controller
 # Build & load router/broker/controller image into the Kind cluster
 build-and-load-image:
 	@echo "Building and loading image into Kind cluster..."
-	docker build -t ghcr.io/kagenti/mcp-gateway:latest .
+	docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway:latest .
 	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
 
 # Deploy example MCPServer
@@ -84,9 +86,9 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 # Build test server Docker images
 build-test-servers: ## Build test server Docker images locally
 	@echo "Building test server images..."
-	cd tests/servers/server1 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
-	cd tests/servers/server2 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
-	cd tests/servers/server3 && docker build -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
+	cd tests/servers/server1 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
+	cd tests/servers/server2 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
+	cd tests/servers/server3 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
 
 # Load test server images into Kind cluster
 kind-load-test-servers: build-test-servers ## Load test server images into Kind cluster
@@ -102,7 +104,7 @@ deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local
 
 # Build and push container image
 docker-build: ## Build container image locally
-	docker build -t mcp-gateway:local .
+	docker build ${BUILDFLAGS} -t mcp-gateway:local .
 
 # Build multi-platform image
 docker-buildx: ## Build multi-platform container image
@@ -207,6 +209,10 @@ istioctl: ## Download and install istioctl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development
+	docker pull docker.io/bitnami/keycloak:26.3.3-debian-12-r0
+	kind load -n mcp-gateway docker-image docker.io/bitnami/keycloak:26.3.3-debian-12-r0
+	docker pull docker.io/bitnami/postgresql:17.6.0-debian-12-r0
+	kind load -n mcp-gateway docker-image docker.io/bitnami/postgresql:17.6.0-debian-12-r0
 	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
 
 .PHONY: keycloak-forward
