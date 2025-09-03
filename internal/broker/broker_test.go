@@ -3,11 +3,13 @@ package broker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/tests/server2"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
@@ -23,6 +25,8 @@ const (
 	// MCPAddrForgetAddr is the URL the client will use to force the server to forget a session
 	MCPAddrForgetAddr = "http://localhost:8088/admin/forget"
 )
+
+var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 // TestMain starts an MCP server that we will run actual tests against
 func TestMain(m *testing.M) {
@@ -50,10 +54,36 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestOnConfigChange(t *testing.T) {
+	b := NewBroker(logger)
+	conf := &config.MCPServersConfig{}
+	server1 := &config.MCPServer{
+		Name:       "test1",
+		URL:        MCPAddr,
+		ToolPrefix: "_test1",
+	}
+	b.OnConfigChange(context.TODO(), conf)
+	if b.IsRegistered(server1.URL) {
+		t.Fatalf("server1 should not be registered but is")
+	}
+
+	conf.Servers = append(conf.Servers, server1)
+	b.OnConfigChange(context.TODO(), conf)
+	if !b.IsRegistered(server1.URL) {
+		t.Fatalf("server1 should be registered but is not")
+	}
+
+	conf.Servers = []*config.MCPServer{}
+	b.OnConfigChange(context.TODO(), conf)
+	if b.IsRegistered(server1.URL) {
+		t.Fatalf("server1 should not be registered but is")
+	}
+}
+
 func TestRegisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestRegisterServer\n")
 
-	broker := NewBroker()
+	broker := NewBroker(logger)
 
 	err := broker.RegisterServer(
 		context.Background(),
@@ -67,7 +97,7 @@ func TestRegisterServer(t *testing.T) {
 func TestUnregisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestUnregisterServer\n")
 
-	broker := NewBroker()
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
@@ -93,7 +123,7 @@ func TestUnregisterServer(t *testing.T) {
 func TestToolCall(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestToolCall\n")
 
-	broker := NewBroker()
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
@@ -126,7 +156,7 @@ func TestToolCall(t *testing.T) {
 func TestToolCallAfterMCPDisconnect(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestToolCall\n")
 
-	broker := NewBroker()
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
