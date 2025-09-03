@@ -4,26 +4,23 @@ metadata:
   name: test-servers
   namespace: mcp-test
 spec:
+  # Tool prefix applied to all servers in this MCPServer
+  toolPrefix: test_
+  
   # Reference all three test MCP servers via their HTTPRoutes
   targetRefs:
   # Server 1 - Go SDK based (hi, time, slow, headers tools)
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp-server1-route
-    toolPrefix: s1_
   
   # Server 2 - Go SDK based (similar tools, different implementation)
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp-server2-route
-    toolPrefix: s2_
   
   # Server 3 - Python FastMCP based (time, add, dozen, pi, get_weather, slow)
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp-server3-route
-    toolPrefix: s3_
-  
-  # Default tool prefix if not specified per-server
-  toolPrefix: test_
 
