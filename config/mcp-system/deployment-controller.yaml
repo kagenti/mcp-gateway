@@ -22,7 +22,7 @@ spec:
       containers:
         - name: mcp-controller
           image: ghcr.io/kagenti/mcp-gateway:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           command:
             - ./mcp_gateway
             - --controller
