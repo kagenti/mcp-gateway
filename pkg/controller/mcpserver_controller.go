@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -330,7 +331,56 @@ func (r *MCPServerReconciler) updateStatus(
 
 // SetupWithManager sets up the reconciler
 func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &mcpv1alpha1.MCPServer{}, "spec.targetRefs.httproute", func(rawObj client.Object) []string {
+		mcpServer := rawObj.(*mcpv1alpha1.MCPServer)
+		var httpRoutes []string
+		for _, targetRef := range mcpServer.Spec.TargetRefs {
+			if targetRef.Kind == "HTTPRoute" {
+				namespace := targetRef.Namespace
+				if namespace == "" {
+					namespace = mcpServer.Namespace
+				}
+				httpRoutes = append(httpRoutes, fmt.Sprintf("%s/%s", namespace, targetRef.Name))
+			}
+		}
+		return httpRoutes
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcpv1alpha1.MCPServer{}).
+		Watches(
+			&gatewayv1.HTTPRoute{},
+			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForHTTPRoute),
+		).
 		Complete(r)
+}
+
+// findMCPServersForHTTPRoute finds all MCPServers that reference the given HTTPRoute
+func (r *MCPServerReconciler) findMCPServersForHTTPRoute(ctx context.Context, obj client.Object) []reconcile.Request {
+	httpRoute := obj.(*gatewayv1.HTTPRoute)
+	log := log.FromContext(ctx).WithValues("HTTPRoute", httpRoute.Name, "namespace", httpRoute.Namespace)
+
+	indexKey := fmt.Sprintf("%s/%s", httpRoute.Namespace, httpRoute.Name)
+	mcpServerList := &mcpv1alpha1.MCPServerList{}
+	if err := r.List(ctx, mcpServerList, client.MatchingFields{"spec.targetRefs.httproute": indexKey}); err != nil {
+		log.Error(err, "Failed to list MCPServers using index")
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, mcpServer := range mcpServerList.Items {
+		log.Info("Found MCPServer referencing HTTPRoute via index",
+			"MCPServer", mcpServer.Name,
+			"MCPServerNamespace", mcpServer.Namespace)
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      mcpServer.Name,
+				Namespace: mcpServer.Namespace,
+			},
+		})
+	}
+
+	return requests
 }
