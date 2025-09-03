@@ -2,9 +2,8 @@
 package mcprouter
 
 import (
-
-	// "github.com/kagenti/mcp-gateway/internal/config"
-
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/kagenti/mcp-gateway/internal/broker"
@@ -12,8 +11,9 @@ import (
 )
 
 func TestSetupSessionCache(_ *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	server := &ExtProcServer{
-		MCPConfig: &config.MCPServersConfig{
+		RoutingConfig: &config.MCPServersConfig{
 			Servers: []*config.MCPServer{
 				{
 					Name:       "dummy",
@@ -24,7 +24,7 @@ func TestSetupSessionCache(_ *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(),
+		Broker: broker.NewBroker(logger),
 	}
 
 	// We can't test the internals of this, because it returns nothing on error...

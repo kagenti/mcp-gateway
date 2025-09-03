@@ -138,7 +138,6 @@ golangci-lint:
 lint: fmt vet golangci-lint
 
 test-unit:
-	echo "blah blah blah test"
 	go test ./...
 
 .PHONY: tools

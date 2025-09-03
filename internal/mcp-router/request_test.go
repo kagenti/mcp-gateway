@@ -2,6 +2,8 @@ package mcprouter
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -161,8 +163,9 @@ func TestGetServerInfo(t *testing.T) {
 }
 
 func TestHandleRequestBody(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	server := &ExtProcServer{
-		MCPConfig: &config.MCPServersConfig{
+		RoutingConfig: &config.MCPServersConfig{
 			Servers: []*config.MCPServer{
 				{
 					Name:       "dummy",
@@ -173,7 +176,7 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(),
+		Broker: broker.NewBroker(logger),
 	}
 
 	data := map[string]any{
