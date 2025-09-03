@@ -77,12 +77,9 @@ spec:
                     namespace:
                       type: string
                       description: Namespace of the HTTPRoute (optional, defaults to same namespace)
-                    toolPrefix:
-                      type: string
-                      description: Tool prefix for this specific server (overrides spec-level toolPrefix)
               toolPrefix:
                 type: string
-                description: ToolPrefix is the default prefix to add to all federated tools from referenced servers. This helps avoid naming conflicts when aggregating tools from multiple sources. Can be overridden per targetRef.
+                description: ToolPrefix is the prefix to add to all federated tools from referenced servers. This helps avoid naming conflicts when aggregating tools from multiple sources.
           status:
             type: object
             description: Status represents the observed state of the MCPServer resource

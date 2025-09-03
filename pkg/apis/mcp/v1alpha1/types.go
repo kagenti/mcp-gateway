@@ -28,11 +28,10 @@ type MCPServerSpec struct {
 	// the broker to federate tools from those MCP servers.
 	TargetRefs []TargetReference `json:"targetRefs"`
 
-	// ToolPrefix is the default prefix to add to all federated tools from referenced servers.
+	// ToolPrefix is the prefix to add to all federated tools from referenced servers.
 	// This helps avoid naming conflicts when aggregating tools from multiple sources.
 	// For example, if two servers both provide a 'search' tool, prefixes like 'server1_' and 'server2_'
 	// ensure they can coexist as 'server1_search' and 'server2_search'.
-	// Can be overridden per targetRef.
 	// +optional
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 }
@@ -56,10 +55,6 @@ type TargetReference struct {
 	// Namespace of the target resource (optional, defaults to same namespace)
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
-
-	// ToolPrefix to use for this specific server (overrides spec-level toolPrefix)
-	// +optional
-	ToolPrefix string `json:"toolPrefix,omitempty"`
 }
 
 // MCPServerStatus represents the observed state of the MCPServer resource.

@@ -255,10 +255,7 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 			nameAndEndpoint = serviceDNSName
 		}
 
-		toolPrefix := targetRef.ToolPrefix
-		if toolPrefix == "" {
-			toolPrefix = mcpServer.Spec.ToolPrefix
-		}
+		toolPrefix := mcpServer.Spec.ToolPrefix
 
 		// Extract hostname from HTTPRoute
 		if len(httpRoute.Spec.Hostnames) != 1 {
