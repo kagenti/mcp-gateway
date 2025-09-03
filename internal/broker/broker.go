@@ -15,7 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-var _ config.ConfigObserver = &mcpBrokerImpl{}
+var _ config.Observer = &mcpBrokerImpl{}
 
 // downstreamSessionID is for session IDs the gateway uses with its own clients
 type downstreamSessionID string
@@ -79,7 +79,7 @@ type MCPBroker interface {
 	// CreateSession creates a new MCP session for the given authority/host
 	CreateSession(ctx context.Context, authority string) (string, error)
 
-	config.ConfigObserver
+	config.Observer
 }
 
 // mcpBrokerImpl implements MCPBroker

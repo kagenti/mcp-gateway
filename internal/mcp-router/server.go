@@ -15,7 +15,7 @@ import (
 	"github.com/kagenti/mcp-gateway/internal/config"
 )
 
-var _ config.ConfigObserver = &ExtProcServer{}
+var _ config.Observer = &ExtProcServer{}
 
 // ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
