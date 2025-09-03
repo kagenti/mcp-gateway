@@ -258,3 +258,15 @@ logs: ## Tail Istio gateway logs
 	@$(MAKE) -s -f build/debug.mk debug-logs-gateway-impl
 
 -include build/*.mk
+
+.PHONY: testwithcoverage
+testwithcoverage:
+	go test ./... -coverprofile=coverage.out
+
+.PHONY: coverage
+coverage: testwithcoverage
+	@echo "test coverage: $(shell go tool cover -func coverage.out | grep total | awk '{print substr($$3, 1, length($$3)-1)}')"
+
+.PHONY: htmlcov
+htmlcov: coverage
+	go tool cover -html=coverage.out
