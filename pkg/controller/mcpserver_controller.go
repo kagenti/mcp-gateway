@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -95,22 +94,15 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	}
 
 	if len(mcpServerList.Items) == 0 {
-		log.Info("No MCPServers found, deleting ConfigMap if it exists")
-		configMap := &corev1.ConfigMap{}
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      ConfigName,
-			Namespace: ConfigNamespace,
-		}, configMap)
-		if err == nil {
-			if err := r.Delete(ctx, configMap); err != nil {
-				log.Error(err, "Failed to delete ConfigMap")
-				return reconcile.Result{}, err
-			}
-		} else if !errors.IsNotFound(err) {
-			// Only return error if it's not a NotFound error
-			log.Error(err, "Failed to get ConfigMap")
+		log.Info("No MCPServers found, writing empty ConfigMap")
+		emptyConfig := &config.BrokerConfig{
+			Servers: []config.ServerConfig{},
+		}
+		if err := r.writeAggregatedConfig(ctx, emptyConfig); err != nil {
+			log.Error(err, "Failed to write empty configuration")
 			return reconcile.Result{}, err
 		}
+		log.Info("Successfully wrote empty ConfigMap")
 		return reconcile.Result{}, nil
 	}
 
