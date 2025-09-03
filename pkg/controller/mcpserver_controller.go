@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -151,7 +150,7 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 
 	log.Info("Successfully regenerated aggregated configuration",
 		"serverCount", len(brokerConfig.Servers))
-	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
+	return reconcile.Result{}, nil
 }
 
 func (r *MCPServerReconciler) writeAggregatedConfig(
