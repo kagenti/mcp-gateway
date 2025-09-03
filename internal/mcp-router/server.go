@@ -15,13 +15,19 @@ import (
 	"github.com/kagenti/mcp-gateway/internal/config"
 )
 
+var _ config.ConfigObserver = &ExtProcServer{}
+
 // ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
-	MCPConfig      *config.MCPServersConfig
+	RoutingConfig  *config.MCPServersConfig
 	Broker         broker.MCPBroker
 	SessionCache   *cache.Cache
 	streaming      bool
 	requestHeaders *extProcV3.HttpHeaders
+}
+
+func (s *ExtProcServer) OnConfigChange(ctx context.Context, newConfig *config.MCPServersConfig) {
+	s.RoutingConfig = newConfig
 }
 
 // SetupSessionCache initializes the session cache with broker's real MCP initialization logic
@@ -90,7 +96,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 				}
 				continue
 			}
-			responses, _ := s.HandleRequestBody(stream.Context(), data, s.MCPConfig)
+			responses, _ := s.HandleRequestBody(stream.Context(), data, s.RoutingConfig)
 			for _, response := range responses {
 				slog.Info(fmt.Sprintf("Sending MCP routing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {

@@ -5,13 +5,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
+	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+var _ config.ConfigObserver = &mcpBrokerImpl{}
 
 // downstreamSessionID is for session IDs the gateway uses with its own clients
 type downstreamSessionID string
@@ -57,6 +61,8 @@ type MCPBroker interface {
 	// Removes a server
 	UnregisterServer(ctx context.Context, mcpHost string) error
 
+	IsRegistered(mcpHost string) bool
+
 	// Call a tool by gatewaying to upstream MCP server.  Note that the upstream connection may be created lazily.
 	CallTool(
 		ctx context.Context,
@@ -72,6 +78,8 @@ type MCPBroker interface {
 
 	// CreateSession creates a new MCP session for the given authority/host
 	CreateSession(ctx context.Context, authority string) (string, error)
+
+	config.ConfigObserver
 }
 
 // mcpBrokerImpl implements MCPBroker
@@ -92,13 +100,15 @@ type mcpBrokerImpl struct {
 
 	// listeningMCPServer returns an actual listening MCP server that federates registered MCP servers
 	listeningMCPServer *server.MCPServer
+
+	logger *slog.Logger
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
 // NewBroker creates a new MCPBroker
-func NewBroker() MCPBroker {
+func NewBroker(logger *slog.Logger) MCPBroker {
 	hooks := &server.Hooks{}
 
 	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
@@ -131,6 +141,33 @@ func NewBroker() MCPBroker {
 			server.WithHooks(hooks),
 			server.WithToolCapabilities(true),
 		),
+		logger: logger,
+	}
+}
+
+func (m *mcpBrokerImpl) IsRegistered(mcpHost string) bool {
+	_, ok := m.mcpServers[upstreamMCPHost(mcpHost)]
+	return ok
+}
+
+func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServersConfig) {
+	m.logger.Debug("Broker OnConfigChange called")
+	// unregister decomissioned servers
+	for upstreamHost := range m.mcpServers {
+		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
+			return upstreamHost == upstreamMCPHost(s.URL)
+		}) {
+			if err := m.UnregisterServer(ctx, string(upstreamHost)); err != nil {
+				m.logger.Warn("unregister failed ", "server", upstreamHost)
+			}
+		}
+
+	}
+	// ensure new servers registered
+	for _, server := range conf.Servers {
+		if err := m.RegisterServer(ctx, server.URL, server.ToolPrefix, "TODO_envoy_cluster"); err != nil {
+			slog.Warn("Could not register upstream MCP", "upstream", server.URL, "name", server.Name, "error", err)
+		}
 	}
 }
 
@@ -141,6 +178,10 @@ func (m *mcpBrokerImpl) RegisterServer(
 	prefix string,
 	envoyClusterName string,
 ) error {
+	if m.IsRegistered(mcpHost) {
+		m.logger.Info("mcp server is already registered", "mcpHost", mcpHost)
+		return nil
+	}
 	slog.Info("Registering server", "mcpHost", mcpHost, "prefix", prefix)
 
 	upstream := &upstreamMCP{

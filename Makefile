@@ -68,6 +68,7 @@ build-and-load-image:
 	@echo "Building and loading image into Kind cluster..."
 	docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway:latest .
 	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	kubectl rollout restart deployment/mcp-broker-router -n mcp-system
 
 # Deploy example MCPServer
 deploy-example: install-crd ## Deploy example MCPServer resource

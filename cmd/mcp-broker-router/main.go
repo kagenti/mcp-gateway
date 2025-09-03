@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	mcpConfig config.MCPServersConfig
+	mcpConfig = &config.MCPServersConfig{}
 	mutex     sync.RWMutex
 	logger    = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	scheme    = runtime.NewScheme()
@@ -105,39 +105,25 @@ func main() {
 		logger.Info("shutting down controller")
 		return
 	}
-
+	ctx := context.Background()
+	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
+	routerGRPCServer, router := setUpRouter()
+	mcpConfig.RegisterObserver(router)
+	mcpConfig.RegisterObserver(broker)
 	// Only load config and run broker/router in standalone mode
 	LoadConfig(mcpConfigFile)
+	logger.Info("config: notifying observers of config change")
+	mcpConfig.Notify(ctx)
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
 		logger.Info("mcp servers config changed ", "config file", in.Name)
 		mutex.Lock()
 		defer mutex.Unlock()
 		LoadConfig(mcpConfigFile)
+		mcpConfig.Notify(ctx)
 	})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
-
-	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
-	for _, server := range mcpConfig.Servers {
-		err := broker.RegisterServer(context.Background(),
-			server.URL,
-			server.ToolPrefix,
-			"TODO_envoy_cluster") // The broker doesn't need this (for now), the router will
-		if err != nil {
-			slog.Warn(
-				"Could not register upstream MCP",
-				"upstream",
-				server.URL,
-				"name",
-				server.Name,
-				"error",
-				err,
-			)
-		}
-	}
-
-	routerServer := setUpRouter()
 
 	grpcAddr := mcpRouterAddrFlag
 	lis, err := net.Listen("tcp", grpcAddr)
@@ -147,7 +133,7 @@ func main() {
 
 	go func() {
 		logger.Info("[grpc] starting MCP Router", "listening", grpcAddr)
-		log.Fatal(routerServer.Serve(lis))
+		log.Fatal(routerGRPCServer.Serve(lis))
 	}()
 
 	go func() {
@@ -165,10 +151,11 @@ func main() {
 	if err := brokerServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("HTTP shutdown error: %v", err)
 	}
-	routerServer.GracefulStop()
+	routerGRPCServer.GracefulStop()
 }
 
 func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -181,7 +168,7 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	broker := broker.NewBroker()
+	broker := broker.NewBroker(logger)
 
 	streamableHTTPServer := server.NewStreamableHTTPServer(
 		broker.MCPServer(),
@@ -192,20 +179,21 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	return httpSrv, broker
 }
 
-func setUpRouter() *grpc.Server {
+func setUpRouter() (*grpc.Server, *mcpRouter.ExtProcServer) {
 	grpcSrv := grpc.NewServer()
 
 	// Create the ExtProcServer instance
 	server := &mcpRouter.ExtProcServer{
-		MCPConfig: &mcpConfig,
-		Broker:    broker.NewBroker(),
+		RoutingConfig: mcpConfig,
+		// TODO this seems wrong. Why does the router need to be passed an instance of the broker?
+		Broker: broker.NewBroker(logger),
 	}
 
 	// Setup the session cache with proper initialization
 	server.SetupSessionCache()
 
 	extProcV3.RegisterExternalProcessorServer(grpcSrv, server)
-	return grpcSrv
+	return grpcSrv, server
 }
 
 // config
