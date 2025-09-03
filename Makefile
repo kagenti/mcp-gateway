@@ -157,7 +157,6 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	@echo "Starting MCP Gateway Environment Setup"
 	@echo "========================================="
 	$(MAKE) tools
-	$(MAKE) kind-delete-cluster
 	$(MAKE) kind-create-cluster
 	$(MAKE) build-and-load-image
 	$(MAKE) gateway-api-install
