@@ -6,13 +6,15 @@ import "context"
 // MCPServersConfig holds server configuration
 type MCPServersConfig struct {
 	Servers   []*MCPServer
-	observers []ConfigObserver
+	observers []Observer
 }
 
-func (config *MCPServersConfig) RegisterObserver(obs ConfigObserver) {
+// RegisterObserver registers an observer to be notified of changes to the config
+func (config *MCPServersConfig) RegisterObserver(obs Observer) {
 	config.observers = append(config.observers, obs)
 }
 
+// Notify notifies registered observers of config changes
 func (config *MCPServersConfig) Notify(ctx context.Context) {
 	for _, observer := range config.observers {
 		observer.OnConfigChange(ctx, config)
@@ -28,6 +30,7 @@ type MCPServer struct {
 	Hostname   string
 }
 
-type ConfigObserver interface {
+// Observer provides an interface to implement inorder to register as an Observer of config changes
+type Observer interface {
 	OnConfigChange(ctx context.Context, config *MCPServersConfig)
 }

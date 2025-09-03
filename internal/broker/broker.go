@@ -152,7 +152,7 @@ func (m *mcpBrokerImpl) IsRegistered(mcpHost string) bool {
 
 func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServersConfig) {
 	m.logger.Debug("Broker OnConfigChange called")
-	// unregister decomissioned servers
+	// unregister decommissioned servers
 	for upstreamHost := range m.mcpServers {
 		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
 			return upstreamHost == upstreamMCPHost(s.URL)

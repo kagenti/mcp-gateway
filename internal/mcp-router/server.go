@@ -26,7 +26,8 @@ type ExtProcServer struct {
 	requestHeaders *extProcV3.HttpHeaders
 }
 
-func (s *ExtProcServer) OnConfigChange(ctx context.Context, newConfig *config.MCPServersConfig) {
+// OnConfigChange is used to register the router for config changes
+func (s *ExtProcServer) OnConfigChange(_ context.Context, newConfig *config.MCPServersConfig) {
 	s.RoutingConfig = newConfig
 }
 
