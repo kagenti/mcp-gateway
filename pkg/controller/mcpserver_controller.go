@@ -397,12 +397,12 @@ type startupReconciler struct {
 func (s *startupReconciler) Start(ctx context.Context) error {
 	log := log.FromContext(ctx).WithName("startup-reconciler")
 	log.Info("Running startup reconciliation to ensure config exists")
-	
+
 	if _, err := s.reconciler.regenerateAggregatedConfig(ctx); err != nil {
 		log.Error(err, "Failed to run startup reconciliation")
 		return err
 	}
-	
+
 	log.Info("Startup reconciliation completed successfully")
 	return nil
 }
