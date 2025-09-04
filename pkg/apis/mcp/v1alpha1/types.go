@@ -22,11 +22,11 @@ type MCPServer struct {
 // MCPServerSpec defines the desired state of MCPServer.
 // It specifies which HTTPRoutes point to MCP servers and how their tools should be federated.
 type MCPServerSpec struct {
-	// TargetRefs specifies HTTPRoutes that point to backend MCP servers.
-	// Each referenced HTTPRoute should have backend services that implement the MCP protocol.
-	// The controller will discover the backend services from these HTTPRoutes and configure
-	// the broker to federate tools from those MCP servers.
-	TargetRefs []TargetReference `json:"targetRefs"`
+	// TargetRef specifies an HTTPRoute that points to a backend MCP server.
+	// The referenced HTTPRoute should have backend services that implement the MCP protocol.
+	// The controller will discover the backend service from this HTTPRoute and configure
+	// the broker to federate tools from that MCP server.
+	TargetRef TargetReference `json:"targetRef"`
 
 	// ToolPrefix is the prefix to add to all federated tools from referenced servers.
 	// This helps avoid naming conflicts when aggregating tools from multiple sources.

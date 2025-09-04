@@ -9,12 +9,11 @@ metadata:
 spec:
   # Tool prefix applied to all servers in this MCPServer
   toolPrefix: test_
-  # Reference all three test MCP servers via their HTTPRoutes
-  targetRefs:
+  targetRef:
     # Server 1 - Go SDK based (hi, time, slow, headers tools)
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      name: mcp-server1-route
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server1-route
 ---
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
@@ -25,11 +24,11 @@ metadata:
     'kagenti/mcp': 'true'
 spec:
   toolPrefix: test2_
-  targetRefs:
-    # Server 1 - Go SDK based (hi, time, slow, headers tools)
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      name: mcp-server2-route
+  targetRef:
+    # Server 2 - Go SDK based (hello_world, time, headers, auth1234, slow tools)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server2-route
 ---
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
@@ -40,8 +39,8 @@ metadata:
     'kagenti/mcp': 'true'
 spec:
   toolPrefix: test3_
-  targetRefs:
+  targetRef:
     # Server 3 - Python FastMCP based (time, add, dozen, pi, get_weather, slow)
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      name: mcp-server3-route
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server3-route

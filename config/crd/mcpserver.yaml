@@ -46,37 +46,34 @@ spec:
             type: object
             description: Spec defines the desired state of the MCPServer resource
             required:
-            - targetRefs
+            - targetRef
             properties:
-              targetRefs:
-                type: array
-                description: TargetRefs specifies HTTPRoutes that point to backend MCP servers. Each referenced HTTPRoute should have backend services that implement the MCP protocol.
-                minItems: 1
-                items:
-                  type: object
-                  required:
-                  - group
-                  - kind
-                  - name
-                  properties:
-                    group:
-                      type: string
-                      default: gateway.networking.k8s.io
-                      enum:
-                      - gateway.networking.k8s.io
-                      description: Group of the target resource
-                    kind:
-                      type: string
-                      default: HTTPRoute
-                      enum:
-                      - HTTPRoute
-                      description: Kind of the target resource
-                    name:
-                      type: string
-                      description: Name of the HTTPRoute
-                    namespace:
-                      type: string
-                      description: Namespace of the HTTPRoute (optional, defaults to same namespace)
+              targetRef:
+                type: object
+                description: TargetRef specifies an HTTPRoute that points to a backend MCP server
+                required:
+                - group
+                - kind
+                - name
+                properties:
+                  group:
+                    type: string
+                    default: gateway.networking.k8s.io
+                    enum:
+                    - gateway.networking.k8s.io
+                    description: Group of the target resource
+                  kind:
+                    type: string
+                    default: HTTPRoute
+                    enum:
+                    - HTTPRoute
+                    description: Kind of the target resource
+                  name:
+                    type: string
+                    description: Name of the HTTPRoute
+                  namespace:
+                    type: string
+                    description: Namespace of the HTTPRoute (optional, defaults to same namespace)
               toolPrefix:
                 type: string
                 description: ToolPrefix is the prefix to add to all federated tools from referenced servers. This helps avoid naming conflicts when aggregating tools from multiple sources.
