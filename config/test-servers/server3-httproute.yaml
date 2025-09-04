@@ -3,19 +3,18 @@ kind: HTTPRoute
 metadata:
   name: mcp-server3-route
   labels:
-    mcp-server: "true"
+    mcp-server: 'true'
 spec:
   parentRefs:
-  - name: mcp-gateway
-    namespace: gateway-system
+    - name: mcp-gateway
+      namespace: gateway-system
   hostnames:
-  - 'server3.mcp.127-0-0-1.sslip.io'
+    - 'server3.mcp.test.com' #note this is matching the gateway listener. It is purely for internal routing by envoy
   rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /
-    backendRefs:
-    - name: mcp-test-server3
-      port: 9090
-
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-test-server3
+          port: 9090

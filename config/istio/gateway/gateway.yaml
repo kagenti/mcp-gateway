@@ -8,15 +8,15 @@ metadata:
 spec:
   gatewayClassName: istio
   listeners:
-    - name: mcp # deny all by default overridden by AuthPolicy on route
+    - name: mcp
       hostname: 'mcp.127-0-0-1.sslip.io' #public accessibly MCP host one used by client
       port: 8080
       protocol: HTTP
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcps # deny all by default overridden by AuthPolicy on route
-      hostname: '*.mcp.127-0-0-1.sslip.io' #public accessibly MCP host (doesn't need dns as it is for rewritten hosts)
+    - name: mcps
+      hostname: '*.mcp.test.com' # set to test.com on purpose to illustrate it doesn't matter what is in here but something has to be in here
       port: 8080
       protocol: HTTP
       allowedRoutes:

@@ -1,26 +1,47 @@
+---
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
-  name: test-servers
+  name: test-server1
   namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
 spec:
   # Tool prefix applied to all servers in this MCPServer
   toolPrefix: test_
-  
   # Reference all three test MCP servers via their HTTPRoutes
   targetRefs:
-  # Server 1 - Go SDK based (hi, time, slow, headers tools)
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: mcp-server1-route
-  
-  # Server 2 - Go SDK based (similar tools, different implementation)
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: mcp-server2-route
-  
-  # Server 3 - Python FastMCP based (time, add, dozen, pi, get_weather, slow)
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: mcp-server3-route
-
+    # Server 1 - Go SDK based (hi, time, slow, headers tools)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server1-route
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server2
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  toolPrefix: test2_
+  targetRefs:
+    # Server 1 - Go SDK based (hi, time, slow, headers tools)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server2-route
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server3
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  toolPrefix: test3_
+  targetRefs:
+    # Server 3 - Python FastMCP based (time, add, dozen, pi, get_weather, slow)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server3-route
