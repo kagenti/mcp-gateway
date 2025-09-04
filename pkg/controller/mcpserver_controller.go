@@ -347,13 +347,17 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	controller := ctrl.NewControllerManagedBy(mgr).
 		For(&mcpv1alpha1.MCPServer{}).
 		Watches(
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForHTTPRoute),
-		).
-		Complete(r)
+		)
+
+	// Perform startup reconciliation to ensure config exists even with zero MCPServers
+	mgr.Add(&startupReconciler{reconciler: r})
+
+	return controller.Complete(r)
 }
 
 // findMCPServersForHTTPRoute finds all MCPServers that reference the given HTTPRoute
@@ -382,4 +386,23 @@ func (r *MCPServerReconciler) findMCPServersForHTTPRoute(ctx context.Context, ob
 	}
 
 	return requests
+}
+
+// startupReconciler ensures initial configuration is written even with zero MCPServers
+type startupReconciler struct {
+	reconciler *MCPServerReconciler
+}
+
+// Start implements manager.Runnable
+func (s *startupReconciler) Start(ctx context.Context) error {
+	log := log.FromContext(ctx).WithName("startup-reconciler")
+	log.Info("Running startup reconciliation to ensure config exists")
+	
+	if _, err := s.reconciler.regenerateAggregatedConfig(ctx); err != nil {
+		log.Error(err, "Failed to run startup reconciliation")
+		return err
+	}
+	
+	log.Info("Startup reconciliation completed successfully")
+	return nil
 }
