@@ -355,7 +355,9 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		)
 
 	// Perform startup reconciliation to ensure config exists even with zero MCPServers
-	mgr.Add(&startupReconciler{reconciler: r})
+	if err := mgr.Add(&startupReconciler{reconciler: r}); err != nil {
+		return err
+	}
 
 	return controller.Complete(r)
 }
