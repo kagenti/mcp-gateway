@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-test-server4
+  labels:
+    app: mcp-test-server4
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-test-server4

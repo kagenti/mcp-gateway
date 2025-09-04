@@ -14,4 +14,6 @@ resources:
   - server3-deployment.yaml
   - server3-service.yaml
   - server3-httproute.yaml
-
+  - server4-deployment.yaml
+  - server4-service.yaml
+  - server4-httproute.yaml

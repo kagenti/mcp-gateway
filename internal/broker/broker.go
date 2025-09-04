@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
+	mcpclient "github.com/kagenti/mcp-gateway/internal/mcp"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -308,30 +309,21 @@ func (m *mcpBrokerImpl) discoverTools(
 		return nil, fmt.Errorf("failed to create streamable client: %w", err)
 	}
 
-	resInit, err := httpTransportClient.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities:    mcp.ClientCapabilities{},
-			ClientInfo: mcp.Implementation{
-				Name:    "kagenti-mcp-broker",
-				Version: "0.0.1",
-			},
-		},
-	})
+	resInit, err := mcpclient.InitializeMCPClient(ctx, httpTransportClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
-
-	upstream.initializeResult = resInit
 
 	resTools, err := httpTransportClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
-	upstream.toolsResult = resTools
 
-	upstream.lastContact = time.Now()
 	err = httpTransportClient.Close()
+
+	upstream.initializeResult = resInit
+	upstream.toolsResult = resTools
+	upstream.lastContact = time.Now()
 
 	newTools := m.populateToolMapping(upstream)
 
@@ -361,38 +353,19 @@ func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
 	return retval
 }
 
-func (m *mcpBrokerImpl) createUpstreamSession(
-	ctx context.Context,
-	host upstreamMCPHost,
-	options ...transport.StreamableHTTPCOption,
+func (m *mcpBrokerImpl) createUpstreamSession(ctx context.Context, host upstreamMCPHost, options ...transport.StreamableHTTPCOption,
 ) (*upstreamSessionState, error) {
-	retval := &upstreamSessionState{}
-
-	var err error
-	retval.client, err = client.NewStreamableHttpClient(string(host), options...)
+	mcpClient, _, err := mcpclient.CreateClient(ctx, string(host), options...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create streamable client: %w", err)
+		return nil, err
 	}
 
-	_, err = retval.client.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities:    mcp.ClientCapabilities{},
-			ClientInfo: mcp.Implementation{
-				Name:    "kagenti-mcp-broker",
-				Version: "0.0.1",
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
-	}
-
-	retval.initialized = true
-	retval.sessionID = upstreamSessionID(retval.client.GetSessionId())
-	retval.lastContact = time.Now()
-
-	return retval, nil
+	return &upstreamSessionState{
+		initialized: true,
+		client:      mcpClient,
+		sessionID:   upstreamSessionID(mcpClient.GetSessionId()),
+		lastContact: time.Now(),
+	}, nil
 }
 
 // CreateSession creates a new MCP session for the given authority - wrapper for createUpstreamSession

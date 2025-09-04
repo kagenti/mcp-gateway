@@ -1,0 +1,35 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-servers-with-failures
+  namespace: mcp-test
+spec:
+  # Reference all test MCP servers including the intentionally "bad" server4
+  targetRefs:
+    # Server 1 - Go SDK based (good server)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server1-route
+      toolPrefix: s1_
+
+    # Server 2 - Go SDK based (good server)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server2-route
+      toolPrefix: s2_
+
+    # Server 3 - Python FastMCP based (good server)
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server3-route
+      toolPrefix: s3_
+
+    # Server 4 - Intentionally "bad" server for testing validation failures
+    # This should fail validation and appear in status errors
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mcp-server4-route
+      toolPrefix: s4_
+
+  # Default tool prefix if not specified per-server
+  toolPrefix: test_
