@@ -154,15 +154,6 @@ func main() {
 	routerGRPCServer.GracefulStop()
 }
 
-// OAuthDiscoveryResponse represents the OAuth discovery endpoint response
-type OAuthDiscoveryResponse struct {
-	ResourceName           string   `json:"resource_name"`
-	Resource               string   `json:"resource"`
-	AuthorizationServers   []string `json:"authorization_servers"`
-	BearerMethodsSupported []string `json:"bearer_methods_supported"`
-	ScopesSupported        []string `json:"scopes_supported"`
-}
-
 func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 
 	mux := http.NewServeMux()
@@ -170,7 +161,6 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, "Hello, World!  BTW, the MCP server is on /mcp")
 	})
-
 	httpSrv := &http.Server{
 		Addr:         address,
 		Handler:      mux,
