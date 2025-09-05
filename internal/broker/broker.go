@@ -23,12 +23,12 @@ type downstreamSessionID string
 // upstreamSessionID is for session IDs the gateway uses with upstream MCP servers
 type upstreamSessionID string
 
-// upstreamMCPHost identifies an upstream MCP server
-type upstreamMCPHost string
+// upstreamMCPURL identifies an upstream MCP server
+type upstreamMCPURL string
 
 // upstreamMCP identifies what we know about an upstream MCP server
 type upstreamMCP struct {
-	upstreamMCP      upstreamMCPHost
+	upstreamMCP      upstreamMCPURL
 	envoyCluster     string                // The cluster name the upstream is known as to Envoy
 	prefix           string                // A prefix to add to tool names
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
@@ -49,8 +49,8 @@ type toolName string
 
 // upstreamToolInfo references a single tool on an upstream MCP server
 type upstreamToolInfo struct {
-	host     upstreamMCPHost // An MCP server host name
-	toolName string          // A tool name
+	host     upstreamMCPURL // An MCP server host name
+	toolName string         // A tool name
 }
 
 // MCPBroker manages a set of MCP servers and their sessions
@@ -90,10 +90,10 @@ type mcpBrokerImpl struct {
 	// knownSessionIDs map[downstreamSessionID]clientStatus
 
 	// serverSessions tracks the sessions we maintain with upstream MCP servers
-	serverSessions map[upstreamMCPHost]map[downstreamSessionID]*upstreamSessionState
+	serverSessions map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState
 
 	// mcpServers tracks the known servers
-	mcpServers map[upstreamMCPHost]*upstreamMCP
+	mcpServers map[upstreamMCPURL]*upstreamMCP
 
 	// toolMapping tracks the unique gateway'ed tool name to its upstream MCP server implementation
 	toolMapping map[toolName]*upstreamToolInfo
@@ -132,8 +132,8 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 
 	return &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
-		serverSessions: map[upstreamMCPHost]map[downstreamSessionID]*upstreamSessionState{},
-		mcpServers:     map[upstreamMCPHost]*upstreamMCP{},
+		serverSessions: map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
+		mcpServers:     map[upstreamMCPURL]*upstreamMCP{},
 		toolMapping:    map[toolName]*upstreamToolInfo{},
 		listeningMCPServer: server.NewMCPServer(
 			"Kagenti MCP Broker",
@@ -146,7 +146,7 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 }
 
 func (m *mcpBrokerImpl) IsRegistered(mcpHost string) bool {
-	_, ok := m.mcpServers[upstreamMCPHost(mcpHost)]
+	_, ok := m.mcpServers[upstreamMCPURL(mcpHost)]
 	return ok
 }
 
@@ -155,7 +155,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 	// unregister decommissioned servers
 	for upstreamHost := range m.mcpServers {
 		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
-			return upstreamHost == upstreamMCPHost(s.URL)
+			return upstreamHost == upstreamMCPURL(s.URL)
 		}) {
 			if err := m.UnregisterServer(ctx, string(upstreamHost)); err != nil {
 				m.logger.Warn("unregister failed ", "server", upstreamHost)
@@ -185,7 +185,7 @@ func (m *mcpBrokerImpl) RegisterServer(
 	slog.Info("Registering server", "mcpHost", mcpHost, "prefix", prefix)
 
 	upstream := &upstreamMCP{
-		upstreamMCP:  upstreamMCPHost(mcpHost),
+		upstreamMCP:  upstreamMCPURL(mcpHost),
 		prefix:       prefix,
 		envoyCluster: envoyClusterName,
 	}
@@ -197,7 +197,7 @@ func (m *mcpBrokerImpl) RegisterServer(
 	}
 	slog.Info("Discovered tools", "mcpHost", mcpHost, "num tools", len(newTools))
 
-	m.mcpServers[upstreamMCPHost(mcpHost)] = upstream
+	m.mcpServers[upstreamMCPURL(mcpHost)] = upstream
 
 	tools := make([]server.ServerTool, 0)
 	for _, newTool := range newTools {
@@ -224,24 +224,24 @@ func (m *mcpBrokerImpl) RegisterServer(
 }
 
 func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpHost string) error {
-	_, ok := m.mcpServers[upstreamMCPHost(mcpHost)]
+	_, ok := m.mcpServers[upstreamMCPURL(mcpHost)]
 	if !ok {
 		return fmt.Errorf("unknown host")
 	}
 
-	delete(m.mcpServers, upstreamMCPHost(mcpHost))
+	delete(m.mcpServers, upstreamMCPURL(mcpHost))
 
 	// Find tools registered to this server
 	toolsToDelete := make([]string, 0)
 	for toolName, upstreamToolInfo := range m.toolMapping {
-		if upstreamToolInfo.host == upstreamMCPHost(mcpHost) {
+		if upstreamToolInfo.host == upstreamMCPURL(mcpHost) {
 			toolsToDelete = append(toolsToDelete, string(toolName))
 		}
 	}
 	m.listeningMCPServer.DeleteTools(toolsToDelete...)
 
 	// Close any connections to the upstream server
-	mapping, ok := m.serverSessions[upstreamMCPHost(mcpHost)]
+	mapping, ok := m.serverSessions[upstreamMCPURL(mcpHost)]
 	if ok {
 		for downstreamSessionID, upstreamSessionState := range mapping {
 			err := upstreamSessionState.client.Close()
@@ -363,7 +363,7 @@ func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
 
 func (m *mcpBrokerImpl) createUpstreamSession(
 	ctx context.Context,
-	host upstreamMCPHost,
+	host upstreamMCPURL,
 	options ...transport.StreamableHTTPCOption,
 ) (*upstreamSessionState, error) {
 	retval := &upstreamSessionState{}
@@ -397,7 +397,7 @@ func (m *mcpBrokerImpl) createUpstreamSession(
 
 // CreateSession creates a new MCP session for the given authority - wrapper for createUpstreamSession
 func (m *mcpBrokerImpl) CreateSession(ctx context.Context, authority string) (string, error) {
-	host := upstreamMCPHost(authority)
+	host := upstreamMCPURL(authority)
 
 	sessionState, err := m.createUpstreamSession(ctx, host)
 	if err != nil {
