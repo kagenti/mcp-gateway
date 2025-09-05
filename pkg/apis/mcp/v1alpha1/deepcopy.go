@@ -67,11 +67,7 @@ func (in *MCPServerList) DeepCopyObject() runtime.Object {
 // DeepCopyInto copies the receiver, writing into out. in must be non-nil.
 func (in *MCPServerSpec) DeepCopyInto(out *MCPServerSpec) {
 	*out = *in
-	if in.TargetRefs != nil {
-		in, out := &in.TargetRefs, &out.TargetRefs
-		*out = make([]TargetReference, len(*in))
-		copy(*out, *in)
-	}
+	out.TargetRef = in.TargetRef
 }
 
 // DeepCopyInto copies the receiver, writing into out. in must be non-nil.

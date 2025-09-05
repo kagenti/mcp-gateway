@@ -1,36 +1,62 @@
+---
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
-  name: ai-assistant-tools
+  name: weather-service
   namespace: mcp-system
 spec:
-  # Tool prefix applied to all servers in this MCPServer
-  toolPrefix: ai_
-  
-  # Multiple HTTPRoute references for different MCP servers
-  targetRefs:
-  # Weather service
-  - group: gateway.networking.k8s.io
+  toolPrefix: weather_
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: weather-route
     namespace: mcp-system
-  
-  # Calendar service  
-  - group: gateway.networking.k8s.io
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: calendar-service
+  namespace: mcp-system
+spec:
+  toolPrefix: cal_
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: calendar-route
-  
-  # Search service - same namespace
-  - group: gateway.networking.k8s.io
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: search-service
+  namespace: mcp-system
+spec:
+  toolPrefix: search_
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: search-route
-  
-  # Knowledge base service
-  - group: gateway.networking.k8s.io
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: knowledge-service
+  namespace: mcp-system
+spec:
+  toolPrefix: kb_
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: knowledge-route
-  
-  # Documentation service
-  - group: gateway.networking.k8s.io
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: docs-service
+  namespace: mcp-system
+spec:
+  toolPrefix: docs_
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: docs-route
+
