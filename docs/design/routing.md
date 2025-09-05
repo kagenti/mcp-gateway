@@ -26,7 +26,7 @@ The MCP Server resource is a kuberentes CRD used to register and configure an MC
 
 To configure the MCP Gateway we have two different routes with distinct routing responsibilities, both of these are required:
 
-- **The MCP Gateway Route:** This route is how agents interact with the Gateway and is intented to be the route exposed for use (for example via a DNS resolvable hostname). The default backend for this route must be the MCP Broker component. From a client perspective this endpoint acts as an MCP Server.[Example](../../config/mcp-system/httproute.yaml). Although it will recieve tools/calls it does not directly handle tools/calls.
+- **The MCP Gateway Route:** This route is how agents interact with the Gateway and is intented to be the route exposed for use (for example via a DNS resolvable hostname). The default backend for this route must be the MCP Broker component. From a client perspective this endpoint acts as an MCP Server.[Example](../../config/mcp-system/httproute.yaml). Although this route will also recieve tools/calls it does not actually send tools/calls to the broker backend. These are intercepted and re-routed. 
 
 - **Individual MCP Server Routes:** These are intended to route to individual MCP Servers that can handle distinct tools/calls from a client. There can be many of these routes but there is expected to be a 1:1 relationship between a route and a MCP Backend. Each MCP Server route should have some form of hostname set. The hostname used, is not hugely important as it is not expected to be DNS resolvable. In our examples we use `server1.mcp.local` etc. Each route should have a single rule that points at the MCP backend. [Example](../../config/test-servers/server1-httproute.yaml).
 
