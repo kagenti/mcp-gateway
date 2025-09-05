@@ -21,7 +21,10 @@ spec:
       protocol: HTTP
       allowedRoutes:
         namespaces:
-          from: mcp-system #only the mcp-system namespace can define HTTPRoutes for this listener
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: keycloak
     - name: mcps
       hostname: '*.mcp.local' # set to test.com on purpose to illustrate it doesn't matter what is in here but something has to be in here
       port: 8080
