@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-test-server4
+  labels:
+    app: mcp-test-server4
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-test-server4
+  template:
+    metadata:
+      labels:
+        app: mcp-test-server4
+    spec:
+      containers:
+        - name: mcp-test-server4
+          image: ghcr.io/kagenti/mcp-gateway/test-server4:latest
+          imagePullPolicy: IfNotPresent
+          command: ["./mcp-test-server4"]
+          args: ["--http", "0.0.0.0:9090"]
+          ports:
+            - containerPort: 9090
+              name: http
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: FAILURE_MODE
+              value: "protocol" # Default to protocol version failure
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+          # Add readiness probe that will likely fail for most failure modes
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          # Add liveness probe that will also likely fail
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3

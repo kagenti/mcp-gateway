@@ -64,6 +64,10 @@ type MCPServerStatus struct {
 	// Conditions represent the latest available observations of the MCPServer's state.
 	// Common conditions include 'Ready' to indicate if all referenced servers are accessible.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration reflects the generation of the most recently observed MCPServer.
+	// This is used to determine if validation should be performed when the spec changes.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
