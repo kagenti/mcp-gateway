@@ -4,8 +4,11 @@ package broker
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -121,11 +124,11 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
-		slog.Info("Processing %s request", "method", method)
+		slog.Info("Processing request", "method", method)
 	})
 
 	hooks.AddOnError(func(_ context.Context, _ any, method mcp.MCPMethod, _ any, err error) {
-		slog.Info("Error in %s: %v", "method", method, "error", err)
+		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
 	return &mcpBrokerImpl{
@@ -302,6 +305,15 @@ func (m *mcpBrokerImpl) discoverTools(
 	upstream *upstreamMCP,
 	options ...transport.StreamableHTTPCOption,
 ) ([]mcp.Tool, error) {
+
+	// Some MCP servers require a bearer token or other Authorization to init and list tools
+	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
+	if serverAuthHeaderValue != "" {
+		options = append(options, transport.WithHTTPHeaders(map[string]string{
+			"Authorization": serverAuthHeaderValue,
+		}))
+	}
+
 	httpTransportClient, err := client.NewStreamableHttpClient(
 		upstream.URL,
 		options...)
@@ -429,4 +441,38 @@ func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSes
 // MCPServer is a listening MCP server that federates the endpoints
 func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
 	return m.listeningMCPServer
+}
+
+// Get the authorization header needed for a particular MCP upstream
+func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
+	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
+	// Instead it is passed to the Broker pod through an env var (typically from a Secret)
+	// The format is
+	// url1=value1+url2=value2+url3=value3
+	// e.g.
+	// UPSTREAM_AUTHORIZATIONS=http://localhost:9090/mcp=Bearer 1234
+	authorizations := os.Getenv("UPSTREAM_AUTHORIZATIONS")
+
+	// Not defined
+	if authorizations == "" {
+		return ""
+	}
+
+	for _, auth := range strings.Split(authorizations, "+") {
+		authParts := strings.SplitN(auth, "=", 2)
+		if len(authParts) != 2 {
+			// It would be better to print the incorrect fragment, but we don't want
+			// to log a possibly important bearer key
+			log.Printf("Invalid auth encoding (%d parts)", len(authParts))
+			continue
+		}
+
+		if authParts[0] == string(upstream.upstreamMCP) {
+			// We found an Authorization value for this upstream MCP url
+			return authParts[1]
+		}
+	}
+
+	// We didn't find a match
+	return ""
 }
