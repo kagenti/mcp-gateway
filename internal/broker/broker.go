@@ -56,12 +56,12 @@ type upstreamToolInfo struct {
 // MCPBroker manages a set of MCP servers and their sessions
 type MCPBroker interface {
 	// Implements the https://github.com/kagenti/mcp-gateway/blob/main/docs/design/flows.md#discovery flow
-	RegisterServer(ctx context.Context, mcpHost string, prefix string, envoyCluster string) error
+	RegisterServer(ctx context.Context, mcpURL string, prefix string, envoyCluster string) error
 
 	// Removes a server
-	UnregisterServer(ctx context.Context, mcpHost string) error
+	UnregisterServer(ctx context.Context, mcpURL string) error
 
-	IsRegistered(mcpHost string) bool
+	IsRegistered(mcpURL string) bool
 
 	// Call a tool by gatewaying to upstream MCP server.  Note that the upstream connection may be created lazily.
 	CallTool(
@@ -145,8 +145,8 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 	}
 }
 
-func (m *mcpBrokerImpl) IsRegistered(mcpHost string) bool {
-	_, ok := m.mcpServers[upstreamMCPURL(mcpHost)]
+func (m *mcpBrokerImpl) IsRegistered(mcpURL string) bool {
+	_, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
 	return ok
 }
 
@@ -174,34 +174,34 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 // RegisterServer registers an MCP server
 func (m *mcpBrokerImpl) RegisterServer(
 	ctx context.Context,
-	mcpHost string,
+	mcpURL string,
 	prefix string,
 	envoyClusterName string,
 ) error {
-	if m.IsRegistered(mcpHost) {
-		m.logger.Info("mcp server is already registered", "mcpHost", mcpHost)
+	if m.IsRegistered(mcpURL) {
+		m.logger.Info("mcp server is already registered", "mcpURL", mcpURL)
 		return nil
 	}
-	slog.Info("Registering server", "mcpHost", mcpHost, "prefix", prefix)
+	slog.Info("Registering server", "mcpURL", mcpURL, "prefix", prefix)
 
 	upstream := &upstreamMCP{
-		upstreamMCP:  upstreamMCPURL(mcpHost),
+		upstreamMCP:  upstreamMCPURL(mcpURL),
 		prefix:       prefix,
 		envoyCluster: envoyClusterName,
 	}
 
 	newTools, err := m.discoverTools(ctx, upstream)
 	if err != nil {
-		slog.Info("Failed to discover tools", "mcpHost", mcpHost, "error", err)
+		slog.Info("Failed to discover tools", "mcpURL", mcpURL, "error", err)
 		return err
 	}
-	slog.Info("Discovered tools", "mcpHost", mcpHost, "num tools", len(newTools))
+	slog.Info("Discovered tools", "mcpURL", mcpURL, "num tools", len(newTools))
 
-	m.mcpServers[upstreamMCPURL(mcpHost)] = upstream
+	m.mcpServers[upstreamMCPURL(mcpURL)] = upstream
 
 	tools := make([]server.ServerTool, 0)
 	for _, newTool := range newTools {
-		slog.Info("Federating tool", "mcpHost", mcpHost, "federated name", newTool.Name)
+		slog.Info("Federating tool", "mcpURL", mcpURL, "federated name", newTool.Name)
 		tools = append(tools, server.ServerTool{
 			Tool: newTool,
 			Handler: func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -223,33 +223,33 @@ func (m *mcpBrokerImpl) RegisterServer(
 	return nil
 }
 
-func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpHost string) error {
-	_, ok := m.mcpServers[upstreamMCPURL(mcpHost)]
+func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error {
+	_, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
 	if !ok {
 		return fmt.Errorf("unknown host")
 	}
 
-	delete(m.mcpServers, upstreamMCPURL(mcpHost))
+	delete(m.mcpServers, upstreamMCPURL(mcpURL))
 
 	// Find tools registered to this server
 	toolsToDelete := make([]string, 0)
 	for toolName, upstreamToolInfo := range m.toolMapping {
-		if upstreamToolInfo.host == upstreamMCPURL(mcpHost) {
+		if upstreamToolInfo.host == upstreamMCPURL(mcpURL) {
 			toolsToDelete = append(toolsToDelete, string(toolName))
 		}
 	}
 	m.listeningMCPServer.DeleteTools(toolsToDelete...)
 
 	// Close any connections to the upstream server
-	mapping, ok := m.serverSessions[upstreamMCPURL(mcpHost)]
+	mapping, ok := m.serverSessions[upstreamMCPURL(mcpURL)]
 	if ok {
 		for downstreamSessionID, upstreamSessionState := range mapping {
 			err := upstreamSessionState.client.Close()
 			if err != nil {
 				slog.Warn(
 					"Could not close upstream session",
-					"mcpHost",
-					mcpHost,
+					"mcpURL",
+					mcpURL,
 					"sessionID",
 					downstreamSessionID,
 				)
