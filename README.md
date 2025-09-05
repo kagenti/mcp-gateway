@@ -24,6 +24,27 @@ make inspect-gateway
 
 Open http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
 
+## Example OAuth setup
+
+After running the Quick start above,
+create the EnvoyFilter with a hardcoded oauth-protected-resource response,
+and an AuthPolicy that validates tokens on the /mcp endpoint.
+
+```bash
+kubectl apply -f ./config/istio/gateway/oauth-envoyfilter.yaml
+kubectl apply -f ./config/mcp-system/authpolicy.yaml
+```
+
+Set up a new 'mcp' realm in keycloak:
+
+* Open http://keycloak.127-0-0-1.sslip.io:8888/
+* Login as admin/admin
+* Create a new realm called 'mcp'
+* Create a new user called 'mcp, with password mcp` in the new realm
+* From 'Clients' > 'Client Registration' > 'Anonymous access polices' - delete the 'Trusted Hosts' policy
+
+Finally, open the mcp-inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp and go through the OAuth flow.
+
 ## Running Modes
 
 ### Standalone Mode (File-based)

@@ -1,0 +1,51 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak-route
+  namespace: keycloak
+spec:
+  parentRefs:
+    - name: mcp-gateway
+      namespace: gateway-system
+  hostnames:
+    - 'keycloak.127-0-0-1.sslip.io'
+  rules:
+    # OAuth discovery endpoint rewrite rule for mcp realm
+    - matches:
+        - path:
+            type: Exact
+            value: /.well-known/oauth-authorization-server/realms/mcp
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /realms/mcp/.well-known/oauth-authorization-server
+      backendRefs:
+        - name: keycloak
+          port: 80
+    # Default rule for all other paths
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            remove:
+              - Access-Control-Allow-Origin
+              - Access-Control-Allow-Credentials
+              - Access-Control-Allow-Headers
+              - Access-Control-Allow-Methods
+            set:
+              - name: Access-Control-Allow-Origin
+                value: "http://localhost:6274"
+              - name: Access-Control-Allow-Credentials
+                value: "true"
+              - name: Access-Control-Allow-Headers
+                value: "Content-Type, Authorization"
+              - name: Access-Control-Allow-Methods
+                value: "POST, OPTIONS"
+      backendRefs:
+        - name: keycloak
+          port: 80

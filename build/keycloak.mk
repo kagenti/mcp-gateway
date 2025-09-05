@@ -23,6 +23,9 @@ keycloak-install-impl: $(HELM)
 		--set replicaCount=1 \
 		--wait --timeout=300s
 	@echo ""
+	@echo "Creating HTTPRoute"
+	kubectl apply -f config/keycloak/httproute.yaml
+	@echo ""
 	@echo "Keycloak installed!"
 	@echo "Admin credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
 	@echo "Run 'make keycloak-forward' to access at http://localhost:8095"
