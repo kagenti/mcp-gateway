@@ -8,7 +8,7 @@ metadata:
 spec:
   gatewayClassName: istio
   listeners:
-    - name: mcp
+    - name: mcp # gateway listener
       hostname: 'mcp.127-0-0-1.sslip.io' #public accessibly MCP host one used by client
       port: 8080
       protocol: HTTP
@@ -21,11 +21,11 @@ spec:
       protocol: HTTP
       allowedRoutes:
         namespaces:
-          from: All
+          from: mcp-system #only the mcp-system namespace can define HTTPRoutes for this listener
     - name: mcps
-      hostname: '*.mcp.test.com' # set to test.com on purpose to illustrate it doesn't matter what is in here but something has to be in here
+      hostname: '*.mcp.local' # set to test.com on purpose to illustrate it doesn't matter what is in here but something has to be in here
       port: 8080
       protocol: HTTP
       allowedRoutes:
         namespaces:
-          from: All
+          from: All #any namespace can register an MCP server route
