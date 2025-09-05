@@ -9,7 +9,7 @@ spec:
     - name: mcp-gateway
       namespace: gateway-system
   hostnames:
-    - 'server3.mcp.test.com' #note this is matching the gateway listener. It is purely for internal routing by envoy
+    - 'server3.mcp.local' #note this is matching the gateway listener. It is purely for internal routing by envoy
   rules:
     - matches:
         - path:
