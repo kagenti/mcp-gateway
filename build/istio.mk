@@ -18,7 +18,7 @@ istioctl-impl: $(ISTIOCTL)
 
 .PHONY: istio-install
 istio-install: $(HELM) # Install Istio using Sail operator
-	$(HELM) install sail-operator \
+	$(HELM) upgrade --install sail-operator \
 		--create-namespace \
 		--namespace $(ISTIO_NAMESPACE) \
 		--wait \
