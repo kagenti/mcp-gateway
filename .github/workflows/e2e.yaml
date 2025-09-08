@@ -1,0 +1,52 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        
+    - name: Create Kind cluster
+      run: |
+        kind create cluster --name mcp-gateway --config - <<EOF
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          extraPortMappings:
+          - containerPort: 8080
+            hostPort: 8080
+            protocol: TCP
+          - containerPort: 8443
+            hostPort: 8443
+            protocol: TCP
+        EOF
+              
+    - name: Setup CI environment
+      run: make ci-setup
+        
+    - name: Run E2E tests
+      run: make test-e2e-ci
+        
+    - name: Collect logs on failure
+      if: failure()
+      run: make ci-debug-logs
