@@ -4,11 +4,9 @@ package broker
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -446,33 +444,10 @@ func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
 // Get the authorization header needed for a particular MCP upstream
 func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
-	// Instead it is passed to the Broker pod through an env var (typically from a Secret)
+	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
 	// The format is
-	// url1=value1+url2=value2+url3=value3
+	// KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
 	// e.g.
-	// UPSTREAM_AUTHORIZATIONS=http://localhost:9090/mcp=Bearer 1234
-	authorizations := os.Getenv("UPSTREAM_AUTHORIZATIONS")
-
-	// Not defined
-	if authorizations == "" {
-		return ""
-	}
-
-	for _, auth := range strings.Split(authorizations, "+") {
-		authParts := strings.SplitN(auth, "=", 2)
-		if len(authParts) != 2 {
-			// It would be better to print the incorrect fragment, but we don't want
-			// to log a possibly important bearer key
-			log.Printf("Invalid auth encoding (%d parts)", len(authParts))
-			continue
-		}
-
-		if authParts[0] == string(upstream.upstreamMCP) {
-			// We found an Authorization value for this upstream MCP url
-			return authParts[1]
-		}
-	}
-
-	// We didn't find a match
-	return ""
+	// KAGENTAI_test_CRED=Bearer 1234
+	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
 }
