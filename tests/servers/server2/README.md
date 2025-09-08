@@ -105,3 +105,12 @@ curl -v ${MCP} -H "mcp-session-id: ${SESSION_ID}" -H "Content-Type: application/
 }
 '
 ```
+
+### Security options
+
+To require a bearer token, define `EXPECTED_AUTH`
+
+- `EXPECTED_AUTH="Bearer 1234" MCP_TRANSPORT=http PORT=9091 go run main.go`
+- `docker run --publish 9091:9090 --EXPECTED_AUTH="Bearer 1234" --env MCP_TRANSPORT=http --env PORT=9090 mcp-test2`
+
+Then, before Connecting in the MCP Inspector console, expand _Authorization_ and set the Bearer Token value to `1234`.  (Note that the MCP inspector prepends this with "Bearer ", so the value set in the MCP Inspector UI doesn't match exactly with what the test MCP server receives).

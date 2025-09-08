@@ -5,6 +5,7 @@
 // - A "time" tool that returns the current time
 // - A "slow" tool that waits N seconds, notifying the client of progress
 // - A "headers" tool that returns all HTTP headers it received
+// - A "auth1234" that fails unless it gets a specific Authorization header value
 package main
 
 import (
@@ -23,6 +24,11 @@ import (
 )
 
 func main() {
+	expectedAuth := os.Getenv("EXPECTED_AUTH")
+	if expectedAuth != "" {
+		log.Printf("Test Server2 will expect authorization of %q", expectedAuth)
+	}
+
 	hooks := &server.Hooks{}
 
 	// Add session lifecycle hooks
@@ -103,7 +109,7 @@ func main() {
 		mux := http.NewServeMux()
 		httpServer := &http.Server{
 			Addr:              ":" + port,
-			Handler:           mux,
+			Handler:           optionalFixedAuth(mux, expectedAuth),
 			ReadHeaderTimeout: 3 * time.Second,
 		}
 
@@ -215,4 +221,23 @@ func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	return mcp.NewToolResultText("done"), nil
+}
+
+// optionalFixedAuth fails with 401 unless Authorization header matches expectedAuth
+// If expectedAuth is empty, any authorization (or none) is accepted.
+func optionalFixedAuth(next http.Handler, expectedAuth string) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if expectedAuth != "" {
+			auth := req.Header.Get("Authorization")
+			if auth != expectedAuth {
+				log.Printf("Rejecting %q, got %q", expectedAuth, auth)
+				http.Error(w,
+					fmt.Sprintf("Expected Authorization %q, got %q", expectedAuth, auth),
+					http.StatusUnauthorized)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, req)
+	})
 }
