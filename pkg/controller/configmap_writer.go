@@ -12,15 +12,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
+	internalconfig "github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/pkg/config"
 )
 
 // ConfigMapWriter writes ConfigMaps
 type ConfigMapWriter struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client       client.Client
+	Scheme       *runtime.Scheme
+	ConfigPusher *ConfigPusher
 }
 
 // WriteAggregatedConfig writes aggregated config
@@ -52,7 +55,17 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 	err = w.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, existing)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return w.Client.Create(ctx, configMap)
+			if err := w.Client.Create(ctx, configMap); err != nil {
+				return err
+			}
+			if w.ConfigPusher != nil {
+				servers := convertToInternalFormat(brokerConfig.Servers)
+				if err := w.ConfigPusher.PushConfig(ctx, servers); err != nil {
+					logger := log.FromContext(ctx)
+					logger.Error(err, "Failed to push config to broker")
+				}
+			}
+			return nil
 		}
 		return err
 	}
@@ -62,7 +75,19 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 		!equality.Semantic.DeepEqual(existing.Labels, configMap.Labels) {
 		existing.Data = configMap.Data
 		existing.Labels = configMap.Labels
-		return w.Client.Update(ctx, existing)
+		if err := w.Client.Update(ctx, existing); err != nil {
+			return err
+		}
+
+		if w.ConfigPusher != nil {
+			servers := convertToInternalFormat(brokerConfig.Servers)
+			if err := w.ConfigPusher.PushConfig(ctx, servers); err != nil {
+				// log error but don't fail - configmap is still updated
+				// broker will eventually pick it up via file watch
+				logger := log.FromContext(ctx)
+				logger.Error(err, "Failed to push config to broker")
+			}
+		}
 	}
 
 	return nil
@@ -71,7 +96,23 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 // NewConfigMapWriter creates a ConfigMapWriter
 func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMapWriter {
 	return &ConfigMapWriter{
-		Client: client,
-		Scheme: scheme,
+		Client:       client,
+		Scheme:       scheme,
+		ConfigPusher: NewConfigPusher(),
 	}
+}
+
+// convertToInternalFormat converts from pkg/config to internal/config format
+func convertToInternalFormat(servers []config.ServerConfig) []*internalconfig.MCPServer {
+	result := make([]*internalconfig.MCPServer, len(servers))
+	for i, s := range servers {
+		result[i] = &internalconfig.MCPServer{
+			Name:       s.Name,
+			URL:        s.URL,
+			ToolPrefix: s.ToolPrefix,
+			Enabled:    s.Enabled,
+			Hostname:   s.Hostname,
+		}
+	}
+	return result
 }
