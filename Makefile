@@ -137,7 +137,13 @@ vet:
 
 .PHONY: golangci-lint
 golangci-lint:
-	golangci-lint run ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	elif [ -f bin/golangci-lint ]; then \
+		bin/golangci-lint run ./...; \
+	else \
+		$(MAKE) golangci-lint-bin && bin/golangci-lint run ./...; \
+	fi
 
 .PHONY: lint
 lint: fmt vet golangci-lint

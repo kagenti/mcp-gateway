@@ -256,6 +256,14 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthProtectedResourceHandler(oauthConfig))
 	logger.Info("OAuth protected resource endpoint configured", "config", oauthConfig)
 
+	// config update endpoint
+	authToken := os.Getenv("CONFIG_UPDATE_TOKEN")
+	if authToken == "" {
+		logger.Warn("CONFIG_UPDATE_TOKEN not set, config updates will be unauthenticated")
+	}
+	configHandler := broker.NewConfigUpdateHandler(mcpConfig, authToken, logger)
+	mux.Handle("/config", configHandler)
+
 	httpSrv := &http.Server{
 		Addr:         address,
 		Handler:      mux,
