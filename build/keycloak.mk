@@ -10,7 +10,7 @@ keycloak-install-impl: $(HELM)
 	@echo "Installing Keycloak (dev mode)..."
 	@-$(HELM) repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null
 	@$(HELM) repo update
-	@$(HELM) install keycloak bitnami/keycloak \
+	@$(HELM) upgrade --install keycloak bitnami/keycloak \
 		--create-namespace \
 		--namespace $(KEYCLOAK_NAMESPACE) \
 		--set auth.adminUser=$(KEYCLOAK_ADMIN_USER) \
