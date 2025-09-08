@@ -9,7 +9,8 @@ spec:
     - name: mcp-gateway
       namespace: gateway-system
   hostnames:
-    - 'server2.mcp.local' #note this is matching the gateway listener. It is purely for internal routing by envoy
+    - 'server2.mcp.local' #note this is matching the gateway listener. It is purely for internal routing by Envoy
+    - 'server2.127-0-0-1.sslip.io'
   rules:
     - matches:
         - path:
