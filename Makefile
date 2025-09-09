@@ -81,7 +81,8 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server1 --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server2 --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server3 --timeout=90s
-	@echo "All test servers ready, deploying MCPServer resource..."
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server4 --timeout=60s
+	@echo "All test servers ready, deploying MCPServer resources..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
 	@echo "Waiting for controller to process MCPServer..."
 	@sleep 3
