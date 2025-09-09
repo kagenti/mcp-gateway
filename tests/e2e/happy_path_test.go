@@ -105,6 +105,8 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		By("Waiting for broker to register servers")
 		// wait for broker to load the config and be ready
+		// note: configmap volume mounts can take 60-120s to sync in kubernetes
+		// plus additional time for fsnotify to detect and reload
 		// we'll verify by checking if the broker pod has reloaded config
 		Eventually(func() bool {
 			// check broker logs for config reload message
@@ -117,7 +119,7 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 			// look for evidence that config was loaded with our servers
 			return bytes.Contains(output, []byte("s1_")) &&
 				bytes.Contains(output, []byte("s2_"))
-		}, 90*time.Second, 5*time.Second).Should(BeTrue(),
+		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
 			"Broker should load configuration with test servers")
 
 		By("Setting up port-forward to broker")
