@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"slices"
 	"time"
 
@@ -121,11 +122,11 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
-		slog.Info("Processing %s request", "method", method)
+		slog.Info("Processing request", "method", method)
 	})
 
 	hooks.AddOnError(func(_ context.Context, _ any, method mcp.MCPMethod, _ any, err error) {
-		slog.Info("Error in %s: %v", "method", method, "error", err)
+		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
 	return &mcpBrokerImpl{
@@ -302,6 +303,15 @@ func (m *mcpBrokerImpl) discoverTools(
 	upstream *upstreamMCP,
 	options ...transport.StreamableHTTPCOption,
 ) ([]mcp.Tool, error) {
+
+	// Some MCP servers require a bearer token or other Authorization to init and list tools
+	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
+	if serverAuthHeaderValue != "" {
+		options = append(options, transport.WithHTTPHeaders(map[string]string{
+			"Authorization": serverAuthHeaderValue,
+		}))
+	}
+
 	httpTransportClient, err := client.NewStreamableHttpClient(
 		upstream.URL,
 		options...)
@@ -429,4 +439,15 @@ func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSes
 // MCPServer is a listening MCP server that federates the endpoints
 func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
 	return m.listeningMCPServer
+}
+
+// Get the authorization header needed for a particular MCP upstream
+func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
+	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
+	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
+	// The format is
+	// KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
+	// e.g.
+	// KAGENTAI_test_CRED=Bearer 1234
+	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
 }
