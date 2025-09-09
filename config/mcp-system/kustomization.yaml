@@ -2,8 +2,10 @@
 namespace: mcp-system
 resources:
   - namespace.yaml
+  - secret.yaml
   - rbac.yaml
   - broker-service.yaml
+  - config-service.yaml
   - deployment-broker.yaml
   - deployment-controller.yaml
   - httproute.yaml

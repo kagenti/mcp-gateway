@@ -12,6 +12,7 @@ import (
 )
 
 // ConfigUpdateHandler handles dynamic configuration updates via HTTP
+// Each broker instance receives the same config from the controller via the service
 type ConfigUpdateHandler struct {
 	config    *config.MCPServersConfig
 	authToken string
@@ -29,11 +30,7 @@ func NewConfigUpdateHandler(cfg *config.MCPServersConfig, authToken string, logg
 
 // ServeHTTP handles config update requests
 func (h *ConfigUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+	// method check handled by mux with "POST /config" pattern
 	if h.authToken != "" {
 		token := r.Header.Get("Authorization")
 		expectedToken := "Bearer " + h.authToken

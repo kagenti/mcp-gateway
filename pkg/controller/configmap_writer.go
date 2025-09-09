@@ -98,7 +98,7 @@ func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMap
 	return &ConfigMapWriter{
 		Client:       client,
 		Scheme:       scheme,
-		ConfigPusher: NewConfigPusher(),
+		ConfigPusher: NewConfigPusher(client),
 	}
 }
 

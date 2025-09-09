@@ -34,7 +34,7 @@ spec:
                   name: mcp-config-update-token
                   key: token
             - name: BROKER_CONFIG_URL
-              value: "http://mcp-broker.mcp-system.svc.cluster.local:8080/config"
+              value: "http://mcp-config.mcp-system.svc.cluster.local:8181/config"
           ports:
             - name: health
               containerPort: 8081
