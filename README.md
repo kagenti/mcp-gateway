@@ -34,7 +34,7 @@ Configure the mcp-broker with OAuth environment variables:
 # Configure OAuth discovery endpoint via environment variables
 export OAUTH_RESOURCE_NAME="MCP Server"
 export OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp"  
-export OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8888/realms/mcp"
+export OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"
 export OAUTH_BEARER_METHODS_SUPPORTED="header"
 export OAUTH_SCOPES_SUPPORTED="basic"
 
@@ -55,13 +55,11 @@ The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-pro
 
 ### Keycloak Setup
 
-Set up a new 'mcp' realm in keycloak:
+Set up a new 'mcp' realm in keycloak with user/pass mcp/mcp:
 
-* Open http://keycloak.127-0-0-1.sslip.io:8888/
-* Login as admin/admin
-* Create a new realm called 'mcp'
-* Create a new user called 'mcp, with password mcp` in the new realm
-* From 'Clients' > 'Client Registration' > 'Anonymous access polices' - delete the 'Trusted Hosts' policy
+```bash
+make keycloak-setup-mcp-realm
+```
 
 Finally, open the mcp-inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp and go through the OAuth flow.
 
