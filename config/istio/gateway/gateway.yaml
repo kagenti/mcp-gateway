@@ -25,8 +25,29 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: keycloak
+    - name: mcp-server1-route
+      hostname: 'server1.127-0-0-1.sslip.io'
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: mcp-server2-route
+      hostname: 'server2.127-0-0-1.sslip.io'
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: mcp-server3-route
+      hostname: 'server3.127-0-0-1.sslip.io'
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
     - name: mcps
-      hostname: '*.mcp.local' # set to test.com on purpose to illustrate it doesn't matter what is in here but something has to be in here
+      hostname: '*.mcp.local'
       port: 8080
       protocol: HTTP
       allowedRoutes:
