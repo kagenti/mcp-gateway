@@ -30,7 +30,7 @@ type MCPServer struct {
 	Hostname   string
 }
 
-// Observer provides an interface to implement inorder to register as an Observer of config changes
+// Observer provides an interface to implement in order to register as an Observer of config changes
 type Observer interface {
 	OnConfigChange(ctx context.Context, config *MCPServersConfig)
 }

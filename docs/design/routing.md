@@ -9,7 +9,7 @@ In order to expose MCP Servers, the MCP Gateway aggregates the available tools f
 
 > Note: In describing the solution [Gateway API](https://gateway-api.sigs.k8s.io/) and Kubernetes are used as the basis for defining and deploying routes and gateways. It is worth mentioning that the result of all these APIs is config that is eventually consumed by Envoy and as such could be done without the need for the Gateway API resources.
 
-MCP Gateway intercept the tools/calls hitting the /mcp endpoint before envoy routes them and then based on configuration sets the `authority:` header to force the routing decision of envoy to choose the corrrect MCP backend. Setting the `authority:` header allows for distinct routing and hostname per MCP backend. 
+MCP Gateway intercept the tools/calls hitting the /mcp endpoint before envoy routes them and then based on configuration sets the `authority:` header to force the routing decision of Envoy to choose the correct MCP backend. Setting the `authority:` header allows for distinct routing and hostname per MCP backend.
 
 ![](./images/mcp-gateway-routing.jpg)
 

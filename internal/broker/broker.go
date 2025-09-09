@@ -448,6 +448,6 @@ func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// The format is
 	// KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
 	// e.g.
-	// KAGENTAI_test_CRED=Bearer 1234
+	// KAGENTAI_test_CRED="Bearer 1234"
 	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
 }
