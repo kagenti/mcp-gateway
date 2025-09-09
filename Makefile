@@ -107,6 +107,10 @@ deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local
 docker-build: ## Build container image locally
 	docker build ${BUILDFLAGS} -t mcp-gateway:local .
 
+##@ E2E Testing
+
+# E2E test targets are in build/e2e.mk
+
 # Build multi-platform image
 docker-buildx: ## Build multi-platform container image
 	docker buildx build --platform linux/amd64,linux/arm64 -t mcp-gateway:local .
