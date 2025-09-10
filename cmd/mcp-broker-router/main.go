@@ -200,7 +200,7 @@ func setUpRouter() (*grpc.Server, *mcpRouter.ExtProcServer) {
 
 func LoadConfig(path string) {
 	viper.SetConfigFile(path)
-	logger.Debug("loading congfig", "path", viper.ConfigFileUsed())
+	logger.Debug("loading config", "path", viper.ConfigFileUsed())
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatalf("Error reading config file: %s", err)

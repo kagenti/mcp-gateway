@@ -142,7 +142,7 @@ sequenceDiagram
         note right of Authorino: checking JWT and tool name <br/> defined in AuthPolicy
         Authorino->>WASM: 401 WWW-Authenticate 
         note left of Authorino: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/tool/prefix_echo
-        note left of Authorino: the response is set in the  AuthPolicy targeting the MCP HTTPRoute <br/> as the owner of the MCP server will know <br/> what that should be . Prefix will need to be includd in the resource url
+        note left of Authorino: the response is set in the  AuthPolicy targeting the MCP HTTPRoute <br/> as the owner of the MCP server will know <br/> what that should be . Prefix will need to be included in the resource url
         WASM->>MCP Client: 401 WWW-Authenticate 
         note left of WASM: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/tool/prefix_echo
         MCP Client->>Gateway: .well-known/oauth-protected-resource/tool/prefix_echo
