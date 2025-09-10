@@ -25,21 +25,21 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: keycloak
-    - name: mcp-server1-route
+    - name: mcp-server1-route-ext
       hostname: 'server1.127-0-0-1.sslip.io'
       port: 8080
       protocol: HTTP
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcp-server2-route
+    - name: mcp-server2-route-ext
       hostname: 'server2.127-0-0-1.sslip.io'
       port: 8080
       protocol: HTTP
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcp-server3-route
+    - name: mcp-server3-route-ext
       hostname: 'server3.127-0-0-1.sslip.io'
       port: 8080
       protocol: HTTP

@@ -8,10 +8,13 @@ resources:
   - server1-deployment.yaml
   - server1-service.yaml
   - server1-httproute.yaml
+  - server1-httproute-ext.yaml
   - server2-deployment.yaml
   - server2-service.yaml
   - server2-httproute.yaml
+  - server2-httproute-ext.yaml
   - server3-deployment.yaml
   - server3-service.yaml
   - server3-httproute.yaml
+  - server3-httproute-ext.yaml
 

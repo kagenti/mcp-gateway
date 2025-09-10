@@ -283,12 +283,14 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 
 	// Extract hostname from HTTPRoute
 	if len(httpRoute.Spec.Hostnames) != 1 {
-		return nil, fmt.Errorf(
+		err := fmt.Errorf(
 			"HTTPRoute %s/%s must have exactly one hostname for MCP backend routing, found %d",
 			namespace,
 			targetRef.Name,
-			len(httpRoute.Spec.Hostnames),
-		)
+			len(httpRoute.Spec.Hostnames))
+		log := log.FromContext(ctx)
+		log.Error(err, "Ignoring route")
+		return nil, err
 	}
 	hostname := string(httpRoute.Spec.Hostnames[0])
 
