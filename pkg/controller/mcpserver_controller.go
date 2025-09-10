@@ -45,6 +45,7 @@ type MCPServerReconciler struct {
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
@@ -79,6 +80,10 @@ func (r *MCPServerReconciler) Reconcile(
 		return reconcile.Result{}, err
 	}
 
+	if err := r.updateHTTPRouteStatus(ctx, mcpServer, true); err != nil {
+		log.Error(err, "Failed to update HTTPRoute status")
+	}
+
 	return r.regenerateAggregatedConfig(ctx)
 }
 
@@ -91,6 +96,19 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	if err := r.List(ctx, mcpServerList); err != nil {
 		log.Error(err, "Failed to list MCPServers")
 		return reconcile.Result{}, err
+	}
+
+	referencedHTTPRoutes := make(map[string]struct{})
+	for _, mcpServer := range mcpServerList.Items {
+		targetRef := mcpServer.Spec.TargetRef
+		if targetRef.Kind == "HTTPRoute" {
+			namespace := mcpServer.Namespace
+			if targetRef.Namespace != "" {
+				namespace = targetRef.Namespace
+			}
+			key := fmt.Sprintf("%s/%s", namespace, targetRef.Name)
+			referencedHTTPRoutes[key] = struct{}{}
+		}
 	}
 
 	if len(mcpServerList.Items) == 0 {
@@ -150,6 +168,11 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 
 	log.Info("Successfully regenerated aggregated configuration",
 		"serverCount", len(brokerConfig.Servers))
+
+	if err := r.cleanupOrphanedHTTPRoutes(ctx, referencedHTTPRoutes); err != nil {
+		log.Error(err, "Failed to cleanup orphaned HTTPRoute conditions")
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -294,6 +317,140 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 	return serverInfos, nil
 }
 
+func (r *MCPServerReconciler) cleanupOrphanedHTTPRoutes(
+	ctx context.Context,
+	referencedHTTPRoutes map[string]struct{},
+) error {
+	log := log.FromContext(ctx)
+
+	httpRouteList := &gatewayv1.HTTPRouteList{}
+	if err := r.List(ctx, httpRouteList, client.MatchingFields{"status.hasProgrammedCondition": "true"}); err != nil {
+		return fmt.Errorf("failed to list programmed HTTPRoutes: %w", err)
+	}
+
+	for _, httpRoute := range httpRouteList.Items {
+		key := fmt.Sprintf("%s/%s", httpRoute.Namespace, httpRoute.Name)
+
+		if _, referenced := referencedHTTPRoutes[key]; referenced {
+			continue
+		}
+
+		hasProgrammedCondition := false
+		updateNeeded := false
+		for i, parentStatus := range httpRoute.Status.Parents {
+			newConditions := []metav1.Condition{}
+			for _, condition := range parentStatus.Conditions {
+				if condition.Type == "Programmed" && condition.Status == metav1.ConditionTrue {
+					hasProgrammedCondition = true
+					updateNeeded = true
+				} else {
+					newConditions = append(newConditions, condition)
+				}
+			}
+			if updateNeeded {
+				httpRoute.Status.Parents[i].Conditions = newConditions
+			}
+		}
+
+		if hasProgrammedCondition {
+			log.Info("Cleaning up Programmed condition on orphaned HTTPRoute",
+				"HTTPRoute", httpRoute.Name,
+				"namespace", httpRoute.Namespace)
+
+			if err := r.Status().Update(ctx, &httpRoute); err != nil {
+				log.Error(err, "Failed to cleanup HTTPRoute status",
+					"HTTPRoute", httpRoute.Name,
+					"namespace", httpRoute.Namespace)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *MCPServerReconciler) updateHTTPRouteStatus(
+	ctx context.Context,
+	mcpServer *mcpv1alpha1.MCPServer,
+	affected bool,
+) error {
+	log := log.FromContext(ctx)
+	targetRef := mcpServer.Spec.TargetRef
+
+	if targetRef.Kind != "HTTPRoute" {
+		return nil
+	}
+
+	namespace := mcpServer.Namespace
+	if targetRef.Namespace != "" {
+		namespace = targetRef.Namespace
+	}
+
+	httpRoute := &gatewayv1.HTTPRoute{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      targetRef.Name,
+		Namespace: namespace,
+	}, httpRoute)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get HTTPRoute: %w", err)
+	}
+
+	condition := metav1.Condition{
+		Type:               "Programmed",
+		ObservedGeneration: httpRoute.Generation,
+		LastTransitionTime: metav1.Now(),
+	}
+
+	if affected {
+		condition.Status = metav1.ConditionTrue
+		condition.Reason = "InUseByMCPServer"
+		condition.Message = fmt.Sprintf("HTTPRoute is referenced by MCPServer %s/%s", mcpServer.Namespace, mcpServer.Name)
+	} else {
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "NotInUse"
+		condition.Message = "HTTPRoute is not referenced by any MCPServer"
+	}
+
+	found := false
+	for i, cond := range httpRoute.Status.Parents {
+		conditionFound := false
+		for j, c := range cond.Conditions {
+			if c.Type == condition.Type {
+				httpRoute.Status.Parents[i].Conditions[j] = condition
+				conditionFound = true
+				break
+			}
+		}
+		if !conditionFound {
+			httpRoute.Status.Parents[i].Conditions = append(
+				httpRoute.Status.Parents[i].Conditions,
+				condition,
+			)
+		}
+		found = true
+	}
+
+	if !found {
+		log.Info("HTTPRoute has no parent statuses, skipping condition update",
+			"HTTPRoute", httpRoute.Name,
+			"namespace", httpRoute.Namespace)
+		return nil
+	}
+
+	if err := r.Status().Update(ctx, httpRoute); err != nil {
+		return fmt.Errorf("failed to update HTTPRoute status: %w", err)
+	}
+
+	log.Info("Updated HTTPRoute status",
+		"HTTPRoute", httpRoute.Name,
+		"namespace", httpRoute.Namespace,
+		"affected", affected)
+
+	return nil
+}
+
 func (r *MCPServerReconciler) updateStatus(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
@@ -342,6 +499,20 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return []string{fmt.Sprintf("%s/%s", namespace, targetRef.Name)}
 		}
 		return []string{}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &gatewayv1.HTTPRoute{}, "status.hasProgrammedCondition", func(rawObj client.Object) []string {
+		httpRoute := rawObj.(*gatewayv1.HTTPRoute)
+		for _, parentStatus := range httpRoute.Status.Parents {
+			for _, condition := range parentStatus.Conditions {
+				if condition.Type == "Programmed" && condition.Status == metav1.ConditionTrue {
+					return []string{"true"}
+				}
+			}
+		}
+		return []string{"false"}
 	}); err != nil {
 		return err
 	}
