@@ -36,12 +36,12 @@ Provide an Envoy based integration that allows teams and platform engineers to b
 
 The MCP router is an envoy focused ext_proc component that is capable of parsing the MCP protocol and using it to set headers to force correct routing of the request to the correct MCP server. It is mostly involved with specific tools call requests.
 
-**Resposibilities:**
+**Responsibilities:**
 
 - Parsing and validation of the MCP [JSON-RPC](https://www.jsonrpc.org/) body
 - Setting the key request headers: 
     - x-destination-mcp, x-mcp-tool, mcp-session-id
-- Watching for 404 reponses from MCP servers and invalidating the  session store.
+- Watching for 404 responses from MCP servers and invalidating the  session store.
 - Handling session initialization and storage on behalf of a requesting  MCP client during a tools/call
 
 

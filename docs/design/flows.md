@@ -54,7 +54,7 @@ sequenceDiagram
   participant MCP Server as MCP Server
   actor MCP Client(s)
 
-  MCP Controller ->> Gateway: watch for new MCPServer resoruces
+  MCP Controller ->> Gateway: watch for new MCPServer resources
   note right of MCP Controller:  MCPServer resources <br/> target HTTPRoutes
   MCP Controller ->> MCP Broker: update MCP Router config 
   MCP Controller ->> MCP Router: update MCP Broker config 
@@ -171,4 +171,4 @@ sequenceDiagram
 TODO (recommend scoping to just tools/list_changed) notifications initially.
 
 The GET /mcp request will fall through to the MCP Broker.
-MCP broker will see the registered session id and any send any ```tools/list_changed` notifications recieved via its own notifications connection to the backend MCP servers to any registered clients.
+MCP broker will see the registered session id and any send any ```tools/list_changed` notifications received via its own notifications connection to the backend MCP servers to any registered clients.
