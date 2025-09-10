@@ -9,3 +9,13 @@ servers:
     hostname: server2.example.com
     enabled: true
     toolPrefix: "s2_"
+  - name: test-server3
+    url: http://localhost:9003
+    hostname: server3.example.com
+    enabled: true
+    toolPrefix: "s3_"
+  - name: test-server4
+    url: http://localhost:9090
+    hostname: server4.example.com
+    enabled: true
+    toolPrefix: "s4_"

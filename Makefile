@@ -96,6 +96,7 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/server1 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
 	cd tests/servers/server2 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
 	cd tests/servers/server3 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
+	cd tests/servers/server4 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server4:latest .
 
 # Load test server images into Kind cluster
 kind-load-test-servers: build-test-servers ## Load test server images into Kind cluster
@@ -103,6 +104,7 @@ kind-load-test-servers: build-test-servers ## Load test server images into Kind 
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server4:latest --name mcp-gateway
 
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing

@@ -209,6 +209,7 @@ func main() {
 	mcpConfig.RegisterObserver(mcpBroker)
 	// Only load config and run broker/router in standalone mode
 	LoadConfig(mcpConfigFile)
+
 	logger.Info("config: notifying observers of config change")
 	mcpConfig.Notify(ctx)
 	viper.WatchConfig()
@@ -250,6 +251,7 @@ func main() {
 	<-stop
 	// handle shutdown
 	logger.Info("shutting down MCP Broker and MCP Router")
+
 	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownRelease()
 	if err := brokerServer.Shutdown(shutdownCtx); err != nil {
@@ -290,6 +292,9 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.Stream
 		mcpBroker.MCPServer(),
 		server.WithStreamableHTTPServer(httpSrv),
 	)
+	mux.Handle("/mcp", streamableHTTPServer)
+	mux.HandleFunc("/status", mcpBroker.HandleStatusRequest)
+	mux.HandleFunc("/status/", mcpBroker.HandleStatusRequest)
 
 	// Wrap the MCP handler with virtual server filtering
 	virtualServerHandler := broker.NewVirtualServerHandler(streamableHTTPServer, mcpConfig, logger)
@@ -398,8 +403,9 @@ func runController() error {
 	}
 
 	if err = (&controller.MCPReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		ServerValidator: controller.NewServerValidator(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller: %w", err)
 	}
