@@ -20,5 +20,6 @@ resources:
   - server4-deployment.yaml
   - server4-service.yaml
   - server4-httproute.yaml
+  - server4-httproute-ext.yaml
   - server4-secret.yaml
 
