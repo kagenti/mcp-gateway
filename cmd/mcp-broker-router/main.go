@@ -196,7 +196,7 @@ func main() {
 	}
 	ctx := context.Background()
 	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
-	routerGRPCServer, router := setUpRouter()
+	routerGRPCServer, router := setUpRouter(broker)
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(broker)
 	// Only load config and run broker/router in standalone mode
@@ -274,14 +274,14 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	return httpSrv, broker
 }
 
-func setUpRouter() (*grpc.Server, *mcpRouter.ExtProcServer) {
+func setUpRouter(broker broker.MCPBroker) (*grpc.Server, *mcpRouter.ExtProcServer) {
 	grpcSrv := grpc.NewServer()
 
 	// Create the ExtProcServer instance
 	server := &mcpRouter.ExtProcServer{
 		RoutingConfig: mcpConfig,
 		// TODO this seems wrong. Why does the router need to be passed an instance of the broker?
-		Broker: broker.NewBroker(logger),
+		Broker: broker,
 	}
 
 	// Setup the session cache with proper initialization
