@@ -7,6 +7,7 @@ from datetime import datetime
 import time as pytime # If we don't rename this, it confuses fastmcp
 
 from fastmcp import FastMCP, Context
+from fastmcp.server.dependencies import get_http_headers
 
 mcp = FastMCP("FastMCP test server")
 
@@ -52,6 +53,13 @@ async def slow(seconds: int, ctx: Context) -> str:
         pytime.sleep(1)
 
     return ""
+
+@mcp.tool
+def get_headers() -> dict[str, str]:
+    """Gets the HTTP headers."""
+    # Note that get_http_headers returns init headers
+    # See https://github.com/jlowin/fastmcp/issues/1233
+    return get_http_headers(include_all=True)
 
 if __name__ == "__main__":
     # NOTE THIS NEVER GETS INVOKED.  WE RUN WITH THE FastMCP harness:
