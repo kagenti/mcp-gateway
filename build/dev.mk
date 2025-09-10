@@ -41,7 +41,7 @@ dev-gateway-forward: ## Port forward the gateway to localhost:8888
 	@echo "Forwarding gateway to localhost:8888..."
 	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:8888"
 	@echo "Try: curl -H http://mcp.127-0-0-1.sslip.io:8888"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080
+	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 8889:8081
 
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway

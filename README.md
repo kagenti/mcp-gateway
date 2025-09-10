@@ -26,22 +26,40 @@ Open http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0
 
 ## Example OAuth setup
 
-After running the Quick start above,
-create the EnvoyFilter with a hardcoded oauth-protected-resource response,
-and an AuthPolicy that validates tokens on the /mcp endpoint.
+After running the Quick start above, configure OAuth by setting environment variables for the mcp-broker and applying an AuthPolicy that validates tokens on the /mcp endpoint.
+
+Configure the mcp-broker with OAuth environment variables:
 
 ```bash
-kubectl apply -f ./config/istio/gateway/oauth-envoyfilter.yaml
+# Configure OAuth discovery endpoint via environment variables
+export OAUTH_RESOURCE_NAME="MCP Server"
+export OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp"  
+export OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"
+export OAUTH_BEARER_METHODS_SUPPORTED="header"
+export OAUTH_SCOPES_SUPPORTED="basic"
+
+# Restart the broker to pick up the new configuration
+kubectl set env deployment/mcp-broker-router \
+  OAUTH_RESOURCE_NAME="$OAUTH_RESOURCE_NAME" \
+  OAUTH_RESOURCE="$OAUTH_RESOURCE" \
+  OAUTH_AUTHORIZATION_SERVERS="$OAUTH_AUTHORIZATION_SERVERS" \
+  OAUTH_BEARER_METHODS_SUPPORTED="$OAUTH_BEARER_METHODS_SUPPORTED" \
+  OAUTH_SCOPES_SUPPORTED="$OAUTH_SCOPES_SUPPORTED" \
+  -n mcp-system
+
+# Apply AuthPolicy for token validation
 kubectl apply -f ./config/mcp-system/authpolicy.yaml
 ```
 
-Set up a new 'mcp' realm in keycloak:
+The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
 
-* Open http://keycloak.127-0-0-1.sslip.io:8888/
-* Login as admin/admin
-* Create a new realm called 'mcp'
-* Create a new user called 'mcp, with password mcp` in the new realm
-* From 'Clients' > 'Client Registration' > 'Anonymous access polices' - delete the 'Trusted Hosts' policy
+### Keycloak Setup
+
+Set up a new 'mcp' realm in keycloak with user/pass mcp/mcp:
+
+```bash
+make keycloak-setup-mcp-realm
+```
 
 Finally, open the mcp-inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp and go through the OAuth flow.
 
@@ -130,4 +148,42 @@ spec:
 --mcp-broker-address    # HTTP broker address (default: 0.0.0.0:8080)
 --mcp-gateway-config    # Config file path (default: ./config/mcp-system/config.yaml)
 --controller            # Enable Kubernetes controller mode
+```
+
+### OAuth Configuration
+
+The mcp-broker supports configurable OAuth protected resource discovery through environment variables. When configured, the broker serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
+
+| Environment Variable | Description | Default | Example |
+|---------------------|-------------|---------|---------|
+| `OAUTH_RESOURCE_NAME` | Human-readable name for the protected resource | `"MCP Server"` | `"My MCP Gateway"` |
+| `OAUTH_RESOURCE` | URL of the protected MCP endpoint | `"/mcp"` | `"http://mcp.example.com/mcp"` |
+| `OAUTH_AUTHORIZATION_SERVERS` | Comma-separated list of authorization server URLs | `[]` (empty) | `"http://keycloak.example.com/realms/mcp,http://auth.example.com"` |
+| `OAUTH_BEARER_METHODS_SUPPORTED` | Comma-separated list of bearer token methods | `["header"]` | `"header,query"` |
+| `OAUTH_SCOPES_SUPPORTED` | Comma-separated list of supported scopes | `["basic"]` | `"basic,read,write"` |
+
+**Example configuration:**
+
+```bash
+export OAUTH_RESOURCE_NAME="Production MCP Server"
+export OAUTH_RESOURCE="https://mcp.example.com/mcp"
+export OAUTH_AUTHORIZATION_SERVERS="https://keycloak.example.com/realms/mcp"
+export OAUTH_BEARER_METHODS_SUPPORTED="header"
+export OAUTH_SCOPES_SUPPORTED="basic,read,write"
+```
+
+**Response format:**
+
+The endpoint returns a JSON response following the OAuth Protected Resource discovery specification:
+
+```json
+{
+  "resource_name": "Production MCP Server",
+  "resource": "https://mcp.example.com/mcp", 
+  "authorization_servers": [
+    "https://keycloak.example.com/realms/mcp"
+  ],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": ["basic", "read", "write"]
+}
 ```

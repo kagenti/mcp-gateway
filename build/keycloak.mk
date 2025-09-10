@@ -91,3 +91,83 @@ keycloak-create-client: # Create a test OIDC client for MCP
 	@echo "  - Root URL: http://localhost:8888"
 	@echo "  - Valid Redirect URIs: http://localhost:8888/*"
 	@echo "  - Web Origins: +"
+
+.PHONY: keycloak-setup-mcp-realm
+keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client registration
+	@echo "========================================="
+	@echo "Setting up MCP Realm"
+	@echo "========================================="
+	@echo "Assuming Keycloak is available at http://keycloak.127-0-0-1.sslip.io:8889"
+	@echo "(Run 'make inspect-gateway' or 'make dev-gateway-forward' to enable port forwarding)"
+	@echo ""
+	@echo "Getting admin access token..."
+	@TOKEN=$$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8889/realms/master/protocol/openid-connect/token" \
+		-H "Content-Type: application/x-www-form-urlencoded" \
+		-d "username=$(KEYCLOAK_ADMIN_USER)" \
+		-d "password=$(KEYCLOAK_ADMIN_PASSWORD)" \
+		-d "grant_type=password" \
+		-d "client_id=admin-cli" \
+		2>/dev/null | jq -r '.access_token // empty'); \
+	if [ -z "$$TOKEN" ] || [ "$$TOKEN" = "null" ]; then \
+		echo "❌ Failed to get access token. Check if:"; \
+		echo "  - Keycloak is running and accessible"; \
+		echo "  - Port forwarding is active (make inspect-gateway)"; \
+		echo "  - Admin credentials are correct: $(KEYCLOAK_ADMIN_USER)/$(KEYCLOAK_ADMIN_PASSWORD)"; \
+		exit 1; \
+	fi; \
+	echo "✅ Successfully obtained access token"; \
+	echo ""; \
+	echo "Creating MCP realm..."; \
+	REALM_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms" \
+		-H "Authorization: Bearer $$TOKEN" \
+		-H "Content-Type: application/json" \
+		-d '{"realm":"mcp","enabled":true}'); \
+	REALM_CODE=$$(echo "$$REALM_RESPONSE" | tail -c 4); \
+	if [ "$$REALM_CODE" = "201" ] || [ "$$REALM_CODE" = "409" ]; then \
+		if [ "$$REALM_CODE" = "201" ]; then echo "✅ MCP realm created"; \
+		else echo "✅ MCP realm already exists"; fi; \
+	else \
+		echo "❌ Failed to create MCP realm (HTTP $$REALM_CODE)"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Creating MCP user..."; \
+	USER_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users" \
+		-H "Authorization: Bearer $$TOKEN" \
+		-H "Content-Type: application/json" \
+		-d '{"username":"mcp","email":"mcp@example.com","firstName":"mcp","lastName":"mcp","enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"mcp","temporary":false}]}'); \
+	USER_CODE=$$(echo "$$USER_RESPONSE" | tail -c 4); \
+	if [ "$$USER_CODE" = "201" ] || [ "$$USER_CODE" = "409" ]; then \
+		if [ "$$USER_CODE" = "201" ]; then echo "✅ MCP user created"; \
+		else echo "✅ MCP user already exists"; fi; \
+	else \
+		echo "❌ Failed to create MCP user (HTTP $$USER_CODE)"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Removing trusted hosts policy for anonymous client registration..."; \
+	COMPONENTS=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components?name=Trusted%20Hosts" \
+		-H "Authorization: Bearer $$TOKEN" \
+		-H "Accept: application/json"); \
+	COMPONENT_ID=$$(echo "$$COMPONENTS" | jq -r '.[0].id // empty' 2>/dev/null); \
+	if [ -z "$$COMPONENT_ID" ] || [ "$$COMPONENT_ID" = "null" ]; then \
+		echo "✅ Trusted hosts policy was not present"; \
+	else \
+		echo "Found trusted hosts component: $$COMPONENT_ID"; \
+		DELETE_RESPONSE=$$(curl -s -w "%{http_code}" -X DELETE "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components/$$COMPONENT_ID" \
+			-H "Authorization: Bearer $$TOKEN"); \
+		DELETE_CODE=$$(echo "$$DELETE_RESPONSE" | tail -c 4); \
+		if [ "$$DELETE_CODE" = "204" ]; then \
+			echo "✅ Trusted hosts policy removed"; \
+		else \
+			echo "❌ Failed to remove trusted hosts policy (HTTP $$DELETE_CODE)"; \
+			exit 1; \
+		fi; \
+	fi; \
+	echo ""; \
+	echo "🎉 MCP realm setup complete!"; \
+	echo ""; \
+	echo "Realm: mcp"; \
+	echo "User: mcp / mcp"; \
+	echo "Email: mcp@example.com"
+
