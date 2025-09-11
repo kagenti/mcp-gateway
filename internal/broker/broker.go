@@ -30,9 +30,9 @@ type upstreamMCPURL string
 // upstreamMCP identifies what we know about an upstream MCP server
 type upstreamMCP struct {
 	config.MCPServer
+	mpcClient        *client.Client        // The MCP client we hold open to listen for tool notifications
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
-	toolsResult      *mcp.ListToolsResult  // The tools when we proved at discovery time
-	lastContact      time.Time             // The last time this MCP was contacted
+	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
 }
 
 // upstreamSessionState tracks what we manage about a connection an upstream MCP server
@@ -77,6 +77,9 @@ type MCPBroker interface {
 
 	// CreateSession creates a new MCP session for the given authority/host
 	CreateSession(ctx context.Context, authority string) (string, error)
+
+	// Shutdown closes any resources associated with this Broker
+	Shutdown(ctx context.Context) error
 
 	config.Observer
 }
@@ -200,35 +203,22 @@ func (m *mcpBrokerImpl) RegisterServer(
 	slog.Info("Discovered tools", "mcpURL", mcpURL, "num tools", len(newTools))
 
 	m.mcpServers[upstreamMCPURL(mcpURL)] = upstream
-
-	tools := make([]server.ServerTool, 0)
-	for _, newTool := range newTools {
-		slog.Info("Federating tool", "mcpURL", mcpURL, "federated name", newTool.Name)
-		tools = append(tools, server.ServerTool{
-			Tool: newTool,
-			Handler: func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				return mcp.NewToolResultError("Kagenti MCP Broker doesn't forward tool calls"), nil
-			},
-			/* UNCOMMENT THIS TO TURN THE BROKER INTO A STAND-ALONE GATEWAY
-			Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				result, err := m.CallTool(ctx,
-					downstreamSessionID(request.GetString("Mcp-Session-Id", "")),
-					request,
-				)
-				return result, err
-			}
-			*/
-		})
-	}
-	m.listeningMCPServer.AddTools(tools...)
+	m.listeningMCPServer.AddTools(toolsToServerTools(mcpURL, newTools)...)
 
 	return nil
 }
 
 func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error {
-	_, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
+	upstream, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
 	if !ok {
 		return fmt.Errorf("unknown host")
+	}
+
+	err := upstream.mpcClient.Close()
+	if err != nil {
+		m.logger.Info("Failed to close upstream connection while unregistering",
+			"mcpURL", mcpURL,
+		)
 	}
 
 	delete(m.mcpServers, upstreamMCPURL(mcpURL))
@@ -304,6 +294,9 @@ func (m *mcpBrokerImpl) discoverTools(
 	options ...transport.StreamableHTTPCOption,
 ) ([]mcp.Tool, error) {
 
+	// Instead of using m.createUpstreamSession() we hand-create so that we can ask for precise notifications.
+	// TODO: In the future, perhaps extend m.createUpstreamSession() to do these things?
+
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
 	if serverAuthHeaderValue != "" {
@@ -312,17 +305,34 @@ func (m *mcpBrokerImpl) discoverTools(
 		}))
 	}
 
-	httpTransportClient, err := client.NewStreamableHttpClient(
+	// Continue listening for future tool updates
+	options = append(options, transport.WithContinuousListening())
+
+	var err error
+	upstream.mpcClient, err = client.NewStreamableHttpClient(
 		upstream.URL,
 		options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streamable client: %w", err)
 	}
 
-	resInit, err := httpTransportClient.Initialize(ctx, mcp.InitializeRequest{
+	// Let transport listen for updates
+	// TODO Note that currently this pollutes the log, see https://github.com/mark3labs/mcp-go/issues/552
+	err = upstream.mpcClient.Start(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to start streamable client: %w", err)
+	}
+
+	resInit, err := upstream.mpcClient.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities:    mcp.ClientCapabilities{},
+			Capabilities: mcp.ClientCapabilities{
+				Roots: &struct {
+					ListChanged bool "json:\"listChanged,omitempty\""
+				}{
+					ListChanged: true,
+				},
+			},
 			ClientInfo: mcp.Implementation{
 				Name:    "kagenti-mcp-broker",
 				Version: "0.0.1",
@@ -335,41 +345,93 @@ func (m *mcpBrokerImpl) discoverTools(
 
 	upstream.initializeResult = resInit
 
-	resTools, err := httpTransportClient.ListTools(ctx, mcp.ListToolsRequest{})
+	resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
 	upstream.toolsResult = resTools
 
-	upstream.lastContact = time.Now()
-	err = httpTransportClient.Close()
-
-	newTools := m.populateToolMapping(upstream)
+	newTools, _ := m.populateToolMapping(upstream, resTools.Tools, nil)
 
 	// TODO probe resources other than tools
 
-	// Don't keep open the probe
-	// TODO: Keep it open and monitor for tool changes?
+	// Keep the tools probe client open and monitor for tool changes
+	upstream.mpcClient.OnConnectionLost(func(err error) {
+		m.logger.Info("Broker OnConnectionLost",
+			"err", err,
+			"upstream.URL", upstream.URL,
+			"sessionID", upstream.mpcClient.GetSessionId())
+	})
+
+	upstream.mpcClient.OnNotification(func(notification mcp.JSONRPCNotification) {
+		m.logger.Debug("Broker OnNotification",
+			"notification.Method", notification.Method,
+			"notification.Params", notification.Params,
+		)
+		if notification.Method == "notifications/tools/list_changed" {
+			resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
+			if err != nil {
+				m.logger.Warn("failed to list tools", "err", err)
+			} else {
+				m.logger.Info("Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+			}
+
+			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, resTools.Tools)
+
+			newlyAddedTools, newlyRemovedToolNames := m.populateToolMapping(upstream, addedTools, removedTools)
+
+			// Add any tools added since the last notification
+			if len(newlyAddedTools) > 0 {
+				m.logger.Info("Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
+				m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newlyAddedTools)...)
+			}
+
+			// Delete any tools removed since the last notification
+			if len(newlyRemovedToolNames) > 0 {
+				m.logger.Info("Removing tools", "mcpURL", upstream.URL, "newlyRemovedToolNames", newlyRemovedToolNames)
+				m.listeningMCPServer.DeleteTools(newlyRemovedToolNames...)
+			}
+
+			// Track the current state of tools
+			upstream.toolsResult = resTools
+		}
+	})
+
+	m.logger.Info("Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+
 	return newTools, err
 }
 
-// populateToolMapping creates maps tools to names that this gateway recognizes
-// and returns a list of the new uniquely prefixed tools
-func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP) []mcp.Tool {
-	retval := make([]mcp.Tool, 0)
-	for _, tool := range upstream.toolsResult.Tools {
-		gatewayToolName := toolName(fmt.Sprintf("%s%s", upstream.ToolPrefix, tool.Name))
+// populateToolMapping maps tools to names that this gateway recognizes
+// and returns a list of the new uniquely prefixed tools,
+// and a list of the removed prefixed tools
+func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP, addTools []mcp.Tool, removeTools []mcp.Tool) ([]mcp.Tool, []string) {
+
+	// Remove any tools no longer present in the upstream
+	retvalRemovals := make([]string, 0)
+	for _, tool := range removeTools {
+		gatewayToolName := upstream.prefixedName(tool.Name)
+
+		retvalRemovals = append(retvalRemovals, string(gatewayToolName))
+
+		delete(m.toolMapping, gatewayToolName)
+	}
+
+	// Add new tools to the upstream
+	retvalAdditions := make([]mcp.Tool, 0)
+	for _, tool := range addTools {
+		gatewayToolName := upstream.prefixedName(tool.Name)
 
 		gatewayTool := tool // Note: shallow
 		gatewayTool.Name = string(gatewayToolName)
-		retval = append(retval, gatewayTool)
+		retvalAdditions = append(retvalAdditions, gatewayTool)
 
 		m.toolMapping[gatewayToolName] = &upstreamToolInfo{
 			url:      upstreamMCPURL(upstream.URL),
 			toolName: tool.Name,
 		}
 	}
-	return retval
+	return retvalAdditions, retvalRemovals
 }
 
 func (m *mcpBrokerImpl) createUpstreamSession(
@@ -429,11 +491,32 @@ func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSes
 					// Save all of the failures into a combined error?  Currently we only show last failure
 					lastErr = err
 				}
+				sessionState.client = nil
 			}
 		}
 	}
 
 	return lastErr
+}
+
+func (m *mcpBrokerImpl) Shutdown(_ context.Context) error {
+	// Close any user sessions
+	for _, sessionMap := range m.serverSessions {
+		for _, sessionState := range sessionMap {
+			if sessionState.client != nil {
+				_ = sessionState.client.Close()
+			}
+		}
+	}
+
+	// Close the long-running notification channel
+	for _, mcpServer := range m.mcpServers {
+		if mcpServer.mpcClient != nil {
+			_ = mcpServer.mpcClient.Close()
+		}
+	}
+
+	return nil
 }
 
 // MCPServer is a listening MCP server that federates the endpoints
@@ -450,4 +533,71 @@ func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// e.g.
 	// KAGENTAI_test_CRED="Bearer 1234"
 	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
+}
+
+// prefixedName returns the name the gateway will advertise the tool as
+func (upstream *upstreamMCP) prefixedName(tool string) toolName {
+	return toolName(fmt.Sprintf("%s%s", upstream.ToolPrefix, tool))
+}
+
+func toolToServerTool(newTool mcp.Tool) server.ServerTool {
+	return server.ServerTool{
+		Tool: newTool,
+		Handler: func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return mcp.NewToolResultError("Kagenti MCP Broker doesn't forward tool calls"), nil
+		},
+		/* UNCOMMENT THIS TO TURN THE BROKER INTO A STAND-ALONE GATEWAY
+		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			result, err := m.CallTool(ctx,
+				downstreamSessionID(request.GetString("Mcp-Session-Id", "")),
+				request,
+			)
+			return result, err
+		}
+		*/
+	}
+}
+
+func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool {
+
+	tools := make([]server.ServerTool, 0)
+	for _, newTool := range newTools {
+		slog.Info("Federating tool", "mcpURL", mcpURL, "federated name", newTool.Name)
+		tools = append(tools, toolToServerTool(newTool))
+	}
+
+	return tools
+}
+
+// diffTools compares two lists of tools, and returns a list of additions and a list of subtractions
+func diffTools(oldTools, newTools []mcp.Tool) ([]mcp.Tool, []mcp.Tool) {
+	oldToolMap := make(map[string]mcp.Tool)
+	for _, oldTool := range oldTools {
+		oldToolMap[oldTool.Name] = oldTool
+	}
+
+	newToolMap := make(map[string]mcp.Tool)
+	for _, newTool := range newTools {
+		newToolMap[newTool.Name] = newTool
+	}
+
+	// Any tools with name in the new map but not the old are additions
+	addedTools := make([]mcp.Tool, 0)
+	for _, newTool := range newToolMap {
+		_, ok := oldToolMap[newTool.Name]
+		if !ok {
+			addedTools = append(addedTools, newTool)
+		}
+	}
+
+	// Any tools with name in the old map but not the new are removals
+	removedTools := make([]mcp.Tool, 0)
+	for _, oldTool := range oldToolMap {
+		_, ok := newToolMap[oldTool.Name]
+		if !ok {
+			removedTools = append(removedTools, oldTool)
+		}
+	}
+
+	return addedTools, removedTools
 }
