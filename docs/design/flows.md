@@ -94,7 +94,7 @@ sequenceDiagram
 
 Below are some attempts with Auth in the mix. Still need some refinement of these flows
 
-## MCP Gateway request Auth required (initialize for example)
+## MCP Gateway Request Authentication
 
 ```mermaid
 sequenceDiagram
@@ -111,6 +111,7 @@ sequenceDiagram
         MCP Router->>Gateway: no routing needed
         Gateway->>MCP Broker: GET /.well-known/oauth-protected-resource/mcp
         MCP Broker->>MCP Client: responds with resource json with configured auth server etc
+        MCP Client->>Auth Server: register
         MCP Client->>Auth Server: authenticate
         Auth Server->>MCP Client: authenticated !
         MCP Client->>Gateway: Bearer header set POST/mcp init
