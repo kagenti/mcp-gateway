@@ -358,6 +358,7 @@ func (m *mcpBrokerImpl) discoverTools(
 	// Keep the tools probe client open and monitor for tool changes
 	upstream.mpcClient.OnConnectionLost(func(err error) {
 		m.logger.Info("Broker OnConnectionLost",
+			"err", err,
 			"upstream.URL", upstream.URL,
 			"sessionID", upstream.mpcClient.GetSessionId())
 	})
