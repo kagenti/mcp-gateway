@@ -129,6 +129,7 @@ update:
 .PHONY: fmt
 fmt:
 	go fmt ./...
+	goimports -w .
 
 .PHONY: vet
 vet:
@@ -140,6 +141,74 @@ golangci-lint:
 
 .PHONY: lint
 lint: fmt vet golangci-lint
+
+# Code style checks (matches CI)
+.PHONY: check-style
+check-style: check-gofmt check-goimports check-newlines
+
+.PHONY: check-gofmt
+check-gofmt:
+	@echo "Checking gofmt..."
+	@if [ -n "$$(gofmt -s -l . | grep -v '^vendor/' | grep -v '\.deepcopy\.go')" ]; then \
+		echo "Files need gofmt -s:"; \
+		gofmt -s -l . | grep -v '^vendor/' | grep -v '\.deepcopy\.go'; \
+		echo "Run 'make fmt' to fix."; \
+		exit 1; \
+	fi
+
+.PHONY: check-goimports
+check-goimports:
+	@echo "Checking goimports..."
+	@if [ -n "$$(goimports -l . | grep -v '^vendor/' | grep -v '\.deepcopy\.go')" ]; then \
+		echo "Files need goimports:"; \
+		goimports -l . | grep -v '^vendor/' | grep -v '\.deepcopy\.go'; \
+		echo "Run 'make fmt' to fix."; \
+		exit 1; \
+	fi
+
+.PHONY: check-newlines
+check-newlines:
+	@set -e; \
+	echo "Checking for missing EOF newlines..."; \
+	LINT_FILES=$$(git ls-files | \
+		git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$$' | cut -d: -f1 | \
+		git check-attr --stdin linguist-vendored  | grep -Ev ': (set|true)$$' | cut -d: -f1 | \
+		grep -Ev '^(third_party/|.github|docs/)' | \
+		grep -v '\.ai$$' | \
+		grep -v '\.svg$$'); \
+	FAIL=0; \
+	for x in $$LINT_FILES; do \
+		if [ -f "$$x" ]; then \
+			if [ -s "$$x" ] && [ -n "$$(tail -c 1 "$$x")" ]; then \
+				echo "Missing newline at end of file: $$x"; \
+				FAIL=1; \
+			fi; \
+		fi; \
+	done; \
+	exit $$FAIL
+
+.PHONY: fix-newlines
+fix-newlines:
+	@echo "Fixing missing EOF newlines..."
+	@LINT_FILES=$$(git ls-files | \
+		git check-attr --stdin linguist-generated | grep -Ev ': (set|true)$$' | cut -d: -f1 | \
+		git check-attr --stdin linguist-vendored  | grep -Ev ': (set|true)$$' | cut -d: -f1 | \
+		grep -Ev '^(third_party/|.github|docs/)' | \
+		grep -v '\.ai$$' | \
+		grep -v '\.svg$$'); \
+	for x in $$LINT_FILES; do \
+		if [ -f "$$x" ]; then \
+			if [ -s "$$x" ] && [ -n "$$(tail -c 1 "$$x")" ]; then \
+				echo "" >> "$$x"; \
+				echo "Fixed: $$x"; \
+			fi; \
+		fi; \
+	done
+
+# Combined check that matches what CI does
+.PHONY: ci-check
+ci-check: check-style lint
+	@echo "All CI checks passed!"
 
 test-unit:
 	go test ./...
