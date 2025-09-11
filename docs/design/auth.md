@@ -2,7 +2,7 @@
 
 To provide auth intetgration, the MCP gateway uses (Kuadrant)[https://kuadrant.io] and Gateway API in combination with Keycloak as an identity provider.
 
-We are bringing these components together to give a reference implementation of the OAuth 2.0 Protected Resource Metadata as per the (MCP Authorization)[https://modelcontextprotocol.io/specification/draft/basic/authorization] . In addition we also want to provide a reference implementation for authorizing access to particular tools.
+We are bringing these components together to provide a reference implementation of the OAuth 2.0 Protected Resource Metadata as per the (MCP Authorization)[https://modelcontextprotocol.io/specification/draft/basic/authorization]  and a reference implementation for authorizing access to particular tool.
 
 > Note while we use keycloak in our examples, in theory other IDPs could also be used.
 
@@ -21,7 +21,7 @@ In order to enforce authenticated access, the gateway listeners exposing the MCP
 
 With this policy in place any unauthenticated request not going to the /.well-known endpoints will get a 401 with a resource_metadata url specified. It is then up to the client to leverage this information to retrieve the resource metadata to know how to authenticate to access the resource (example resource would be /mcp). This resource metadata will be served via the MCP Broker component. 
 
-To understand the full flow including the defined Auth server take a look at [MCP Gateway Auth Sequence Diagram](./flows.md#mcp-server-tool-call-with-auth)
+To understand the full flow including the defined Auth server take a look at [MCP Gateway Auth Sequence Diagram](./flows.md#mcp-gateway-request-authentication)
 
 
 ### Registering required scopes
@@ -48,16 +48,29 @@ name: accounting_mcp
         - role
         - user
       rbac:
-        role: accounting
-        tools: ["payroll"]
-        role: admin
-        tools: ["*"]
+        - role: accounting
+          tools: 
+            - "payroll"
+        - role: admin
+          tools: 
+            -"*"
 
 ```
 
 For phase1 this set of scopes will be aggreggated together via the MCP Server controller into the config for the MCP Broker. The MCP broker is then responsible for serving the aggregated scopes via `./well-known/oauth-protected-resource` endpoint. 
 
-> Note In a future phase these defined scopes may be used during an token exchange to scope down the token to only the required scopes. 
+```json
+{
+  "resource_name":"MCP Server",
+  "resource":"http://mcp.127-0-0-1.sslip.io:8888/mcp",
+  "authorization_servers":["http://keycloak.127-0-0-1.sslip.io:8888/realms/mcp"],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported":["email","role","user"]
+}
+
+```
+
+> Note In a future phase these defined scopes may be used to define a token exchange to scope down the token to only the required scopes. 
 
 ### Registering MCP Auth Severs
 
