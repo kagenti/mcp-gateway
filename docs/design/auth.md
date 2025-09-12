@@ -103,6 +103,6 @@ Note> We will use AuthPolicy to enforce the tool access check as a reference of 
 
 ### Filtering of tools
 
-The broker when recieving a tools/list call. Will validate the JWT token if present in the request, and load the rbac data from the config. As it has access to the JWT it can identify which tools should be returned based on this configuration. 
+The broker, when receiving a tools/list call, will validate the JWT token if present in the request, and load the RBAC data from the config. As it has access to the JWT it can identify which tools should be returned based on this configuration. 
 
 Note > not covered here is the removal of tools altogether (allowing a developer not to expose a certain tool) that is considered separate. 
