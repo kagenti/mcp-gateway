@@ -92,7 +92,7 @@ To do this we will update the envoy filter to allow it define metadata: https://
 
 ```yaml
 metadata_options:
-  recieving_namespaces:
+  receiving_namespaces:
     untyped:
       - ext_auth_data
 ```                  
