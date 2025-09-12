@@ -80,7 +80,7 @@ Part of the response from the `oauth-protected-resource` endpoint is an array of
 
 ### Authenticated Calls
 
-Once a client has obtained a token. It can then make requests to the MCP Gateway. When a request comes to the gateway. The Kuadrant WASM plugin intercepts this request and based on configuration, will decide whether or not to call to the Authorino component. With the linked AuthPolicy, Authorino will recieve the request and then validate the token with the configured auth server before allowing the request to continue. 
+Once a client has obtained a token, it can then make requests to the MCP Gateway. When a request comes to the gateway, the Kuadrant WASM plugin intercepts this request and based on configuration, will decide whether or not to call to the Authorino component. With the linked AuthPolicy, Authorino will receive the request and then validate the token with the configured auth server before allowing the request to continue. 
 
 > Note not covered here is message signinging as specified under https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1415 . This will be covered at a later phase. 
 
