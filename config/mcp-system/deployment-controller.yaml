@@ -27,6 +27,14 @@ spec:
             - ./mcp_gateway
             - --controller
             - --log-level=0  # info level
+          env:
+            - name: CONFIG_UPDATE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-config-update-token
+                  key: token
+            - name: BROKER_CONFIG_URL
+              value: "http://mcp-config.mcp-system.svc.cluster.local:8181/config"
           ports:
             - name: health
               containerPort: 8081

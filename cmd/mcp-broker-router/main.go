@@ -141,6 +141,7 @@ func main() {
 	var (
 		mcpRouterAddrFlag string
 		mcpBrokerAddrFlag string
+		mcpConfigAddrFlag string
 		mcpConfigFile     string
 		loglevel          int
 		logFormat         string
@@ -154,9 +155,15 @@ func main() {
 	)
 	flag.StringVar(
 		&mcpBrokerAddrFlag,
-		"mcp-broker-address",
+		"mcp-broker-public-address",
 		"0.0.0.0:8080",
-		"The address for mcp broker",
+		"The public address for mcp broker",
+	)
+	flag.StringVar(
+		&mcpConfigAddrFlag,
+		"mcp-broker-config-address",
+		"0.0.0.0:8181",
+		"The internal address for config API",
 	)
 	flag.StringVar(
 		&mcpConfigFile,
@@ -196,6 +203,7 @@ func main() {
 	}
 	ctx := context.Background()
 	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
+	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	routerGRPCServer, router := setUpRouter(broker)
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(broker)
@@ -226,9 +234,16 @@ func main() {
 	}()
 
 	go func() {
-		logger.Info("[http] starting MCP Broker", "listening", brokerServer.Addr)
+		logger.Info("[http] starting MCP Broker (public)", "listening", brokerServer.Addr)
 		if err := brokerServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[http] Cannot start broker: %v", err)
+			log.Fatalf("[http] Cannot start public broker: %v", err)
+		}
+	}()
+
+	go func() {
+		logger.Info("[http] starting Config API (internal)", "listening", configServer.Addr)
+		if err := configServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[http] Cannot start config server: %v", err)
 		}
 	}()
 
@@ -239,6 +254,9 @@ func main() {
 	defer shutdownRelease()
 	if err := brokerServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("HTTP shutdown error: %v", err)
+	}
+	if err := configServer.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Config server shutdown error: %v", err)
 	}
 	routerGRPCServer.GracefulStop()
 }
@@ -272,6 +290,31 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	mux.Handle("/mcp", streamableHTTPServer)
 
 	return httpSrv, broker
+}
+
+func setUpConfigServer(address string) *http.Server {
+	mux := http.NewServeMux()
+
+	authToken := os.Getenv("CONFIG_UPDATE_TOKEN")
+	if authToken == "" {
+		logger.Warn("CONFIG_UPDATE_TOKEN not set, config updates will be unauthenticated")
+	}
+
+	configHandler := broker.NewConfigUpdateHandler(mcpConfig, authToken, logger)
+	mux.Handle("POST /config", configHandler)
+
+	// health check endpoint for internal API
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	return &http.Server{
+		Addr:         address,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
 }
 
 func setUpRouter(broker broker.MCPBroker) (*grpc.Server, *mcpRouter.ExtProcServer) {

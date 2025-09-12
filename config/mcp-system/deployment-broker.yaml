@@ -30,15 +30,25 @@ spec:
           command:
             - ./mcp_gateway
             - --mcp-gateway-config=/config/config.yaml
-            - --mcp-broker-address=0.0.0.0:8080
+            - --mcp-broker-public-address=0.0.0.0:8080
+            - --mcp-broker-config-address=0.0.0.0:8181
             - --mcp-router-address=0.0.0.0:50051
             - --log-level=-4  # info level
+          env:
+            - name: CONFIG_UPDATE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-config-update-token
+                  key: token
           volumeMounts:
             - name: config-volume
               mountPath: /config
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            - name: config
+              containerPort: 8181
               protocol: TCP
             - name: grpc
               containerPort: 50051

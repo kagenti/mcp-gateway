@@ -1,14 +1,10 @@
 # Refer to golangci-lint's example config file for more options and information:
 # https://golangci-lint.run/docs/configuration/file/
-version: "2"
+version: 2
 
 run:
   timeout: 10m
   modules-download-mode: readonly
-
-formatters:
-  enable:
-    - goimports
     
 linters:
   enable:

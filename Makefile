@@ -47,6 +47,11 @@ install-crd: ## Install MCPServer CRD
 
 # Deploy mcp-gateway components
 deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
+	@kubectl create namespace mcp-system --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl get secret mcp-config-update-token -n mcp-system &>/dev/null || \
+		kubectl create secret generic mcp-config-update-token \
+		-n mcp-system \
+		--from-literal=token="$$(openssl rand -base64 32)"
 	kubectl apply -k config/mcp-system/
 
 # Deploy only the broker/router
@@ -137,7 +142,13 @@ vet:
 
 .PHONY: golangci-lint
 golangci-lint:
-	golangci-lint run ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	elif [ -f bin/golangci-lint ]; then \
+		bin/golangci-lint run ./...; \
+	else \
+		$(MAKE) golangci-lint-bin && bin/golangci-lint run ./...; \
+	fi
 
 .PHONY: lint
 lint: fmt vet golangci-lint
