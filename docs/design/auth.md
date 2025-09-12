@@ -87,7 +87,7 @@ Once a client has obtained a token, it can then make requests to the MCP Gateway
 
 ### Authorization of tools/calls
 
-When the router recieves a tools/call. It will load from the config the rbac section for the specified mcp server. It will then set this data into the dynamic metadata via the `ext_auth_data` namespace. Optionally we could also encode this data and set it as a request header. The reason for this is to allow down stream filters to access this information to make authorization decisions. 
+When the router receives a tools/call. It will load from the config the RBAC section for the specified MCP server. It will then set this data into the dynamic metadata via the `ext_auth_data` namespace. Optionally we could also encode this data and set it as a request header. The reason for this is to allow downstream filters to access this information to make authorization decisions. 
 To do this we will update the envoy filter to allow it define metadata: https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/http/ext_proc/v3/ext_proc.proto#envoy-v3-api-msg-extensions-filters-http-ext-proc-v3-metadataoptions 
 
 ```yaml
