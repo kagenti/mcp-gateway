@@ -10,7 +10,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 COPY pkg/ pkg/
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o mcp_gateway cmd/mcp-broker-router/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o mcp_gateway cmd/mcp-broker-router/main.go
 
 FROM alpine:latest
 
