@@ -81,3 +81,71 @@ func (in *MCPServerStatus) DeepCopyInto(out *MCPServerStatus) {
 		}
 	}
 }
+
+// DeepCopyInto copies the receiver, writing into out. in must be non-nil.
+func (in *MCPVirtualServer) DeepCopyInto(out *MCPVirtualServer) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+}
+
+// DeepCopy copies the receiver, creating a new MCPVirtualServer.
+func (in *MCPVirtualServer) DeepCopy() *MCPVirtualServer {
+	if in == nil {
+		return nil
+	}
+	out := new(MCPVirtualServer)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyObject copies the receiver, creating a new runtime.Object.
+func (in *MCPVirtualServer) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
+// DeepCopyInto copies the receiver, writing into out. in must be non-nil.
+func (in *MCPVirtualServerList) DeepCopyInto(out *MCPVirtualServerList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]MCPVirtualServer, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+
+// DeepCopy copies the receiver, creating a new MCPVirtualServerList.
+func (in *MCPVirtualServerList) DeepCopy() *MCPVirtualServerList {
+	if in == nil {
+		return nil
+	}
+	out := new(MCPVirtualServerList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyObject copies the receiver, creating a new runtime.Object.
+func (in *MCPVirtualServerList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
+// DeepCopyInto copies the receiver, writing into out. in must be non-nil.
+func (in *MCPVirtualServerSpec) DeepCopyInto(out *MCPVirtualServerSpec) {
+	*out = *in
+	if in.Tools != nil {
+		in, out := &in.Tools, &out.Tools
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+}

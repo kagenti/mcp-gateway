@@ -1,0 +1,10 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPVirtualServer
+metadata:
+  name: test2-vs
+  namespace: default
+spec:
+  description: "test2 virtual server"
+  tools:
+  - test2_get_weather
+  - test2_get_news

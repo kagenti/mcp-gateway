@@ -381,7 +381,7 @@ func runController() error {
 		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
-	if err = (&controller.MCPServerReconciler{
+	if err = (&controller.MCPReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {

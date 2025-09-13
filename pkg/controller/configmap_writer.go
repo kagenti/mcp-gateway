@@ -4,6 +4,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
@@ -26,7 +28,7 @@ type ConfigMapWriter struct {
 	ConfigPusher *ConfigPusher
 }
 
-// WriteAggregatedConfig writes aggregated config
+// WriteAggregatedConfig writes aggregated config with retry logic for conflicts
 func (w *ConfigMapWriter) WriteAggregatedConfig(
 	ctx context.Context,
 	namespace, name string,
@@ -51,46 +53,58 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 		},
 	}
 
-	existing := &corev1.ConfigMap{}
-	err = w.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, existing)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if err := w.Client.Create(ctx, configMap); err != nil {
-				return err
+	// Retry with exponential backoff for conflict errors
+	return wait.ExponentialBackoff(wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+		Steps:    5,
+	}, func() (bool, error) {
+		existing := &corev1.ConfigMap{}
+		err := w.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, existing)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				err = w.Client.Create(ctx, configMap)
+				if errors.IsAlreadyExists(err) {
+					// Someone else created it, retry
+					return false, nil
+				}
+				if err == nil && w.ConfigPusher != nil {
+					servers := convertToInternalFormat(brokerConfig.Servers)
+					if pushErr := w.ConfigPusher.PushConfig(ctx, servers); pushErr != nil {
+						logger := log.FromContext(ctx)
+						logger.Error(pushErr, "Failed to push config to broker")
+					}
+				}
+				return err == nil, err
 			}
-			if w.ConfigPusher != nil {
+			return false, err
+		}
+
+		// Only update if data or labels have changed
+		if !equality.Semantic.DeepEqual(existing.Data, configMap.Data) ||
+			!equality.Semantic.DeepEqual(existing.Labels, configMap.Labels) {
+			existing.Data = configMap.Data
+			existing.Labels = configMap.Labels
+			err = w.Client.Update(ctx, existing)
+			if errors.IsConflict(err) {
+				// Resource conflict, retry
+				return false, nil
+			}
+			if err == nil && w.ConfigPusher != nil {
 				servers := convertToInternalFormat(brokerConfig.Servers)
-				if err := w.ConfigPusher.PushConfig(ctx, servers); err != nil {
+				if pushErr := w.ConfigPusher.PushConfig(ctx, servers); pushErr != nil {
+					// log error but don't fail - configmap is still updated
+					// broker will eventually pick it up via file watch
 					logger := log.FromContext(ctx)
-					logger.Error(err, "Failed to push config to broker")
+					logger.Error(pushErr, "Failed to push config to broker")
 				}
 			}
-			return nil
-		}
-		return err
-	}
-
-	// Only update if data or labels have changed
-	if !equality.Semantic.DeepEqual(existing.Data, configMap.Data) ||
-		!equality.Semantic.DeepEqual(existing.Labels, configMap.Labels) {
-		existing.Data = configMap.Data
-		existing.Labels = configMap.Labels
-		if err := w.Client.Update(ctx, existing); err != nil {
-			return err
+			return err == nil, err
 		}
 
-		if w.ConfigPusher != nil {
-			servers := convertToInternalFormat(brokerConfig.Servers)
-			if err := w.ConfigPusher.PushConfig(ctx, servers); err != nil {
-				// log error but don't fail - configmap is still updated
-				// broker will eventually pick it up via file watch
-				logger := log.FromContext(ctx)
-				logger.Error(err, "Failed to push config to broker")
-			}
-		}
-	}
-
-	return nil
+		return true, nil
+	})
 }
 
 // NewConfigMapWriter creates a ConfigMapWriter

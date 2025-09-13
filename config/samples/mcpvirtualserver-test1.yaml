@@ -1,0 +1,12 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPVirtualServer
+metadata:
+  name: test1-vs
+  namespace: default
+spec:
+  description: "test1 virtual server"
+  tools:
+  - test1_read_doc
+  - test1_write_doc
+  - test1_list_channels
+  - test1_read_channel
