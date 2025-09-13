@@ -23,11 +23,12 @@ func (config *MCPServersConfig) Notify(ctx context.Context) {
 
 // MCPServer represents a server
 type MCPServer struct {
-	Name       string
-	URL        string
-	ToolPrefix string
-	Enabled    bool
-	Hostname   string
+	Name             string
+	URL              string
+	ToolPrefix       string
+	Enabled          bool
+	Hostname         string
+	CredentialEnvVar string // env var name for auth
 }
 
 // Observer provides an interface to implement in order to register as an Observer of config changes

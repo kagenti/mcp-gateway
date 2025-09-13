@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-server4-route
+  namespace: mcp-test
+  labels:
+    mcp-server: 'true'
+spec:
+  parentRefs:
+    - name: mcp-gateway
+      namespace: gateway-system
+  hostnames:
+    - 'server4.mcp.local' # note this is matching the gateway listener. It is purely for internal routing by Envoy
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-test-server4
+          port: 9090

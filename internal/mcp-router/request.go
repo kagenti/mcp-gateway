@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -21,10 +22,11 @@ const (
 
 // ServerInfo contains routing information for an MCP server
 type ServerInfo struct {
-	ServerName string
-	Hostname   string
-	ToolPrefix string
-	URL        string
+	ServerName       string
+	Hostname         string
+	ToolPrefix       string
+	URL              string
+	CredentialEnvVar string
 }
 
 // extractMCPToolName safely extracts the tool name from MCP tool call request
@@ -85,38 +87,47 @@ func extractMCPToolName(data map[string]any) string {
 }
 
 func getServerInfo(toolName string, config *config.MCPServersConfig) *ServerInfo {
-	routeTarget := strings.Split(toolName, "_")[0]
-	if routeTarget == "" {
+	if config == nil {
 		return nil
 	}
-	slog.Info("[EXT-PROC] Route target", "routeTarget", routeTarget)
-	expectedPrefix := routeTarget + "_"
 
-	slog.Info("[EXT-PROC] Expected prefix", "expectedPrefix", expectedPrefix)
-
-	if config != nil {
-		for _, server := range config.Servers {
-			if server.Enabled && server.ToolPrefix == expectedPrefix {
-				return &ServerInfo{
-					ServerName: server.Name,
-					Hostname:   server.Hostname,
-					ToolPrefix: server.ToolPrefix,
-					URL:        server.URL,
-				}
+	// find server by prefix
+	for _, server := range config.Servers {
+		if server.Enabled && strings.HasPrefix(toolName, server.ToolPrefix) {
+			slog.Info("[EXT-PROC] Found matching server",
+				"toolName", toolName,
+				"serverPrefix", server.ToolPrefix,
+				"serverName", server.Name)
+			return &ServerInfo{
+				ServerName:       server.Name,
+				Hostname:         server.Hostname,
+				ToolPrefix:       server.ToolPrefix,
+				URL:              server.URL,
+				CredentialEnvVar: server.CredentialEnvVar,
 			}
 		}
 	}
 
+	slog.Info("Tool name doesn't match any configured server prefix", "tool", toolName)
 	return nil
 }
 
 // Returns the stripped tool name and whether stripping was needed
-func stripServerPrefix(toolName string, _ *config.MCPServersConfig) (string, bool) {
-	// Extract route target for prefix stripping
-	routeTarget := strings.Split(toolName, "_")[0]
-	strippedToolName := strings.TrimPrefix(toolName, routeTarget+"_")
-	slog.Info("Stripped tool name", "tool", strippedToolName, "originalPrefix", routeTarget)
-	return strippedToolName, true
+func stripServerPrefix(toolName string, config *config.MCPServersConfig) (string, bool) {
+	if config == nil {
+		return toolName, false
+	}
+
+	// strip matching prefix
+	for _, server := range config.Servers {
+		if server.Enabled && strings.HasPrefix(toolName, server.ToolPrefix) {
+			strippedToolName := strings.TrimPrefix(toolName, server.ToolPrefix)
+			slog.Info("Stripped tool name", "tool", strippedToolName, "originalPrefix", server.ToolPrefix)
+			return strippedToolName, true
+		}
+	}
+
+	return toolName, false
 }
 
 // extractSessionFromContext extracts mcp-session-id from the stored request headers
@@ -231,7 +242,7 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	}
 
 	return s.createRoutingResponse(
-		toolName, requestBodyBytes, hostname, serverName, upstreamSession,
+		toolName, requestBodyBytes, hostname, serverName, upstreamSession, serverInfo,
 	), nil
 }
 
@@ -240,6 +251,7 @@ func (s *ExtProcServer) createRoutingResponse(
 	toolName string,
 	bodyBytes []byte,
 	hostname, serverName, backendSession string,
+	serverInfo *ServerInfo,
 ) []*eppb.ProcessingResponse {
 
 	headers := []*basepb.HeaderValueOption{
@@ -266,6 +278,22 @@ func (s *ExtProcServer) createRoutingResponse(
 				RawValue: []byte(backendSession),
 			},
 		})
+	}
+
+	// add auth header if needed
+	if serverInfo != nil && serverInfo.CredentialEnvVar != "" {
+		authValue := os.Getenv(serverInfo.CredentialEnvVar)
+		if authValue != "" {
+			slog.Info("Adding Authorization header for routing",
+				"server", serverName,
+				"credentialEnvVar", serverInfo.CredentialEnvVar)
+			headers = append(headers, &basepb.HeaderValueOption{
+				Header: &basepb.HeaderValue{
+					Key:      "authorization",
+					RawValue: []byte(authValue),
+				},
+			})
+		}
 	}
 
 	// Update content-length header to match the modified body

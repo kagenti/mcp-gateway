@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-test-server4
+  namespace: mcp-test
+  labels:
+    app: mcp-test-server4
+spec:
+  selector:
+    app: mcp-test-server4
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP

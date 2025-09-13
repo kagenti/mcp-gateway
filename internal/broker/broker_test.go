@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/tests/server2"
@@ -42,6 +43,9 @@ func TestMain(m *testing.M) {
 		// Start the server in a Goroutine
 		_ = startFunc()
 	}()
+
+	// wait for server to be ready
+	time.Sleep(100 * time.Millisecond)
 
 	code := m.Run()
 

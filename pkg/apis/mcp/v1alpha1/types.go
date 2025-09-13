@@ -34,6 +34,13 @@ type MCPServerSpec struct {
 	// ensure they can coexist as 'server1_search' and 'server2_search'.
 	// +optional
 	ToolPrefix string `json:"toolPrefix,omitempty"`
+
+	// CredentialRef references a Secret containing authentication credentials for the MCP server.
+	// The Secret should contain a key with the authentication token or credentials.
+	// The controller will aggregate these credentials and make them available to the broker
+	// via environment variables following the pattern: KAGENTI_{MCP_NAME}_CRED
+	// +optional
+	CredentialRef *SecretReference `json:"credentialRef,omitempty"`
 }
 
 // TargetReference identifies an HTTPRoute that points to MCP servers.
@@ -55,6 +62,18 @@ type TargetReference struct {
 	// Namespace of the target resource (optional, defaults to same namespace)
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// SecretReference identifies a Secret containing credentials for MCP server authentication.
+type SecretReference struct {
+	// Name is the name of the Secret resource.
+	Name string `json:"name"`
+
+	// Key is the key within the Secret that contains the credential value.
+	// If not specified, defaults to "token".
+	// +kubebuilder:default=token
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // MCPServerStatus represents the observed state of the MCPServer resource.

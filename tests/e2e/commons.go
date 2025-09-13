@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -64,6 +65,8 @@ func BuildTestHTTPRoute(name, namespace, hostname, serviceName string, port int3
 			},
 			Hostnames: []gatewayapiv1.Hostname{
 				gatewayapiv1.Hostname(hostname),
+				// add second hostname to match real deployments
+				gatewayapiv1.Hostname(strings.Replace(hostname, ".mcp.example.com", ".127-0-0-1.sslip.io", 1)),
 			},
 			Rules: []gatewayapiv1.HTTPRouteRule{
 				{

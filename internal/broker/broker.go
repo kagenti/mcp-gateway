@@ -166,11 +166,40 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 
 	}
 	// ensure new servers registered
-	for _, server := range conf.Servers {
-		if err := m.RegisterServer(ctx, server.URL, server.ToolPrefix, server.Name); err != nil {
-			slog.Warn("Could not register upstream MCP", "upstream", server.URL, "name", server.Name, "error", err)
+	for _, mcpServer := range conf.Servers {
+		if err := m.RegisterServerWithConfig(ctx, mcpServer); err != nil {
+			slog.Warn("Could not register upstream MCP", "upstream", mcpServer.URL, "name", mcpServer.Name, "error", err)
 		}
 	}
+}
+
+// RegisterServerWithConfig registers an MCP server with full config
+func (m *mcpBrokerImpl) RegisterServerWithConfig(
+	ctx context.Context,
+	mcpServer *config.MCPServer,
+) error {
+	if m.IsRegistered(mcpServer.URL) {
+		m.logger.Info("mcp server is already registered", "mcpURL", mcpServer.URL)
+		return nil
+	}
+	slog.Info("Registering server", "mcpURL", mcpServer.URL, "prefix", mcpServer.ToolPrefix)
+
+	upstream := &upstreamMCP{
+		MCPServer: *mcpServer,
+	}
+
+	newTools, err := m.discoverTools(ctx, upstream)
+	if err != nil {
+		slog.Info("Failed to discover tools", "mcpURL", mcpServer.URL, "error", err)
+		return err
+	}
+	slog.Info("Discovered tools", "mcpURL", mcpServer.URL, "num tools", len(newTools))
+
+	m.mcpServers[upstreamMCPURL(mcpServer.URL)] = upstream
+	slog.Info("Server registered", "url", mcpServer.URL, "totalServers", len(m.mcpServers))
+	m.listeningMCPServer.AddTools(toolsToServerTools(mcpServer.URL, newTools)...)
+
+	return nil
 }
 
 // RegisterServer registers an MCP server
@@ -180,32 +209,12 @@ func (m *mcpBrokerImpl) RegisterServer(
 	prefix string,
 	name string,
 ) error {
-	if m.IsRegistered(mcpURL) {
-		m.logger.Info("mcp server is already registered", "mcpURL", mcpURL)
-		return nil
-	}
-	slog.Info("Registering server", "mcpURL", mcpURL, "prefix", prefix)
-
-	upstream := &upstreamMCP{
-		MCPServer: config.MCPServer{
-			Name:       name,
-			URL:        mcpURL,
-			ToolPrefix: prefix,
-			Enabled:    true,
-		},
-	}
-
-	newTools, err := m.discoverTools(ctx, upstream)
-	if err != nil {
-		slog.Info("Failed to discover tools", "mcpURL", mcpURL, "error", err)
-		return err
-	}
-	slog.Info("Discovered tools", "mcpURL", mcpURL, "num tools", len(newTools))
-
-	m.mcpServers[upstreamMCPURL(mcpURL)] = upstream
-	m.listeningMCPServer.AddTools(toolsToServerTools(mcpURL, newTools)...)
-
-	return nil
+	return m.RegisterServerWithConfig(ctx, &config.MCPServer{
+		Name:       name,
+		URL:        mcpURL,
+		ToolPrefix: prefix,
+		Enabled:    true,
+	})
 }
 
 func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error {
@@ -271,8 +280,24 @@ func (m *mcpBrokerImpl) CallTool(
 
 	upstreamSession, ok := upstreamSessionMap[downstreamSession]
 	if !ok {
+		// check for auth
+		upstream, ok := m.mcpServers[upstreamToolInfo.url]
+		if !ok {
+			return nil, fmt.Errorf("upstream server not found: %s", upstreamToolInfo.url)
+		}
+
+		// auth options
+		var options []transport.StreamableHTTPCOption
+		serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
+		if serverAuthHeaderValue != "" {
+			slog.Debug("Creating upstream session with authentication", "url", upstreamToolInfo.url)
+			options = append(options, transport.WithHTTPHeaders(map[string]string{
+				"Authorization": serverAuthHeaderValue,
+			}))
+		}
+
 		var err error
-		upstreamSession, err = m.createUpstreamSession(ctx, upstreamToolInfo.url)
+		upstreamSession, err = m.createUpstreamSession(ctx, upstreamToolInfo.url, options...)
 		if err != nil {
 			return nil, fmt.Errorf("could not open upstream: %w", err)
 		}
@@ -300,6 +325,9 @@ func (m *mcpBrokerImpl) discoverTools(
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
 	if serverAuthHeaderValue != "" {
+		slog.Info("Adding auth header for discovery",
+			"url", upstream.URL,
+			"credentialEnvVar", upstream.CredentialEnvVar)
 		options = append(options, transport.WithHTTPHeaders(map[string]string{
 			"Authorization": serverAuthHeaderValue,
 		}))
@@ -472,7 +500,32 @@ func (m *mcpBrokerImpl) createUpstreamSession(
 func (m *mcpBrokerImpl) CreateSession(ctx context.Context, authority string) (string, error) {
 	host := upstreamMCPURL(authority)
 
-	sessionState, err := m.createUpstreamSession(ctx, host)
+	slog.Info("CreateSession called", "authority", authority)
+
+	// get the upstream server config to check for auth
+	upstream, ok := m.mcpServers[host]
+	if !ok {
+		// server not registered yet
+		sessionState, err := m.createUpstreamSession(ctx, host)
+		if err != nil {
+			return "", fmt.Errorf("failed to create session: %w", err)
+		}
+		return string(sessionState.sessionID), nil
+	}
+
+	// auth options
+	var options []transport.StreamableHTTPCOption
+	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
+	if serverAuthHeaderValue != "" {
+		slog.Info("Creating session with authentication",
+			"authority", authority,
+			"credentialEnvVar", upstream.CredentialEnvVar)
+		options = append(options, transport.WithHTTPHeaders(map[string]string{
+			"Authorization": serverAuthHeaderValue,
+		}))
+	}
+
+	sessionState, err := m.createUpstreamSession(ctx, host, options...)
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
@@ -528,10 +581,11 @@ func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
 func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
 	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
-	// The format is
-	// KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
-	// e.g.
-	// KAGENTAI_test_CRED="Bearer 1234"
+	if upstream.CredentialEnvVar != "" {
+		return os.Getenv(upstream.CredentialEnvVar)
+	}
+	// The format is KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
+	// e.g. KAGENTAI_test_CRED="Bearer 1234"
 	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
 }
 

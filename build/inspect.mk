@@ -22,54 +22,39 @@ urls-impl:
 .PHONY: inspect-broker
 inspect-broker: inspect-gateway
 
-# Open MCP Inspector for mock server implementation
-# Inspect test servers
-.PHONY: inspect-server1
-inspect-server1: ## Open MCP Inspector for test server 1
-	@echo "Setting up port-forward to test server 1..."
-	@kubectl -n mcp-test port-forward svc/mcp-test-server1 9090:9090 > /dev/null 2>&1 & \
-		PF_PID=$$!; \
-		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+# Generic template for inspecting MCP servers
+# Args: $(1) = server name, $(2) = service name, $(3) = local port, $(4) = tools description, $(5) = extra notes
+define inspect-server-template
+	@echo "Setting up port-forward to $(1)..."
+	@kubectl -n mcp-test port-forward svc/$(2) $(3):9090 > /dev/null 2>&1 & \
+		PF_PID=$$$$!; \
+		trap "echo '\nCleaning up...'; kill $$$$PF_PID 2>/dev/null || true; exit" INT TERM; \
 		sleep 2; \
-		echo "Opening MCP Inspector for test server 1 at http://localhost:9090/mcp"; \
-		echo "Available tools: hi, time, slow, headers"; \
-		echo ""; \
-		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9090/mcp"; \
+		echo "Opening MCP Inspector for $(1) at http://localhost:$(3)/mcp"; \
+		echo "Available tools: $(4)"; \
+		$(if $(5),echo "$(5)";) \
+		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:$(3)/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
 		echo ""; \
-		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9090/mcp; \
-		kill $$PF_PID 2>/dev/null || true
+		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:$(3)/mcp; \
+		kill $$$$PF_PID 2>/dev/null || true
+endef
+
+.PHONY: inspect-server1
+inspect-server1: ## Open MCP Inspector for test server 1
+	$(call inspect-server-template,test server 1,mcp-test-server1,9090,hi time slow headers)
 
 .PHONY: inspect-server2
 inspect-server2: ## Open MCP Inspector for test server 2
-	@echo "Setting up port-forward to test server 2..."
-	@kubectl -n mcp-test port-forward svc/mcp-test-server2 9091:9090 > /dev/null 2>&1 & \
-		PF_PID=$$!; \
-		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
-		sleep 2; \
-		echo "Opening MCP Inspector for test server 2 at http://localhost:9091/mcp"; \
-		echo "Available tools: similar to server1, different implementation"; \
-		echo ""; \
-		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9091/mcp"; \
-		echo "Press Ctrl+C to stop and cleanup"; \
-		echo ""; \
-		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9091/mcp; \
-		kill $$PF_PID 2>/dev/null || true
+	$(call inspect-server-template,test server 2,mcp-test-server2,9091,similar to server1 different implementation)
 
 .PHONY: inspect-server3
 inspect-server3: ## Open MCP Inspector for test server 3
-	@echo "Setting up port-forward to test server 3..."
-	@kubectl -n mcp-test port-forward svc/mcp-test-server3 9092:9090 > /dev/null 2>&1 & \
-		PF_PID=$$!; \
-		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
-		sleep 2; \
-		echo "Opening MCP Inspector for test server 3 at http://localhost:9092/mcp"; \
-		echo "Available tools: time, add, dozen, pi, get_weather, slow"; \
-		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:9092/mcp"; \
-		echo "Press Ctrl+C to stop and cleanup"; \
-		echo ""; \
-		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:9092/mcp; \
-		kill $$PF_PID 2>/dev/null || true
+	$(call inspect-server-template,test server 3,mcp-test-server3,9092,time add dozen pi get_weather slow)
+
+.PHONY: inspect-server4
+inspect-server4: ## Open MCP Inspector for test server 4 (requires auth)
+	$(call inspect-server-template,test server 4,mcp-test-server4,9093,similar to server2 but requires authentication,NOTE: This server requires Bearer token authentication)
 
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1
