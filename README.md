@@ -128,13 +128,13 @@ servers:
 
 #### MCPServer Resource
 
-The `MCPServer` is a Kubernetes Custom Resource that defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway. It enables discovery and federation of tools from multiple backend MCP servers through Gateway API `HTTPRoute` references, providing a declarative way to configure which MCP servers should be accessible through the gateway.
+The `MCPServer` is a Kubernetes Custom Resource that defines an MCP (Model Context Protocol) server to be aggregated by the gateway. It enables discovery and federation of tools from backend MCP servers through Gateway API `HTTPRoute` references.
 
 Each `MCPServer` resource:
-- References one or more HTTPRoutes that point to backend MCP services
-- Configures tool prefixes to avoid naming conflicts when federating tools
+- References a single HTTPRoute that points to a backend MCP service
+- Configures a tool prefix to avoid naming conflicts when federating tools
 - Enables the controller to automatically discover and configure the broker with available MCP servers
-- Maintains status conditions to indicate whether the servers are successfully discovered, valid and ready
+- Maintains status conditions to indicate whether the server is successfully discovered, valid and ready
 
 Create `MCPServer` resources that reference HTTPRoutes:
 
@@ -142,17 +142,24 @@ Create `MCPServer` resources that reference HTTPRoutes:
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
-  name: ai-tools
+  name: weather-tools
 spec:
-  targetRefs:
-  - group: gateway.networking.k8s.io
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: weather-route
-    toolPrefix: weather_
-  - group: gateway.networking.k8s.io
+  toolPrefix: weather_
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: calendar-tools
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
     kind: HTTPRoute  
     name: calendar-route
-    toolPrefix: cal_
+  toolPrefix: cal_
 ```
 
 ## Command Line Flags
