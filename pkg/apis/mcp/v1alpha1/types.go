@@ -33,6 +33,7 @@ type MCPServerSpec struct {
 	// For example, if two servers both provide a 'search' tool, prefixes like 'server1_' and 'server2_'
 	// ensure they can coexist as 'server1_search' and 'server2_search'.
 	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf || oldSelf == ''",message="toolPrefix is immutable once set"
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 
 	// CredentialRef references a Secret containing authentication credentials for the MCP server.
@@ -96,6 +97,8 @@ type MCPServerList struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,shortName=mcpvs
+// +kubebuilder:printcolumn:name="Tools",type="integer",JSONPath=".spec.tools.length()"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // MCPVirtualServer defines a virtual server that exposes a specific set of tools.
 // It enables tool-level access control and federation by specifying which tools
