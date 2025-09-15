@@ -43,8 +43,7 @@ run-controller: mcp-broker-router
 
 # Install CRD
 install-crd: ## Install MCPServer and MCPVirtualServer CRDs
-	kubectl apply -f config/crd/mcpserver.yaml
-	kubectl apply -f config/crd/mcpvirtualserver.yaml
+	kubectl apply -f config/crd/
 
 # Deploy mcp-gateway components
 deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
