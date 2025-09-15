@@ -48,38 +48,63 @@ type ServerInfo struct {
 	CredentialEnvVar   string // env var name if auth configured
 }
 
-// MCPServerReconciler reconciles MCPServer resources
-type MCPServerReconciler struct {
+// MCPReconciler reconciles both MCPServer and MCPVirtualServer resources
+type MCPReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpvirtualservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
-// Reconcile reconciles an MCPServer resource
-func (r *MCPServerReconciler) Reconcile(
+// Reconcile reconciles both MCPServer and MCPVirtualServer resources
+func (r *MCPReconciler) Reconcile(
 	ctx context.Context,
 	req reconcile.Request,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling MCPServer", "name", req.Name, "namespace", req.Namespace)
+	log.Info("Reconciling MCP resource", "name", req.Name, "namespace", req.Namespace)
 
+	// Try MCPServer first
 	mcpServer := &mcpv1alpha1.MCPServer{}
 	err := r.Get(ctx, req.NamespacedName, mcpServer)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("MCPServer resource not found, regenerating aggregated config")
-			return r.regenerateAggregatedConfig(ctx)
-		}
+	if err == nil {
+		return r.reconcileMCPServer(ctx, mcpServer)
+	}
+	if !errors.IsNotFound(err) {
 		log.Error(err, "Failed to get MCPServer")
 		return reconcile.Result{}, err
 	}
+
+	// Try MCPVirtualServer
+	mcpVirtualServer := &mcpv1alpha1.MCPVirtualServer{}
+	err = r.Get(ctx, req.NamespacedName, mcpVirtualServer)
+	if err == nil {
+		return r.reconcileMCPVirtualServer(ctx, mcpVirtualServer)
+	}
+	if !errors.IsNotFound(err) {
+		log.Error(err, "Failed to get MCPVirtualServer")
+		return reconcile.Result{}, err
+	}
+
+	// Neither resource found, regenerate config (handles deletions)
+	log.Info("MCP resource not found, regenerating aggregated config")
+	return r.regenerateAggregatedConfig(ctx)
+}
+
+// reconcileMCPServer handles MCPServer reconciliation (existing logic)
+func (r *MCPReconciler) reconcileMCPServer(
+	ctx context.Context,
+	mcpServer *mcpv1alpha1.MCPServer,
+) (reconcile.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Reconciling MCPServer", "name", mcpServer.Name, "namespace", mcpServer.Namespace)
 
 	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
 	if err != nil {
@@ -99,7 +124,20 @@ func (r *MCPServerReconciler) Reconcile(
 	return r.regenerateAggregatedConfig(ctx)
 }
 
-func (r *MCPServerReconciler) regenerateAggregatedConfig(
+// reconcileMCPVirtualServer handles MCPVirtualServer reconciliation
+func (r *MCPReconciler) reconcileMCPVirtualServer(
+	ctx context.Context,
+	mcpVirtualServer *mcpv1alpha1.MCPVirtualServer,
+) (reconcile.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Reconciling MCPVirtualServer", "name", mcpVirtualServer.Name, "namespace", mcpVirtualServer.Namespace)
+
+	// For now, just trigger config regeneration like the existing logic
+	// This keeps the same behavior as before
+	return r.regenerateAggregatedConfig(ctx)
+}
+
+func (r *MCPReconciler) regenerateAggregatedConfig(
 	ctx context.Context,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
@@ -107,6 +145,12 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	mcpServerList := &mcpv1alpha1.MCPServerList{}
 	if err := r.List(ctx, mcpServerList); err != nil {
 		log.Error(err, "Failed to list MCPServers")
+		return reconcile.Result{}, err
+	}
+
+	mcpVirtualServerList := &mcpv1alpha1.MCPVirtualServerList{}
+	if err := r.List(ctx, mcpVirtualServerList); err != nil {
+		log.Error(err, "Failed to list MCPVirtualServers")
 		return reconcile.Result{}, err
 	}
 
@@ -137,7 +181,8 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	}
 
 	brokerConfig := &config.BrokerConfig{
-		Servers: []config.ServerConfig{},
+		Servers:        []config.ServerConfig{},
+		VirtualServers: []config.VirtualServerConfig{},
 	}
 
 	for _, mcpServer := range mcpServerList.Items {
@@ -179,6 +224,15 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 		}
 	}
 
+	// Process MCPVirtualServer resources
+	for _, mcpVirtualServer := range mcpVirtualServerList.Items {
+		virtualServerName := fmt.Sprintf("%s/%s", mcpVirtualServer.Namespace, mcpVirtualServer.Name)
+		brokerConfig.VirtualServers = append(brokerConfig.VirtualServers, config.VirtualServerConfig{
+			Name:  virtualServerName,
+			Tools: mcpVirtualServer.Spec.Tools,
+		})
+	}
+
 	if err := r.writeAggregatedConfig(ctx, brokerConfig); err != nil {
 		log.Error(err, "Failed to write aggregated configuration")
 		return reconcile.Result{}, err
@@ -192,7 +246,8 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	}
 
 	log.Info("Successfully regenerated aggregated configuration",
-		"serverCount", len(brokerConfig.Servers))
+		"serverCount", len(brokerConfig.Servers),
+		"virtualServerCount", len(brokerConfig.VirtualServers))
 
 	if err := r.cleanupOrphanedHTTPRoutes(ctx, referencedHTTPRoutes); err != nil {
 		log.Error(err, "Failed to cleanup orphaned HTTPRoute conditions")
@@ -201,7 +256,7 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 	return reconcile.Result{}, nil
 }
 
-func (r *MCPServerReconciler) writeAggregatedConfig(
+func (r *MCPReconciler) writeAggregatedConfig(
 	ctx context.Context,
 	brokerConfig *config.BrokerConfig,
 ) error {
@@ -218,7 +273,7 @@ func isReady(mcpServer *mcpv1alpha1.MCPServer) bool {
 	return false
 }
 
-func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
+func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
 ) ([]ServerInfo, error) {
@@ -352,7 +407,7 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 	return serverInfos, nil
 }
 
-func (r *MCPServerReconciler) cleanupOrphanedHTTPRoutes(
+func (r *MCPReconciler) cleanupOrphanedHTTPRoutes(
 	ctx context.Context,
 	referencedHTTPRoutes map[string]struct{},
 ) error {
@@ -403,7 +458,7 @@ func (r *MCPServerReconciler) cleanupOrphanedHTTPRoutes(
 	return nil
 }
 
-func (r *MCPServerReconciler) updateHTTPRouteStatus(
+func (r *MCPReconciler) updateHTTPRouteStatus(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
 	affected bool,
@@ -486,7 +541,7 @@ func (r *MCPServerReconciler) updateHTTPRouteStatus(
 	return nil
 }
 
-func (r *MCPServerReconciler) updateStatus(
+func (r *MCPReconciler) updateStatus(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
 	ready bool,
@@ -521,7 +576,7 @@ func (r *MCPServerReconciler) updateStatus(
 }
 
 // SetupWithManager sets up the reconciler
-func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &mcpv1alpha1.MCPServer{}, "spec.targetRef.httproute", func(rawObj client.Object) []string {
 		mcpServer := rawObj.(*mcpv1alpha1.MCPServer)
 
@@ -555,6 +610,10 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controller := ctrl.NewControllerManagedBy(mgr).
 		For(&mcpv1alpha1.MCPServer{}).
 		Watches(
+			&mcpv1alpha1.MCPVirtualServer{},
+			&handler.EnqueueRequestForObject{},
+		).
+		Watches(
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForHTTPRoute),
 		)
@@ -568,7 +627,7 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // findMCPServersForHTTPRoute finds all MCPServers that reference the given HTTPRoute
-func (r *MCPServerReconciler) findMCPServersForHTTPRoute(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *MCPReconciler) findMCPServersForHTTPRoute(ctx context.Context, obj client.Object) []reconcile.Request {
 	httpRoute := obj.(*gatewayv1.HTTPRoute)
 	log := log.FromContext(ctx).WithValues("HTTPRoute", httpRoute.Name, "namespace", httpRoute.Namespace)
 
@@ -597,7 +656,7 @@ func (r *MCPServerReconciler) findMCPServersForHTTPRoute(ctx context.Context, ob
 
 // startupReconciler ensures initial configuration is written even with zero MCPServers
 type startupReconciler struct {
-	reconciler *MCPServerReconciler
+	reconciler *MCPReconciler
 }
 
 // Start implements manager.Runnable

@@ -93,3 +93,38 @@ type MCPServerList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []MCPServer `json:"items"`
 }
+
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced,shortName=mcpvs
+
+// MCPVirtualServer defines a virtual server that exposes a specific set of tools.
+// It enables tool-level access control and federation by specifying which tools
+// should be accessible through this virtual endpoint.
+type MCPVirtualServer struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec MCPVirtualServerSpec `json:"spec,omitempty"`
+}
+
+// MCPVirtualServerSpec defines the desired state of MCPVirtualServer.
+// It specifies which tools should be exposed by this virtual server.
+type MCPVirtualServerSpec struct {
+	// Description provides a human-readable description of this virtual server's purpose.
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Tools specifies the list of tool names to expose through this virtual server.
+	// These tools must be available from the underlying MCP servers configured in the system.
+	// +kubebuilder:validation:MinItems=1
+	Tools []string `json:"tools"`
+}
+
+// +kubebuilder:object:root=true
+
+// MCPVirtualServerList contains a list of MCPVirtualServer
+type MCPVirtualServerList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []MCPVirtualServer `json:"items"`
+}

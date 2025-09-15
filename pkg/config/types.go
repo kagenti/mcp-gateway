@@ -3,7 +3,8 @@ package config
 
 // BrokerConfig holds broker configuration
 type BrokerConfig struct {
-	Servers []ServerConfig `json:"servers" yaml:"servers"`
+	Servers        []ServerConfig        `json:"servers" yaml:"servers"`
+	VirtualServers []VirtualServerConfig `json:"virtualServers,omitempty" yaml:"virtualServers,omitempty"`
 }
 
 // ServerConfig represents server config
@@ -26,4 +27,10 @@ type AuthConfig struct {
 	Token    string `json:"token,omitempty"    yaml:"token,omitempty"`
 	Username string `json:"username,omitempty" yaml:"username,omitempty"`
 	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+}
+
+// VirtualServerConfig represents virtual server config
+type VirtualServerConfig struct {
+	Name  string   `json:"name"  yaml:"name"`
+	Tools []string `json:"tools" yaml:"tools"`
 }
