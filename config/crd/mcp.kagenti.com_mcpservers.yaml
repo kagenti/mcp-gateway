@@ -17,8 +17,6 @@ spec:
   scope: Namespaced
   versions:
   - name: v1alpha1
-    served: true
-    storage: true
     schema:
       openAPIV3Schema:
         description: |-
@@ -105,6 +103,9 @@ spec:
                   For example, if two servers both provide a 'search' tool, prefixes like 'server1_' and 'server2_'
                   ensure they can coexist as 'server1_search' and 'server2_search'.
                 type: string
+                x-kubernetes-validations:
+                - message: toolPrefix is immutable once set
+                  rule: self == oldSelf || oldSelf == ''
             required:
             - targetRef
             type: object
