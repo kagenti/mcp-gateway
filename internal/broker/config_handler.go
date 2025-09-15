@@ -50,7 +50,8 @@ func (h *ConfigUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	defer func() { _ = r.Body.Close() }()
 
 	var configData struct {
-		Servers []*config.MCPServer `yaml:"servers"`
+		Servers        []*config.MCPServer    `yaml:"servers"`
+		VirtualServers []*config.VirtualServer `yaml:"virtualServers"`
 	}
 
 	err = yaml.Unmarshal(body, &configData)
@@ -61,9 +62,13 @@ func (h *ConfigUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	h.config.Servers = configData.Servers
+	// Only update VirtualServers if they were provided in the config
+	if configData.VirtualServers != nil {
+		h.config.VirtualServers = configData.VirtualServers
+	}
 	h.config.Notify(r.Context())
 
-	h.logger.Info("configuration updated via API", "serverCount", len(configData.Servers))
+	h.logger.Info("configuration updated via API", "serverCount", len(configData.Servers), "virtualServerCount", len(configData.VirtualServers))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

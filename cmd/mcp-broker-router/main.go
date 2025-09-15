@@ -202,11 +202,11 @@ func main() {
 		return
 	}
 	ctx := context.Background()
-	brokerServer, broker, mcpServer := setUpBroker(mcpBrokerAddrFlag)
+	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag)
 	configServer := setUpConfigServer(mcpConfigAddrFlag)
-	routerGRPCServer, router := setUpRouter(broker)
+	routerGRPCServer, router := setUpRouter(mcpBroker)
 	mcpConfig.RegisterObserver(router)
-	mcpConfig.RegisterObserver(broker)
+	mcpConfig.RegisterObserver(mcpBroker)
 	// Only load config and run broker/router in standalone mode
 	LoadConfig(mcpConfigFile)
 	logger.Info("config: notifying observers of config change")
@@ -284,15 +284,18 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.Stream
 		WriteTimeout: 10 * time.Second,
 	}
 
-	broker := broker.NewBroker(logger)
+	mcpBroker := broker.NewBroker(logger)
 
 	streamableHTTPServer := server.NewStreamableHTTPServer(
-		broker.MCPServer(),
+		mcpBroker.MCPServer(),
 		server.WithStreamableHTTPServer(httpSrv),
 	)
-	mux.Handle("/mcp", streamableHTTPServer)
 
-	return httpSrv, broker, streamableHTTPServer
+	// Wrap the MCP handler with virtual server filtering
+	virtualServerHandler := broker.NewVirtualServerHandler(streamableHTTPServer, mcpConfig, logger)
+	mux.Handle("/mcp", virtualServerHandler)
+
+	return httpSrv, mcpBroker, virtualServerHandler
 }
 
 func setUpConfigServer(address string) *http.Server {
@@ -349,6 +352,16 @@ func LoadConfig(path string) {
 	err = viper.UnmarshalKey("servers", &mcpConfig.Servers)
 	if err != nil {
 		log.Fatalf("Unable to decode server config into struct: %s", err)
+	}
+
+	// Load virtualServers if present - this is optional
+	if viper.IsSet("virtualServers") {
+		err = viper.UnmarshalKey("virtualServers", &mcpConfig.VirtualServers)
+		if err != nil {
+			logger.Warn("Failed to parse virtualServers configuration", "error", err)
+		}
+	} else {
+		logger.Debug("No virtualServers section found in configuration")
 	}
 
 	logger.Debug("config successfully loaded ")

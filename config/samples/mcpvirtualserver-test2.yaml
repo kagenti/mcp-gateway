@@ -6,5 +6,5 @@ metadata:
 spec:
   description: "test2 virtual server"
   tools:
-  - test2_get_weather
-  - test2_get_news
+  - test_greet
+  - test_time

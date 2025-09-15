@@ -5,8 +5,9 @@ import "context"
 
 // MCPServersConfig holds server configuration
 type MCPServersConfig struct {
-	Servers   []*MCPServer
-	observers []Observer
+	Servers        []*MCPServer
+	VirtualServers []*VirtualServer
+	observers      []Observer
 }
 
 // RegisterObserver registers an observer to be notified of changes to the config
@@ -29,6 +30,12 @@ type MCPServer struct {
 	Enabled          bool
 	Hostname         string
 	CredentialEnvVar string // env var name for auth
+}
+
+// VirtualServer represents a virtual server configuration
+type VirtualServer struct {
+	Name  string
+	Tools []string
 }
 
 // Observer provides an interface to implement in order to register as an Observer of config changes
