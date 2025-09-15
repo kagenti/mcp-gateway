@@ -44,3 +44,21 @@ spec:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp-server3-route
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server4
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  toolPrefix: test4_
+  targetRef:
+    # Server 4 - Go SDK based with authentication (same as server2 but requires auth)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server4-route
+  credentialRef:
+    name: server4-auth-credentials
+    key: token

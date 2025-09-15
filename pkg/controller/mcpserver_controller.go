@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,16 @@ const (
 	ConfigName = "mcp-gateway-config"
 )
 
+// generateCredentialEnvVar generates an environment variable name for credentials
+// following the pattern KAGENTAI_{MCP_NAME}_CRED (note: KAGENTAI with AI at the end)
+func generateCredentialEnvVar(mcpServerName string) string {
+	// convert to uppercase and replace hyphens with underscores
+	// e.g., "weather-service" -> "WEATHER_SERVICE"
+	name := strings.ToUpper(mcpServerName)
+	name = strings.ReplaceAll(name, "-", "_")
+	return fmt.Sprintf("KAGENTAI_%s_CRED", name)
+}
+
 // ServerInfo holds server information
 type ServerInfo struct {
 	Endpoint           string
@@ -34,6 +45,7 @@ type ServerInfo struct {
 	ToolPrefix         string
 	HTTPRouteName      string
 	HTTPRouteNamespace string
+	CredentialEnvVar   string // env var name if auth configured
 }
 
 // MCPServerReconciler reconciles MCPServer resources
@@ -47,7 +59,7 @@ type MCPServerReconciler struct {
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
 // Reconcile reconciles an MCPServer resource
@@ -150,20 +162,33 @@ func (r *MCPServerReconciler) regenerateAggregatedConfig(
 				serverInfo.HTTPRouteNamespace,
 				serverInfo.HTTPRouteName,
 			)
-			brokerConfig.Servers = append(brokerConfig.Servers, config.ServerConfig{
+			serverConfig := config.ServerConfig{
 				Name:       serverName,
 				URL:        serverInfo.Endpoint,
 				Hostname:   serverInfo.Hostname,
 				ToolPrefix: serverInfo.ToolPrefix,
 				Enabled:    true,
-				// TODO: Handle credentialRef when implementing auth
-			})
+			}
+
+			// add credential env var if configured
+			if serverInfo.CredentialEnvVar != "" {
+				serverConfig.CredentialEnvVar = serverInfo.CredentialEnvVar
+			}
+
+			brokerConfig.Servers = append(brokerConfig.Servers, serverConfig)
 		}
 	}
 
 	if err := r.writeAggregatedConfig(ctx, brokerConfig); err != nil {
 		log.Error(err, "Failed to write aggregated configuration")
 		return reconcile.Result{}, err
+	}
+
+	// aggregate credentials from all MCPServers into a single secret
+	if err := r.aggregateCredentials(ctx, mcpServerList.Items); err != nil {
+		log.Error(err, "Failed to aggregate credentials")
+		// don't fail reconciliation on credential errors
+		// the broker can still work without credentials
 	}
 
 	log.Info("Successfully regenerated aggregated configuration",
@@ -282,16 +307,14 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 	toolPrefix := mcpServer.Spec.ToolPrefix
 
 	// Extract hostname from HTTPRoute
-	if len(httpRoute.Spec.Hostnames) != 1 {
-		err := fmt.Errorf(
-			"HTTPRoute %s/%s must have exactly one hostname for MCP backend routing, found %d",
+	if len(httpRoute.Spec.Hostnames) == 0 {
+		return nil, fmt.Errorf(
+			"HTTPRoute %s/%s must have at least one hostname for MCP backend routing",
 			namespace,
 			targetRef.Name,
-			len(httpRoute.Spec.Hostnames))
-		log := log.FromContext(ctx)
-		log.Error(err, "Ignoring route")
-		return nil, err
+		)
 	}
+	// use first hostname if multiple are present
 	hostname := string(httpRoute.Spec.Hostnames[0])
 
 	protocol := "http"
@@ -308,13 +331,23 @@ func (r *MCPServerReconciler) discoverServersFromHTTPRoutes(
 	// to think about: service vs ingress via GW API
 	endpoint := fmt.Sprintf("%s://%s/mcp", protocol, nameAndEndpoint)
 
-	serverInfos = append(serverInfos, ServerInfo{
+	serverInfo := ServerInfo{
 		Endpoint:           endpoint,
 		Hostname:           hostname,
 		ToolPrefix:         toolPrefix,
 		HTTPRouteName:      targetRef.Name,
 		HTTPRouteNamespace: namespace,
-	})
+	}
+
+	// generate credential env var name if credentialRef is set
+	if mcpServer.Spec.CredentialRef != nil {
+		// convert mcp server name to env var format
+		// e.g., "weather-service" -> "KAGENTI_WEATHER_SERVICE_CRED"
+		envVarName := generateCredentialEnvVar(mcpServer.Name)
+		serverInfo.CredentialEnvVar = envVarName
+	}
+
+	serverInfos = append(serverInfos, serverInfo)
 
 	return serverInfos, nil
 }
@@ -578,5 +611,98 @@ func (s *startupReconciler) Start(ctx context.Context) error {
 	}
 
 	log.Info("Startup reconciliation completed successfully")
+	return nil
+}
+
+// aggregateCredentials collects credentials from all MCPServers and creates/updates
+// a single aggregated secret for the broker to use with envFrom
+func (r *MCPServerReconciler) aggregateCredentials(ctx context.Context, mcpServers []mcpv1alpha1.MCPServer) error {
+	log := log.FromContext(ctx)
+
+	// collect all credentials
+	aggregatedData := make(map[string][]byte)
+
+	for _, mcpServer := range mcpServers {
+		if mcpServer.Spec.CredentialRef == nil {
+			continue // skip if no credentials configured
+		}
+
+		// fetch the referenced secret
+		secret := &corev1.Secret{}
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      mcpServer.Spec.CredentialRef.Name,
+			Namespace: mcpServer.Namespace,
+		}, secret)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				log.Error(err, "Referenced secret not found",
+					"mcpserver", mcpServer.Name,
+					"secret", mcpServer.Spec.CredentialRef.Name)
+				continue // skip this one but continue with others
+			}
+			return fmt.Errorf("failed to get secret %s: %w", mcpServer.Spec.CredentialRef.Name, err)
+		}
+
+		// determine which key to use
+		key := mcpServer.Spec.CredentialRef.Key
+		if key == "" {
+			key = "token" // default
+		}
+
+		// get the credential value
+		credValue, exists := secret.Data[key]
+		if !exists {
+			log.Error(nil, "Secret key not found",
+				"secret", mcpServer.Spec.CredentialRef.Name,
+				"key", key)
+			continue
+		}
+
+		// add to aggregated data with standardized env var name
+		envVarName := generateCredentialEnvVar(mcpServer.Name)
+		aggregatedData[envVarName] = credValue
+	}
+
+	// create or update the aggregated secret
+	aggregatedSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "mcp-aggregated-credentials",
+			Namespace: ConfigNamespace,
+			Labels: map[string]string{
+				"app":                        "mcp-gateway",
+				"mcp.kagenti.com/aggregated": "true",
+			},
+		},
+		Data: aggregatedData,
+	}
+
+	// check if secret exists
+	existing := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      aggregatedSecret.Name,
+		Namespace: aggregatedSecret.Namespace,
+	}, existing)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// create new secret
+			if err := r.Create(ctx, aggregatedSecret); err != nil {
+				return fmt.Errorf("failed to create aggregated secret: %w", err)
+			}
+			log.Info("Created aggregated credentials secret",
+				"credentialCount", len(aggregatedData))
+		} else {
+			return fmt.Errorf("failed to get aggregated secret: %w", err)
+		}
+	} else {
+		// update existing secret
+		existing.Data = aggregatedData
+		if err := r.Update(ctx, existing); err != nil {
+			return fmt.Errorf("failed to update aggregated secret: %w", err)
+		}
+		log.Info("Updated aggregated credentials secret",
+			"credentialCount", len(aggregatedData))
+	}
+
 	return nil
 }

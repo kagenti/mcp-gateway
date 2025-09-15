@@ -40,6 +40,10 @@ spec:
                 secretKeyRef:
                   name: mcp-config-update-token
                   key: token
+          envFrom:
+            - secretRef:
+                name: mcp-aggregated-credentials
+                optional: true  # broker can still work without credentials
           volumeMounts:
             - name: config-volume
               mountPath: /config

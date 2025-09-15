@@ -46,6 +46,13 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: mcp-server4-route-ext
+      hostname: 'server4.127-0-0-1.sslip.io'
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
     - name: mcps
       hostname: '*.mcp.local'
       port: 8080
