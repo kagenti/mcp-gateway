@@ -62,3 +62,18 @@ spec:
   credentialRef:
     name: server4-auth-credentials
     key: token
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server5
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  toolPrefix: test5_
+  targetRef:
+    # Server 5 - Python FastMCP based (same as server3 but without auth)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server5-route

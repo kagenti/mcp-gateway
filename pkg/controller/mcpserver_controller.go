@@ -52,8 +52,7 @@ type ServerInfo struct {
 // MCPReconciler reconciles both MCPServer and MCPVirtualServer resources
 type MCPReconciler struct {
 	client.Client
-	Scheme          *runtime.Scheme
-	ServerValidator *ServerValidator
+	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers,verbs=get;list;watch;create;update;patch;delete
@@ -116,11 +115,8 @@ func (r *MCPReconciler) reconcileMCPServer(
 		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
 	}
 
-	if r.ServerValidator == nil {
-		return reconcile.Result{}, fmt.Errorf("ServerValidator is required but not configured")
-	}
-
-	statusResponse, err := r.ServerValidator.ValidateServers(ctx)
+	validator := NewServerValidator(r.Client)
+	statusResponse, err := validator.ValidateServers(ctx)
 	if err != nil {
 		log.Error(err, "Failed to validate server status via broker")
 		ready, message := false, fmt.Sprintf("Validation failed: %v", err)

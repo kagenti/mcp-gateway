@@ -1,4 +1,4 @@
-// Server4 - Intentionally "bad" MCP server for testing validation failures
+// Server5 - Intentionally "bad" MCP server for testing validation failures
 // This server is designed to fail validation checks:
 // - Uses old protocol version (2024-11-05 instead of 2025-06-18)
 // - Has no tools capability (missing required capability)
@@ -39,7 +39,7 @@ func main() {
 		failureMode = *simulateFailure
 	}
 
-	log.Printf("Server4 starting with failure mode: %s", failureMode)
+	log.Printf("Server5 starting with failure mode: %s", failureMode)
 
 	switch failureMode {
 	case "no-tools":
@@ -63,7 +63,7 @@ func createServerWithWrongProtocol() {
 		log.Printf("Bad server will listen at %s with wrong protocol", *httpAddr)
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Printf("Server4 received %s request to %s", r.Method, r.URL.Path)
+			log.Printf("Server5 received %s request to %s", r.Method, r.URL.Path)
 
 			if r.Method == "POST" {
 				w.Header().Set("Content-Type", "application/json")
@@ -78,19 +78,19 @@ func createServerWithWrongProtocol() {
 							"tools": {}
 						},
 						"serverInfo": {
-							"name": "bad-test-server4",
+							"name": "bad-test-server5",
 							"version": "1.0.0"
 						}
 					}
 				}`
 				w.Write([]byte(badInitResponse))
-				log.Printf("Server4 sent bad protocol response: 2024-11-05")
+				log.Printf("Server5 sent bad protocol response: 2024-11-05")
 				return
 			}
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write([]byte(`{"status": "bad-server4-running"}`))
+			w.Write([]byte(`{"status": "bad-server5-running"}`))
 		})
 
 		server := &http.Server{
@@ -105,13 +105,13 @@ func createServerWithWrongProtocol() {
 		}
 	} else {
 		log.Printf("Bad server using stdio - this will also fail")
-		log.Fatal("Server4 refusing stdio connection")
+		log.Fatal("Server5 refusing stdio connection")
 	}
 }
 
 func createServerWithNoTools() {
 	// Create a valid MCP server but with NO tools (missing required capability)
-	server := mcp.NewServer(&mcp.Implementation{Name: "bad-test-server4-no-tools", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "bad-test-server5-no-tools", Version: "1.0.0"}, nil)
 
 	if *httpAddr != "" {
 		log.Printf("No-tools server will listen at %s", *httpAddr)
@@ -135,33 +135,33 @@ func createServerWithNoTools() {
 }
 
 // Tool handlers for conflicting tools
-func conflictingTimeHandler(_ context.Context,_ *mcp.ServerSession,_ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+func conflictingTimeHandler(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
 	return &mcp.CallToolResultFor[struct{}]{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Server4 conflicting time: " + time.Now().Format(time.RFC3339)},
+			&mcp.TextContent{Text: "Server5 conflicting time: " + time.Now().Format(time.RFC3339)},
 		},
 	}, nil
 }
 
-func conflictingSlowHandler(_ context.Context,_ *mcp.ServerSession,_ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+func conflictingSlowHandler(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
 	return &mcp.CallToolResultFor[struct{}]{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Server4 slow tool (for conflict testing)"},
+			&mcp.TextContent{Text: "Server5 slow tool (for conflict testing)"},
 		},
 	}, nil
 }
 
-func conflictingHeadersHandler(_ context.Context,_ *mcp.ServerSession,_ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+func conflictingHeadersHandler(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
 	return &mcp.CallToolResultFor[struct{}]{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Server4 headers tool (for conflict testing)"},
+			&mcp.TextContent{Text: "Server5 headers tool (for conflict testing)"},
 		},
 	}, nil
 }
 
 func createServerWithConflictingTools() {
 	// Create server that provides tools with names that will conflict with other servers
-	server := mcp.NewServer(&mcp.Implementation{Name: "conflicting-test-server4", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "conflicting-test-server5", Version: "1.0.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "time",

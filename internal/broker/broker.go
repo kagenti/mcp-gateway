@@ -40,8 +40,11 @@ type upstreamMCP struct {
 type ClientType int
 
 const (
+	// ClientTypeValidation is used for validation-only sessions
 	ClientTypeValidation ClientType = iota
+	// ClientTypeDiscovery is used for tool discovery and notifications
 	ClientTypeDiscovery
+	// ClientTypeSession is used for regular tool execution sessions
 	ClientTypeSession
 )
 
@@ -614,7 +617,7 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string
 		},
 	})
 	if err != nil {
-		httpClient.Close()
+		_ = httpClient.Close()
 		return nil, nil, fmt.Errorf("initialization failed: %w", err)
 	}
 
@@ -681,7 +684,6 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolP
 				IsReachable: false,
 				Error:       "Server not registered",
 			},
-			
 		}
 	}
 
@@ -764,13 +766,12 @@ func (m *mcpBrokerImpl) validateServerConnectivity(upstream *upstreamMCP) Connec
 	// Clean up immediately - this is just for validation
 	defer func() {
 		if client != nil {
-			client.Close()
+			_ = client.Close()
 		}
 	}()
 
 	return ConnectionStatus{IsReachable: true}
 }
-
 
 // validateProtocol validates the MCP protocol version
 func validateProtocol(initResp *mcp.InitializeResult) ProtocolValidation {
@@ -836,13 +837,13 @@ func (m *mcpBrokerImpl) checkToolConflicts(tools []mcp.Tool, toolPrefix, current
 // ValidateAllServers performs comprehensive validation of all registered servers and returns status
 func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
 	response := StatusResponse{
-		Servers:             make([]ServerValidationStatus, 0),
-		OverallValid:        true,
-		TotalServers:        len(m.mcpServers),
-		HealthyServers:      0,
-		UnHealthyServers:   0,
-		ToolConflicts:       0,
-		Timestamp:           time.Now(),
+		Servers:          make([]ServerValidationStatus, 0),
+		OverallValid:     true,
+		TotalServers:     len(m.mcpServers),
+		HealthyServers:   0,
+		UnHealthyServers: 0,
+		ToolConflicts:    0,
+		Timestamp:        time.Now(),
 	}
 
 	for url, upstream := range m.mcpServers {

@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// ServerValidationStatus contains the validation status of a single MCP server
 type ServerValidationStatus struct {
 	URL                    string                 `json:"url"`
 	Name                   string                 `json:"name"`
@@ -21,18 +22,21 @@ type ServerValidationStatus struct {
 	LastValidated          time.Time              `json:"lastValidated"`
 }
 
+// ConnectionStatus represents the connection health of an MCP server
 type ConnectionStatus struct {
 	IsReachable    bool   `json:"isReachable"`
 	Error          string `json:"error,omitempty"`
 	HTTPStatusCode int    `json:"httpStatusCode,omitempty"`
 }
 
+// ProtocolValidation represents the MCP protocol version validation results
 type ProtocolValidation struct {
 	IsValid          bool   `json:"isValid"`
 	SupportedVersion string `json:"supportedVersion"`
 	ExpectedVersion  string `json:"expectedVersion"`
 }
 
+// CapabilitiesValidation represents the capabilities validation results
 type CapabilitiesValidation struct {
 	IsValid             bool     `json:"isValid"`
 	HasToolCapabilities bool     `json:"hasToolCapabilities"`
@@ -40,12 +44,14 @@ type CapabilitiesValidation struct {
 	MissingCapabilities []string `json:"missingCapabilities"`
 }
 
+// ToolConflict represents a tool name conflict between servers
 type ToolConflict struct {
 	ToolName      string   `json:"toolName"`
 	PrefixedName  string   `json:"prefixedName"`
 	ConflictsWith []string `json:"conflictsWith"`
 }
 
+// StatusResponse contains the overall validation status of all servers
 type StatusResponse struct {
 	Servers          []ServerValidationStatus `json:"servers"`
 	OverallValid     bool                     `json:"overallValid"`
@@ -62,6 +68,7 @@ type StatusHandler struct {
 	logger slog.Logger
 }
 
+// NewStatusHandler creates a new status handler for HTTP status endpoints
 func NewStatusHandler(broker MCPBroker, logger slog.Logger) *StatusHandler {
 	return &StatusHandler{
 		broker: broker,
@@ -72,7 +79,7 @@ func NewStatusHandler(broker MCPBroker, logger slog.Logger) *StatusHandler {
 // ServeHTTP implements http.Handler interface
 func (h *StatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.setResponseHeaders(w, r)
-	
+
 	switch r.Method {
 	case http.MethodGet:
 		h.handleGetStatus(w, r)
@@ -97,7 +104,7 @@ func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) 
 		// Remove leading slash and extract server name
 		serverName := strings.TrimPrefix(path, "/")
 		if serverName != "" {
-			h.handleSingleServerByName(w, ctx, serverName)
+			h.handleSingleServerByName(ctx, w, serverName)
 			return
 		}
 	}
@@ -105,7 +112,7 @@ func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) 
 	// Check if requesting specific server status via query parameter (legacy support)
 	serverURL := r.URL.Query().Get("server")
 	if serverURL != "" {
-		h.handleSingleServerStatus(w, r, ctx, serverURL)
+		h.handleSingleServerStatus(ctx, w, r, serverURL)
 		return
 	}
 
@@ -113,7 +120,7 @@ func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) 
 	h.sendJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *StatusHandler) handleSingleServerByName(w http.ResponseWriter, ctx context.Context, serverName string) {
+func (h *StatusHandler) handleSingleServerByName(ctx context.Context, w http.ResponseWriter, serverName string) {
 	statusResponse := h.broker.ValidateAllServers(ctx)
 
 	var serverStatus *ServerValidationStatus
@@ -141,7 +148,7 @@ func (h *StatusHandler) handleSingleServerByName(w http.ResponseWriter, ctx cont
 }
 
 // handleSingleServerStatus handles requests for a specific server's status
-func (h *StatusHandler) handleSingleServerStatus(w http.ResponseWriter, _ *http.Request, ctx context.Context, serverURL string) {
+func (h *StatusHandler) handleSingleServerStatus(ctx context.Context, w http.ResponseWriter, _ *http.Request, serverURL string) {
 	brokerImpl, ok := h.broker.(*mcpBrokerImpl)
 	if !ok {
 		h.sendErrorResponse(w, http.StatusInternalServerError, "Invalid broker implementation")
