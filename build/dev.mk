@@ -95,7 +95,7 @@ dev-broker-local: ## Run broker locally with port-forwarded MCP servers
 	@echo "  server3: localhost:9093"
 	@echo ""
 	@echo "Starting broker locally..."
-	./bin/mcp-broker-router --mcp-gateway-config=/tmp/mcp-broker-config-local.yaml --mcp-broker-address=0.0.0.0:8080 --mcp-router-address=0.0.0.0:50051
+	./bin/mcp-broker-router --mcp-gateway-config=/tmp/mcp-broker-config-local.yaml --mcp-broker-public-address=0.0.0.0:8080 --mcp-router-address=0.0.0.0:50051
 
 # Stop local broker and port-forwards
 .PHONY: dev-broker-stop
