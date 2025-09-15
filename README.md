@@ -158,10 +158,10 @@ spec:
 ## Command Line Flags
 
 ```bash
---mcp-router-address    # gRPC ext_proc address (default: 0.0.0.0:50051)
---mcp-broker-address    # HTTP broker address (default: 0.0.0.0:8080)
---mcp-gateway-config    # Config file path (default: ./config/mcp-system/config.yaml)
---controller            # Enable Kubernetes controller mode
+--mcp-router-address            # gRPC ext_proc address (default: 0.0.0.0:50051)
+--mcp-broker-public-address     # HTTP broker address (default: 0.0.0.0:8080)
+--mcp-gateway-config            # Config file path (default: ./config/mcp-system/config.yaml)
+--controller                    # Enable Kubernetes controller mode
 ```
 
 ### OAuth Configuration
