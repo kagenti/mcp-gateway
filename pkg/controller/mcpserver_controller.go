@@ -675,7 +675,7 @@ func (s *startupReconciler) Start(ctx context.Context) error {
 
 // aggregateCredentials collects credentials from all MCPServers and creates/updates
 // a single aggregated secret for the broker to use with envFrom
-func (r *MCPServerReconciler) aggregateCredentials(ctx context.Context, mcpServers []mcpv1alpha1.MCPServer) error {
+func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []mcpv1alpha1.MCPServer) error {
 	log := log.FromContext(ctx)
 
 	// collect all credentials
