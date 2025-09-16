@@ -295,7 +295,7 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.Stream
 	virtualServerHandler := broker.NewVirtualServerHandler(streamableHTTPServer, mcpConfig, logger)
 	mux.Handle("/mcp", virtualServerHandler)
 
-	return httpSrv, mcpBroker, virtualServerHandler
+	return httpSrv, mcpBroker, streamableHTTPServer
 }
 
 func setUpConfigServer(address string) *http.Server {
