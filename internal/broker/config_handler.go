@@ -50,7 +50,7 @@ func (h *ConfigUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	defer func() { _ = r.Body.Close() }()
 
 	var configData struct {
-		Servers        []*config.MCPServer    `yaml:"servers"`
+		Servers        []*config.MCPServer     `yaml:"servers"`
 		VirtualServers []*config.VirtualServer `yaml:"virtualServers"`
 	}
 
