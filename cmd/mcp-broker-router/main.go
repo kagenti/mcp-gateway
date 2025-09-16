@@ -151,13 +151,13 @@ func main() {
 		&mcpRouterAddrFlag,
 		"mcp-router-address",
 		"0.0.0.0:50051",
-		"The address for mcp router",
+		"The address for MCP router",
 	)
 	flag.StringVar(
 		&mcpBrokerAddrFlag,
 		"mcp-broker-public-address",
 		"0.0.0.0:8080",
-		"The public address for mcp broker",
+		"The public address for MCP broker",
 	)
 	flag.StringVar(
 		&mcpConfigAddrFlag,
@@ -202,7 +202,7 @@ func main() {
 		return
 	}
 	ctx := context.Background()
-	brokerServer, broker := setUpBroker(mcpBrokerAddrFlag)
+	brokerServer, broker, mcpServer := setUpBroker(mcpBrokerAddrFlag)
 	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	routerGRPCServer, router := setUpRouter(broker)
 	mcpConfig.RegisterObserver(router)
@@ -255,13 +255,16 @@ func main() {
 	if err := brokerServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("HTTP shutdown error: %v", err)
 	}
+	if err := mcpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("MCP shutdown error: %v; ignoring", err)
+	}
 	if err := configServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Config server shutdown error: %v", err)
 	}
 	routerGRPCServer.GracefulStop()
 }
 
-func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
+func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
 
 	mux := http.NewServeMux()
 
@@ -289,7 +292,7 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	)
 	mux.Handle("/mcp", streamableHTTPServer)
 
-	return httpSrv, broker
+	return httpSrv, broker, streamableHTTPServer
 }
 
 func setUpConfigServer(address string) *http.Server {
