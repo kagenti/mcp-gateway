@@ -124,22 +124,17 @@ func (h *StatusHandler) handleSingleServerByName(ctx context.Context, w http.Res
 	statusResponse := h.broker.ValidateAllServers(ctx)
 
 	var serverStatus *ServerValidationStatus
+
+	// Only support exact match (full namespace/route format)
 	for _, server := range statusResponse.Servers {
 		if server.Name == serverName {
 			serverStatus = &server
 			break
 		}
-		if strings.Contains(server.Name, "/") {
-			parts := strings.Split(server.Name, "/")
-			if len(parts) == 2 && parts[1] == serverName {
-				serverStatus = &server
-				break
-			}
-		}
 	}
 
 	if serverStatus == nil {
-		h.sendErrorResponse(w, http.StatusNotFound, fmt.Sprintf("Server '%s' not found", serverName))
+		h.sendErrorResponse(w, http.StatusNotFound, fmt.Sprintf("Server '%s' not found. Use format 'namespace/route-name' or check available servers at /status", serverName))
 		return
 	}
 

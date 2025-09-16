@@ -14,8 +14,8 @@ servers:
     hostname: server3.example.com
     enabled: true
     toolPrefix: "s3_"
-  - name: test-server4
-    url: http://localhost:9090
-    hostname: server4.example.com
+  - name: test-broken-server
+    url: http://localhost:9094
+    hostname: broken-server.example.com
     enabled: true
-    toolPrefix: "s4_"
+    toolPrefix: "broken_"

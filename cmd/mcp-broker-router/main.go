@@ -292,7 +292,6 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.Stream
 		mcpBroker.MCPServer(),
 		server.WithStreamableHTTPServer(httpSrv),
 	)
-	mux.Handle("/mcp", streamableHTTPServer)
 	mux.HandleFunc("/status", mcpBroker.HandleStatusRequest)
 	mux.HandleFunc("/status/", mcpBroker.HandleStatusRequest)
 

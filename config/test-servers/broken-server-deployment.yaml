@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-test-broken-server
+  labels:
+    app: mcp-test-broken-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-test-broken-server
+  template:
+    metadata:
+      labels:
+        app: mcp-test-broken-server
+    spec:
+      containers:
+        - name: mcp-test-broken-server
+          image: ghcr.io/kagenti/mcp-gateway/test-broken-server:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            [
+              "./mcp-test-server",
+              "--http",
+              "0.0.0.0:9090",
+              "--failure-mode",
+              "protocol",
+            ]
+          ports:
+            - containerPort: 9090
+              name: http
+          env:
+            - name: FAILURE_MODE
+              value: "protocol"
+          readinessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "100m"
+            requests:
+              memory: "128Mi"
+              cpu: "50m"

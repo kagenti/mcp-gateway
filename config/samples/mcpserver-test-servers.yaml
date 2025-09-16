@@ -5,7 +5,7 @@ metadata:
   name: test-server1
   namespace: mcp-test
   labels:
-    'kagenti/mcp': 'true'
+    "kagenti/mcp": "true"
 spec:
   # Tool prefix applied to all servers in this MCPServer
   toolPrefix: test_
@@ -21,7 +21,7 @@ metadata:
   name: test-server2
   namespace: mcp-test
   labels:
-    'kagenti/mcp': 'true'
+    "kagenti/mcp": "true"
 spec:
   toolPrefix: test2_
   targetRef:
@@ -36,7 +36,7 @@ metadata:
   name: test-server3
   namespace: mcp-test
   labels:
-    'kagenti/mcp': 'true'
+    "kagenti/mcp": "true"
 spec:
   toolPrefix: test3_
   targetRef:
@@ -51,7 +51,7 @@ metadata:
   name: test-server4
   namespace: mcp-test
   labels:
-    'kagenti/mcp': 'true'
+    "kagenti/mcp": "true"
 spec:
   toolPrefix: test4_
   targetRef:
@@ -66,14 +66,13 @@ spec:
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
-  name: test-server5
+  name: test-broken-server
   namespace: mcp-test
   labels:
-    'kagenti/mcp': 'true'
+    "kagenti/mcp": "true"
 spec:
-  toolPrefix: test5_
+  toolPrefix: broke_
   targetRef:
-    # Server 5 - Python FastMCP based (same as server3 but without auth)
     group: gateway.networking.k8s.io
     kind: HTTPRoute
-    name: mcp-server5-route
+    name: mcp-broken-server-route
