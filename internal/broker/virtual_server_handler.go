@@ -81,7 +81,7 @@ func (h *VirtualServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 func (h *VirtualServerHandler) handleToolsListWithFiltering(
 	w http.ResponseWriter,
 	r *http.Request,
-	jsonRPCRequest mcp.JSONRPCRequest,
+	_ mcp.JSONRPCRequest,
 	virtualServerName string,
 	originalBody []byte,
 ) {
@@ -102,7 +102,9 @@ func (h *VirtualServerHandler) handleToolsListWithFiltering(
 		// Pass through error responses
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(responseCapture.statusCode)
-		w.Write(responseCapture.body.Bytes())
+		if _, err := w.Write(responseCapture.body.Bytes()); err != nil {
+			h.logger.Error("Failed to write error response", "error", err)
+		}
 		return
 	}
 
