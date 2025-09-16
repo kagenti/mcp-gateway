@@ -113,6 +113,31 @@ deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local
 docker-build: ## Build container image locally
 	docker build ${BUILDFLAGS} -t mcp-gateway:local .
 
+# Common reload steps
+define reload-image
+	@docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
+	@kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+endef
+
+.PHONY: reload-controller
+reload-controller: build docker-build ## Build, load to Kind, and restart controller
+	$(call reload-image)
+	@kubectl rollout restart -n mcp-system deployment/mcp-controller
+	@kubectl rollout status -n mcp-system deployment/mcp-controller --timeout=60s
+
+.PHONY: reload-broker
+reload-broker: build docker-build ## Build, load to Kind, and restart broker
+	$(call reload-image)
+	@kubectl rollout restart -n mcp-system deployment/mcp-broker-router
+	@kubectl rollout status -n mcp-system deployment/mcp-broker-router --timeout=60s
+
+.PHONY: reload
+reload: build docker-build ## Build, load to Kind, and restart both controller and broker
+	$(call reload-image)
+	@kubectl rollout restart -n mcp-system deployment/mcp-controller deployment/mcp-broker-router
+	@kubectl rollout status -n mcp-system deployment/mcp-controller --timeout=60s
+	@kubectl rollout status -n mcp-system deployment/mcp-broker-router --timeout=60s
+
 ##@ E2E Testing
 
 # E2E test targets are in build/e2e.mk

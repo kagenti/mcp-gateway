@@ -33,10 +33,12 @@ define inspect-server-template
 		echo "Opening MCP Inspector for $(1) at http://localhost:$(3)/mcp"; \
 		echo "Available tools: $(4)"; \
 		$(if $(5),echo "$(5)";) \
-		echo "WARNING: If Inspector connects to wrong URL, change it in the UI to: http://localhost:$(3)/mcp"; \
-		echo "Press Ctrl+C to stop and cleanup"; \
 		echo ""; \
-		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://localhost:$(3)/mcp; \
+		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
+		sleep 2; \
+		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:$(3)/mcp"; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		wait; \
 		kill $$$$PF_PID 2>/dev/null || true
 endef
 
@@ -71,9 +73,11 @@ inspect-gateway: ## Open MCP Inspector for the gateway
 		echo "Opening MCP Inspector for gateway"; \
 		echo "URL: http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
 		echo ""; \
+		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
+		sleep 2; \
+		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
-		echo ""; \
-		DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector http://mcp.127-0-0-1.sslip.io:8888/mcp; \
+		wait; \
 		kill $$PF_PID 2>/dev/null || true
 
 # Show status of all MCP components implementation

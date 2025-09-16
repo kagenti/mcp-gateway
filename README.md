@@ -36,7 +36,7 @@ Run the mcp-inspector and connect to the gateway (This also port forwards to the
 make inspect-gateway
 ```
 
-Open http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
+This will start MCP Inspector and automatically open it with the correct URL for the gateway.
 
 ## Example OAuth setup
 
@@ -75,7 +75,7 @@ Set up a new 'mcp' realm in keycloak with user/pass mcp/mcp:
 make keycloak-setup-mcp-realm
 ```
 
-Finally, open the mcp-inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp and go through the OAuth flow.
+Finally, open MCP Inspector with `make inspect-gateway` and go through the OAuth flow.
 
 ## Running Modes
 
