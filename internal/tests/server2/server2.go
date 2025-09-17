@@ -66,7 +66,7 @@ var (
 )
 
 // RunServer create a server that can be started and stopped
-func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
+func RunServer(transport, port string, streamOpts ...server.StreamableHTTPOption) (StartupFunc, ShutdownFunc, error) {
 
 	hooks := &server.Hooks{}
 
@@ -115,9 +115,10 @@ func RunServer(transport, port string) (StartupFunc, ShutdownFunc, error) {
 			ReadHeaderTimeout: 3 * time.Second,
 		}
 
+		streamOpts = append(streamOpts, server.WithStreamableHTTPServer(httpServer))
 		streamableHTTPServer := server.NewStreamableHTTPServer(
 			s,
-			server.WithStreamableHTTPServer(httpServer),
+			streamOpts...,
 		)
 		mux.Handle("/mcp", streamableHTTPServer)
 

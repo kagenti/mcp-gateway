@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,6 +89,14 @@ func TestAuth1234(t *testing.T) {
 
 func TestRunStreamableServer(t *testing.T) {
 	startFunc, shutdownFunc, err := RunServer("http", "8085")
+	require.NoError(t, err)
+	require.NotNil(t, startFunc)
+	require.NotNil(t, shutdownFunc)
+}
+
+func TestCustomEndpointStreamableServer(t *testing.T) {
+	startFunc, shutdownFunc, err := RunServer("http", "8085",
+		server.WithEndpointPath("/emceepea"))
 	require.NoError(t, err)
 	require.NotNil(t, startFunc)
 	require.NotNil(t, shutdownFunc)
