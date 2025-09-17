@@ -26,3 +26,5 @@ resources:
   - broken-server-service.yaml
   - broken-server-httproute.yaml
   - broken-server-httproute-ext.yaml
+  - custom-path-server-deployment.yaml
+  - custom-path-server-httproute.yaml

@@ -36,6 +36,12 @@ jobs:
           - server: server3
             context: tests/servers/server3
             dockerfile: Dockerfile
+          - server: broken-server
+            context: tests/servers/broken-server
+            dockerfile: Dockerfile
+          - server: custom-path-server
+            context: tests/servers/custom-path-server
+            dockerfile: Dockerfile
 
     steps:
       - name: Check out code
