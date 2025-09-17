@@ -65,6 +65,13 @@ spec:
                 required:
                 - name
                 type: object
+              path:
+                default: /mcp
+                description: |-
+                  Path specifies the URL path where the MCP server endpoint is exposed.
+                  If not specified, defaults to "/mcp".
+                  This allows connecting to MCP servers that use custom paths like "/v1/mcp" or "/api/mcp".
+                type: string
               targetRef:
                 description: |-
                   TargetRef specifies an HTTPRoute that points to a backend MCP server.

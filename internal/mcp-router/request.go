@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 
@@ -334,6 +335,20 @@ func (s *ExtProcServer) createRoutingResponse(
 				RawValue: []byte(method),
 			},
 		},
+	}
+
+	// extract path from URL and set :path header if it's not the default /mcp
+	if serverInfo != nil && serverInfo.URL != "" {
+		parsedURL, err := url.Parse(serverInfo.URL)
+		if err == nil && parsedURL.Path != "" && parsedURL.Path != "/mcp" {
+			slog.Info("Setting custom path header", "path", parsedURL.Path, "server", serverName)
+			headers = append(headers, &basepb.HeaderValueOption{
+				Header: &basepb.HeaderValue{
+					Key:      ":path",
+					RawValue: []byte(parsedURL.Path),
+				},
+			})
+		}
 	}
 
 	// Add backend session header if we have one
