@@ -4,36 +4,24 @@ KEYCLOAK_NAMESPACE = keycloak
 KEYCLOAK_ADMIN_USER = admin
 KEYCLOAK_ADMIN_PASSWORD = admin
 
-HELM ?= bin/helm
-
-keycloak-install-impl: $(HELM)
-	@echo "Installing Keycloak (dev mode)..."
-	@-$(HELM) repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null
-	@$(HELM) repo update
-	@$(HELM) upgrade --install keycloak bitnami/keycloak \
-		--create-namespace \
-		--namespace $(KEYCLOAK_NAMESPACE) \
-		--set auth.adminUser=$(KEYCLOAK_ADMIN_USER) \
-		--set auth.adminPassword=$(KEYCLOAK_ADMIN_PASSWORD) \
-		--set production=false \
-		--set proxy=edge \
-		--set postgresql.enabled=true \
-		--set postgresql.auth.postgresPassword=postgres \
-		--set postgresql.auth.database=keycloak \
-		--set replicaCount=1 \
-		--wait --timeout=300s
+keycloak-install-impl:
+	@echo "Installing Keycloak (dev mode using official image)..."
+	@echo "Note: Using kubectl deployment due to Helm chart issues"
+	@kubectl apply -f config/keycloak/deployment.yaml
+	@echo "Waiting for Keycloak to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=keycloak -n $(KEYCLOAK_NAMESPACE) --timeout=120s || true
 	@echo ""
 	@echo "Creating HTTPRoute"
-	kubectl apply -f config/keycloak/httproute.yaml
+	@kubectl apply -f config/keycloak/httproute.yaml
 	@echo ""
 	@echo "Keycloak installed!"
 	@echo "Admin credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
 	@echo "Run 'make keycloak-forward' to access at http://localhost:8095"
 
 .PHONY: keycloak-uninstall
-keycloak-uninstall: $(HELM) # Uninstall Keycloak
-	$(HELM) uninstall keycloak -n $(KEYCLOAK_NAMESPACE)
-	kubectl delete namespace $(KEYCLOAK_NAMESPACE)
+keycloak-uninstall: # Uninstall Keycloak
+	@kubectl delete -f config/keycloak/httproute.yaml 2>/dev/null || true
+	@kubectl delete -f config/keycloak/deployment.yaml 2>/dev/null || true
 
 keycloak-forward-impl:
 	@echo "Forwarding Keycloak to http://localhost:8095"

@@ -318,10 +318,7 @@ istioctl: ## Download and install istioctl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development
-	docker pull docker.io/bitnami/keycloak:26.3.3-debian-12-r0
-	kind load -n mcp-gateway docker-image docker.io/bitnami/keycloak:26.3.3-debian-12-r0
-	docker pull docker.io/bitnami/postgresql:17.6.0-debian-12-r0
-	kind load -n mcp-gateway docker-image docker.io/bitnami/postgresql:17.6.0-debian-12-r0
+	@echo "Installing Keycloak - using official image with H2 database"
 	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
 
 .PHONY: keycloak-forward
