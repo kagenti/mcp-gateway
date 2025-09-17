@@ -177,9 +177,10 @@ golangci-lint:
 	fi
 
 .PHONY: lint
-lint: fmt vet golangci-lint
+lint: check-gofmt check-goimports check-newlines fmt vet golangci-lint ## Run all linting and style checks
+	@echo "All lint checks passed!"
 
-# Code style checks (matches CI)
+# Code style checks
 .PHONY: check-style
 check-style: check-gofmt check-goimports check-newlines
 
@@ -242,10 +243,6 @@ fix-newlines:
 		fi; \
 	done
 
-# Combined check that matches what CI does
-.PHONY: ci-check
-ci-check: check-style lint
-	@echo "All CI checks passed!"
 
 test-unit:
 	go test ./...
