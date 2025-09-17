@@ -407,9 +407,17 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		}
 	}
 
-	// external services use https on port 443
-	if isExternal && backendRef.Port != nil && *backendRef.Port == 443 {
-		protocol = "https"
+	// determine protocol for external services
+	if isExternal {
+		// use appProtocol from Service spec (standard k8s field)
+		for _, port := range service.Spec.Ports {
+			if backendRef.Port != nil && int32(port.Port) == int32(*backendRef.Port) {
+				if port.AppProtocol != nil && strings.ToLower(*port.AppProtocol) == "https" {
+					protocol = "https"
+				}
+				break
+			}
+		}
 	}
 
 	endpoint := fmt.Sprintf("%s://%s/mcp", protocol, nameAndEndpoint)

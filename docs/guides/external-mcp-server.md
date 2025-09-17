@@ -51,9 +51,9 @@ export GITHUB_PAT="ghp_YOUR_GITHUB_TOKEN_HERE"
 Before proceeding, verify all dependencies are met:
 
 ```bash
-# MCP Gateway is deployed
-kubectl get mcpservers -A
+# Verify MCP Gateway components are deployed
 kubectl get pods -n mcp-system
+kubectl get gateway -n gateway-system mcp-gateway
 
 # verify egress to GitHub's MCP server from a test pod
 kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- \
@@ -100,78 +100,7 @@ kubectl patch gateway mcp-gateway -n gateway-system --type json -p='[
 ]'
 ```
 
-## Step 2: Create ExternalName Service
-
-Create a `Service` that represents the external endpoint:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-githubcopilot-com
-  namespace: mcp-test
-spec:
-  type: ExternalName
-  externalName: api.githubcopilot.com
-  ports:
-  - name: https
-    port: 443
-    targetPort: 443
-    protocol: TCP
-EOF
-```
-
-## Step 3: Create ServiceEntry for GitHub MCP API
-
-The `ServiceEntry` tells Istio about the external service:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: networking.istio.io/v1beta1
-kind: ServiceEntry
-metadata:
-  name: github-mcp-external
-  namespace: mcp-test
-spec:
-  hosts:
-  - api.githubcopilot.com
-  ports:
-  - number: 443
-    name: https
-    protocol: HTTPS
-  location: MESH_EXTERNAL
-  resolution: DNS
-EOF
-```
-
-## Step 4: Create DestinationRule
-
-Configure how Istio connects to the external service via a `DestinationRule`:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: github-mcp-external
-  namespace: mcp-test
-spec:
-  host: api.githubcopilot.com
-  trafficPolicy:
-    connectionPool:
-      tcp:
-        maxConnections: 10
-      http:
-        http1MaxPendingRequests: 10
-        h2UpgradePolicy: UPGRADE
-    tls:
-      mode: SIMPLE
-      sni: api.githubcopilot.com
-EOF
-```
-
-## Step 5: Create HTTPRoute for External Service
+## Step 2: Create HTTPRoute for External Service
 
 Create an `HTTPRoute` that matches the external hostname and routes to the `ExternalName` Service:
 
@@ -204,20 +133,81 @@ spec:
 EOF
 ```
 
-## Step 6: Create the Secret for Authentication
+## Step 3: Create ExternalName Service
 
-Create a secret containing your GitHub PAT token with the Bearer prefix.
+Create a `Service` that represents the external endpoint:
 
 ```bash
-# Create the secret with Bearer prefix
-kubectl create secret generic github-token \
-  --namespace=mcp-test \
-  --from-literal=token="Bearer $GITHUB_PAT"
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-githubcopilot-com
+  namespace: mcp-test
+spec:
+  type: ExternalName
+  externalName: api.githubcopilot.com
+  ports:
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP
+    appProtocol: https
+EOF
 ```
 
-## Step 7: Create the MCPServer Resource
+## Step 4: Create ServiceEntry for GitHub MCP API
 
-Finally, create the `MCPServer` resource that registers the GitHub MCP server with the gateway:
+The `ServiceEntry` tells Istio about the external service:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: github-mcp-external
+  namespace: mcp-test
+spec:
+  hosts:
+  - api.githubcopilot.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+EOF
+```
+
+## Step 5: Create DestinationRule
+
+Configure how Istio connects to the external service via a `DestinationRule`:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: github-mcp-external
+  namespace: mcp-test
+spec:
+  host: api.githubcopilot.com
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 10
+      http:
+        http1MaxPendingRequests: 10
+        h2UpgradePolicy: UPGRADE
+    tls:
+      mode: SIMPLE
+      sni: api.githubcopilot.com
+EOF
+```
+
+## Step 6: Create the MCPServer Resource
+
+Create the `MCPServer` resource that registers the GitHub MCP server with the gateway:
 
 ```bash
 kubectl apply -f - <<EOF
@@ -238,7 +228,18 @@ spec:
 EOF
 ```
 
-## Step 8: Verify
+## Step 7: Create Secret with Authentication
+
+Create a secret containing your GitHub PAT token with the Bearer prefix:
+
+```bash
+# Create the secret with Bearer prefix
+kubectl create secret generic github-token \
+  --namespace=mcp-test \
+  --from-literal=token="Bearer $GITHUB_PAT"
+```
+
+## Verification
 
 Check that the `MCPServer` is registered:
 
