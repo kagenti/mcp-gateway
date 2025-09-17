@@ -6,7 +6,5 @@ metadata:
 spec:
   description: "test1 virtual server"
   tools:
-  - test1_read_doc
-  - test1_write_doc
-  - test1_list_channels
-  - test1_read_channel
+  - test2_time
+  - test3_dozen
