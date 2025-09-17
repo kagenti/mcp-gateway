@@ -1,29 +1,30 @@
 apiVersion: kuadrant.io/v1
 kind: AuthPolicy
 metadata:
-  name: mcp-auth-policy
+  name: mcps-auth-policy
   namespace: gateway-system
 spec:
   targetRef:
     group: gateway.networking.k8s.io
     kind: Gateway
     name: mcp-gateway
-    sectionName: mcp
+    sectionName: mcps
   defaults:
-    when:
-      - predicate: "!request.path.contains('/.well-known')"
     rules:
-      authentication:
+      metadata:
+        rbac: #fetches hard coded acl currrently
+          http:
+            urlExpression: '"http://mcp-config.mcp-system.svc.cluster.local:8181/config/"+request.headers["x-mcp-toolid"]'
+      authentication: #validates the token
         'keycloak':
           jwt:
             issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
-      authorization:
-        'allow-tool-list':
+      authorization: #authorizes the tool call
+        'allow-tool-call':
           patternMatching:
             patterns:
-              - predicate: size(auth.identity.groups) >=0
-              - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # add method header
-      response:
+              - predicate: request.headers['x-mcp-toolname'] in auth.metadata.rbac.acl[auth.identity.groups[0]]
+      response: #duplicated content may be able to solve
         unauthorized:
           code: 401
           headers:
@@ -33,7 +34,7 @@ spec:
             value: |
               {
                 "error": "Forbidden",
-                "message": "Access denied."
+                "message": "MCP Tool Access denied."
               }
         unauthenticated:
           code: 401
@@ -44,5 +45,5 @@ spec:
             value: |
               {
                 "error": "Forbidden",
-                "message": "Access denied."
+                "message": "MCP Tool Access denied."
               }

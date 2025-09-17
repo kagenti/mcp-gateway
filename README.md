@@ -50,7 +50,7 @@ export OAUTH_RESOURCE_NAME="MCP Server"
 export OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp"  
 export OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"
 export OAUTH_BEARER_METHODS_SUPPORTED="header"
-export OAUTH_SCOPES_SUPPORTED="basic"
+export OAUTH_SCOPES_SUPPORTED="basic,groups"
 
 # Restart the broker to pick up the new configuration
 kubectl set env deployment/mcp-broker-router \
@@ -63,6 +63,8 @@ kubectl set env deployment/mcp-broker-router \
 
 # Apply AuthPolicy for token validation
 kubectl apply -f ./config/mcp-system/authpolicy.yaml
+kubectl apply -f ./config/mcp-system/tool-call-auth.yaml
+
 ```
 
 The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
@@ -190,7 +192,7 @@ export OAUTH_RESOURCE_NAME="Production MCP Server"
 export OAUTH_RESOURCE="https://mcp.example.com/mcp"
 export OAUTH_AUTHORIZATION_SERVERS="https://keycloak.example.com/realms/mcp"
 export OAUTH_BEARER_METHODS_SUPPORTED="header"
-export OAUTH_SCOPES_SUPPORTED="basic,read,write"
+export OAUTH_SCOPES_SUPPORTED="basic,read,write,groups"
 ```
 
 **Response format:**

@@ -307,7 +307,8 @@ func setUpConfigServer(address string) *http.Server {
 	}
 
 	configHandler := broker.NewConfigUpdateHandler(mcpConfig, authToken, logger)
-	mux.Handle("POST /config", configHandler)
+	mux.HandleFunc("POST /config", configHandler.UpdateConfig)
+	mux.HandleFunc("GET /config/{serverID}", configHandler.GetConfig)
 
 	// health check endpoint for internal API
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {

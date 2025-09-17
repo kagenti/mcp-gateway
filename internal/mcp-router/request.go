@@ -16,6 +16,8 @@ import (
 
 const (
 	toolHeader      = "x-mcp-toolname"
+	toolIDHeader    = "x-mcp-toolid" // internally used only
+	methodHeader    = "x-mcp-method" // internally used only
 	sessionHeader   = "mcp-session-id"
 	authorityHeader = ":authority"
 )
@@ -29,19 +31,41 @@ type ServerInfo struct {
 	CredentialEnvVar string
 }
 
-// extractMCPToolName safely extracts the tool name from MCP tool call request
-func extractMCPToolName(data map[string]any) string {
+func validateJSONRPC(data map[string]any) bool {
 	// Check if this is a JSON-RPC request
 	jsonrpcVal, ok := data["jsonrpc"]
 	if !ok {
-		return ""
+		return false
 	}
 
 	jsonrpcStr, ok := jsonrpcVal.(string)
 	if !ok || jsonrpcStr != "2.0" {
+		return false
+	}
+	return true
+}
+
+func extractMCPMethod(data map[string]any) string {
+	if !validateJSONRPC(data) {
+		return ""
+	}
+	methodVal, ok := data["method"]
+	if !ok {
 		return ""
 	}
 
+	methodStr, ok := methodVal.(string)
+	if !ok {
+		return ""
+	}
+	return methodStr
+}
+
+// extractMCPToolName safely extracts the tool name from MCP tool call request
+func extractMCPToolName(data map[string]any) string {
+	if !validateJSONRPC(data) {
+		return ""
+	}
 	// Extract method field and check if it's tools/call
 	methodVal, ok := data["method"]
 	if !ok {
@@ -148,15 +172,27 @@ func (s *ExtProcServer) extractSessionFromContext(_ context.Context) string {
 
 // HandleRequestBody handles request bodies for MCP requests.
 func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]any, config *config.MCPServersConfig) ([]*eppb.ProcessingResponse, error) {
-	slog.Info(" Processing request body for MCP requests...")
+	slog.Info("Request Handler: Processing request body for MCP requests...", "data", data)
 
 	// Extract tool name for routing
+
 	toolName := extractMCPToolName(data)
-	if toolName == "" {
+	mcpMethod := extractMCPMethod(data)
+	if toolName == "" && mcpMethod == "" {
 		slog.Debug(
-			"[EXT-PROC] HandleRequestBody No tool name found in tools/call request",
+			"[EXT-PROC] HandleRequestBody No tool name or  method found in request",
 		)
 		return s.createEmptyBodyResponse(), nil
+	}
+
+	if toolName == "" && mcpMethod != "" {
+		slog.Debug(
+			"[EXT-PROC] HandleRequestBody None tool call setting method header only" + mcpMethod,
+		)
+		// none tool call set headers
+		return s.createCommonHeaders(
+			mcpMethod,
+		), nil
 	}
 
 	serverInfo := getServerInfo(toolName, config)
@@ -242,13 +278,39 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	}
 
 	return s.createRoutingResponse(
-		toolName, requestBodyBytes, hostname, serverName, upstreamSession, serverInfo,
+		toolName, mcpMethod, requestBodyBytes, hostname, serverName, upstreamSession, serverInfo,
 	), nil
 }
 
+func (s *ExtProcServer) createCommonHeaders(method string) []*eppb.ProcessingResponse {
+	headers := []*basepb.HeaderValueOption{
+		{
+			Header: &basepb.HeaderValue{
+				Key:      methodHeader,
+				RawValue: []byte(method),
+			},
+		},
+	}
+	return []*eppb.ProcessingResponse{
+		{
+			Response: &eppb.ProcessingResponse_RequestBody{
+				RequestBody: &eppb.BodyResponse{
+					Response: &eppb.CommonResponse{
+						HeaderMutation: &eppb.HeaderMutation{
+							SetHeaders: headers,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TODO this needs refactor
 // createRoutingResponse creates a response with routing headers and session mapping
 func (s *ExtProcServer) createRoutingResponse(
 	toolName string,
+	method string,
 	bodyBytes []byte,
 	hostname, serverName, backendSession string,
 	serverInfo *ServerInfo,
@@ -261,7 +323,18 @@ func (s *ExtProcServer) createRoutingResponse(
 				RawValue: []byte(toolName),
 			},
 		},
-
+		{
+			Header: &basepb.HeaderValue{
+				Key:      toolIDHeader,
+				RawValue: []byte(serverInfo.ToolPrefix),
+			},
+		},
+		{
+			Header: &basepb.HeaderValue{
+				Key:      methodHeader,
+				RawValue: []byte(method),
+			},
+		},
 		{
 			Header: &basepb.HeaderValue{
 				Key:      authorityHeader,
@@ -420,7 +493,7 @@ func (s *ExtProcServer) createErrorResponse(
 func (s *ExtProcServer) HandleRequestHeaders(
 	headers *eppb.HttpHeaders,
 ) ([]*eppb.ProcessingResponse, error) {
-	slog.Info("HandleRequestHeaders called", "streaming", s.streaming)
+	slog.Info("Request Handler: HandleRequestHeaders called", "streaming", s.streaming)
 	if headers != nil && headers.Headers != nil {
 		for _, header := range headers.Headers.Headers {
 			if strings.ToLower(header.Key) == "content-type" ||
@@ -429,6 +502,7 @@ func (s *ExtProcServer) HandleRequestHeaders(
 			}
 		}
 	}
+	// TODO change proccessing mode to not receive body if not interested in request based on headers
 	return []*eppb.ProcessingResponse{
 		{
 			Response: &eppb.ProcessingResponse_RequestHeaders{

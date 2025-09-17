@@ -29,7 +29,8 @@ type MCPServer struct {
 	ToolPrefix       string
 	Enabled          bool
 	Hostname         string
-	CredentialEnvVar string // env var name for auth
+	CredentialEnvVar string              // env var name for auth
+	Acl              map[string][]string `json:"acl"`
 }
 
 // VirtualServer represents a virtual server configuration
