@@ -54,9 +54,9 @@ inspect-server2: ## Open MCP Inspector for test server 2
 inspect-server3: ## Open MCP Inspector for test server 3
 	$(call inspect-server-template,test server 3,mcp-test-server3,9092,time add dozen pi get_weather slow)
 
-.PHONY: inspect-server4
-inspect-server4: ## Open MCP Inspector for test server 4 (requires auth)
-	$(call inspect-server-template,test server 4,mcp-test-server4,9093,similar to server2 but requires authentication,NOTE: This server requires Bearer token authentication)
+.PHONY: inspect-api-key-server
+inspect-api-key-server: ## Open MCP Inspector for API key test server (requires auth)
+	$(call inspect-server-template,API key test server,mcp-api-key-server,9093,hello_world tool with authentication,NOTE: This server requires Bearer token authentication)
 
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1

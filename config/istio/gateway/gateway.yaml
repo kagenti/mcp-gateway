@@ -46,8 +46,8 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcp-server4-route-ext
-      hostname: 'server4.127-0-0-1.sslip.io'
+    - name: mcp-api-key-server-route-ext
+      hostname: 'api-key-server.127-0-0-1.sslip.io'
       port: 8080
       protocol: HTTP
       allowedRoutes:
