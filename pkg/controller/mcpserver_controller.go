@@ -351,14 +351,38 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		serviceNamespace = string(*backendRef.Namespace)
 	}
 
-	// Construct full service DNS name
-	serviceDNSName := fmt.Sprintf("%s.%s.svc.cluster.local", backendRef.Name, serviceNamespace)
-
+	// check service type
+	backendName := string(backendRef.Name)
 	var nameAndEndpoint string
-	if backendRef.Port != nil {
-		nameAndEndpoint = fmt.Sprintf("%s:%d", serviceDNSName, *backendRef.Port)
+	isExternal := false
+
+	service := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      backendName,
+		Namespace: serviceNamespace,
+	}, service)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service %s: %w", backendName, err)
+	}
+
+	if service.Spec.Type == corev1.ServiceTypeExternalName {
+		// externalname service points to external host
+		isExternal = true
+		externalName := service.Spec.ExternalName
+		if backendRef.Port != nil {
+			nameAndEndpoint = fmt.Sprintf("%s:%d", externalName, *backendRef.Port)
+		} else {
+			nameAndEndpoint = externalName
+		}
 	} else {
-		nameAndEndpoint = serviceDNSName
+		// regular k8s service
+		serviceDNSName := fmt.Sprintf("%s.%s.svc.cluster.local", backendRef.Name, serviceNamespace)
+		if backendRef.Port != nil {
+			nameAndEndpoint = fmt.Sprintf("%s:%d", serviceDNSName, *backendRef.Port)
+		} else {
+			nameAndEndpoint = serviceDNSName
+		}
 	}
 
 	toolPrefix := mcpServer.Spec.ToolPrefix
@@ -385,12 +409,35 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		}
 	}
 
-	// to think about: service vs ingress via GW API
+	// determine protocol for external services
+	if isExternal {
+		// use appProtocol from Service spec (standard k8s field)
+		for _, port := range service.Spec.Ports {
+			if backendRef.Port != nil && int32(port.Port) == int32(*backendRef.Port) {
+				if port.AppProtocol != nil && strings.ToLower(*port.AppProtocol) == "https" {
+					protocol = "https"
+				}
+				break
+			}
+		}
+	}
+
 	endpoint := fmt.Sprintf("%s://%s/mcp", protocol, nameAndEndpoint)
+
+	// external services need actual hostname for routing
+	routingHostname := hostname
+	if isExternal {
+		// extract hostname without port
+		if idx := strings.LastIndex(nameAndEndpoint, ":"); idx != -1 {
+			routingHostname = nameAndEndpoint[:idx]
+		} else {
+			routingHostname = nameAndEndpoint
+		}
+	}
 
 	serverInfo := ServerInfo{
 		Endpoint:           endpoint,
-		Hostname:           hostname,
+		Hostname:           routingHostname,
 		ToolPrefix:         toolPrefix,
 		HTTPRouteName:      targetRef.Name,
 		HTTPRouteNamespace: namespace,
