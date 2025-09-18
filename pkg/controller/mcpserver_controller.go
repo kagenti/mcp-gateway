@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/kagenti/mcp-gateway/internal/broker"
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
 	"github.com/kagenti/mcp-gateway/pkg/config"
 )
@@ -62,6 +63,8 @@ type MCPReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
 
 // Reconcile reconciles both MCPServer and MCPVirtualServer resources
 func (r *MCPReconciler) Reconcile(
@@ -112,7 +115,21 @@ func (r *MCPReconciler) reconcileMCPServer(
 		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
 	}
 
-	if err := r.updateStatus(ctx, mcpServer, true, fmt.Sprintf("MCPServer successfully reconciled with %d servers", len(serverInfos))); err != nil {
+	validator := NewServerValidator(r.Client)
+	statusResponse, err := validator.ValidateServers(ctx)
+	if err != nil {
+		log.Error(err, "Failed to validate server status via broker")
+		ready, message := false, fmt.Sprintf("Validation failed: %v", err)
+		if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
+			log.Error(err, "Failed to update status")
+			return reconcile.Result{}, err
+		}
+		return r.regenerateAggregatedConfig(ctx)
+	}
+
+	ready, message := r.evaluateValidationResults(statusResponse, serverInfos)
+
+	if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
 		log.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -186,12 +203,6 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 	}
 
 	for _, mcpServer := range mcpServerList.Items {
-		if !isReady(&mcpServer) {
-			log.Info("Skipping MCPServer that is not ready",
-				"name", mcpServer.Name,
-				"namespace", mcpServer.Namespace)
-			continue
-		}
 
 		serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, &mcpServer)
 		if err != nil {
@@ -262,15 +273,6 @@ func (r *MCPReconciler) writeAggregatedConfig(
 ) error {
 	writer := NewConfigMapWriter(r.Client, r.Scheme)
 	return writer.WriteAggregatedConfig(ctx, ConfigNamespace, ConfigName, brokerConfig)
-}
-
-func isReady(mcpServer *mcpv1alpha1.MCPServer) bool {
-	for _, condition := range mcpServer.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *MCPReconciler) discoverServersFromHTTPRoutes(
@@ -539,6 +541,76 @@ func (r *MCPReconciler) updateHTTPRouteStatus(
 		"affected", affected)
 
 	return nil
+}
+
+// evaluateValidationResults checks broker validation results for servers related to this MCPServer
+func (r *MCPReconciler) evaluateValidationResults(
+	statusResponse *broker.StatusResponse,
+	serverInfos []ServerInfo,
+) (bool, string) {
+	if statusResponse == nil {
+		return true, "No validation data available"
+	}
+
+	// Create a map of server endpoints for quick lookup
+	serverEndpoints := make(map[string]bool)
+	for _, info := range serverInfos {
+		serverEndpoints[info.Endpoint] = true
+	}
+
+	var errors []string
+	validServers := 0
+	totalRelatedServers := 0
+
+	// Check each server in the status response
+	for _, server := range statusResponse.Servers {
+		// Only check servers that belong to this MCPServer
+		if !serverEndpoints[server.URL] {
+			continue
+		}
+		totalRelatedServers++
+
+		serverValid := true
+		var serverErrors []string
+
+		if !server.ProtocolValidation.IsValid {
+			serverValid = false
+			serverErrors = append(serverErrors, fmt.Sprintf("Protocol version failed - expected %s, got %s",
+				server.ProtocolValidation.ExpectedVersion, server.ProtocolValidation.SupportedVersion))
+		}
+
+		if !server.CapabilitiesValidation.IsValid {
+			serverValid = false
+			missing := ""
+			if len(server.CapabilitiesValidation.MissingCapabilities) > 0 {
+				missing = fmt.Sprintf(" (missing: %v)", server.CapabilitiesValidation.MissingCapabilities)
+			}
+			serverErrors = append(serverErrors, fmt.Sprintf("Capabilities failed%s", missing))
+		}
+
+		if !server.ConnectionStatus.IsReachable {
+			serverValid = false
+			serverErrors = append(serverErrors, "Not reachable")
+		}
+
+		if !serverValid {
+			// Combine all errors for this server
+			allServerErrors := strings.Join(serverErrors, ", ")
+			errors = append(errors, fmt.Sprintf("Server %s: %s", server.Name, allServerErrors))
+		} else {
+			validServers++
+		}
+	}
+
+	if len(errors) > 0 {
+		return false, strings.Join(errors, "; ")
+	}
+
+	if totalRelatedServers == 0 {
+		return true, fmt.Sprintf("MCPServer successfully reconciled with %d servers (no broker validation data yet)", len(serverInfos))
+	}
+
+	return true, fmt.Sprintf("MCPServer successfully reconciled and validated %d servers", validServers)
 }
 
 func (r *MCPReconciler) updateStatus(

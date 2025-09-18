@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"slices"
 	"time"
@@ -34,6 +35,18 @@ type upstreamMCP struct {
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
 	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
 }
+
+// ClientType defines the type of MCP client being created
+type ClientType int
+
+const (
+	// ClientTypeValidation is used for validation-only sessions
+	ClientTypeValidation ClientType = iota
+	// ClientTypeDiscovery is used for tool discovery and notifications
+	ClientTypeDiscovery
+	// ClientTypeSession is used for regular tool execution sessions
+	ClientTypeSession
+)
 
 // upstreamSessionState tracks what we manage about a connection an upstream MCP server
 type upstreamSessionState struct {
@@ -77,6 +90,12 @@ type MCPBroker interface {
 
 	// CreateSession creates a new MCP session for the given authority/host
 	CreateSession(ctx context.Context, authority string) (string, error)
+
+	// ValidateAllServers performs comprehensive validation of all registered servers and returns status
+	ValidateAllServers(ctx context.Context) StatusResponse
+
+	// HandleStatusRequest handles HTTP status endpoint requests
+	HandleStatusRequest(w http.ResponseWriter, r *http.Request)
 
 	// Shutdown closes any resources associated with this Broker
 	Shutdown(ctx context.Context) error
@@ -313,14 +332,7 @@ func (m *mcpBrokerImpl) CallTool(
 	return res, err
 }
 
-func (m *mcpBrokerImpl) discoverTools(
-	ctx context.Context,
-	upstream *upstreamMCP,
-	options ...transport.StreamableHTTPCOption,
-) ([]mcp.Tool, error) {
-
-	// Instead of using m.createUpstreamSession() we hand-create so that we can ask for precise notifications.
-	// TODO: In the future, perhaps extend m.createUpstreamSession() to do these things?
+func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) ([]mcp.Tool, error) {
 
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
@@ -337,9 +349,8 @@ func (m *mcpBrokerImpl) discoverTools(
 	options = append(options, transport.WithContinuousListening())
 
 	var err error
-	upstream.mpcClient, err = client.NewStreamableHttpClient(
-		upstream.URL,
-		options...)
+	var resInit *mcp.InitializeResult
+	upstream.mpcClient, resInit, err = m.createMCPClient(ctx, upstream.URL, upstream.Name, ClientTypeDiscovery, options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create streamable client: %w", err)
 	}
@@ -349,26 +360,6 @@ func (m *mcpBrokerImpl) discoverTools(
 	err = upstream.mpcClient.Start(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to start streamable client: %w", err)
-	}
-
-	resInit, err := upstream.mpcClient.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities: mcp.ClientCapabilities{
-				Roots: &struct {
-					ListChanged bool "json:\"listChanged,omitempty\""
-				}{
-					ListChanged: true,
-				},
-			},
-			ClientInfo: mcp.Implementation{
-				Name:    "kagenti-mcp-broker",
-				Version: "0.0.1",
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
 	upstream.initializeResult = resInit
@@ -462,31 +453,22 @@ func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP, addTools []mc
 	return retvalAdditions, retvalRemovals
 }
 
-func (m *mcpBrokerImpl) createUpstreamSession(
-	ctx context.Context,
-	host upstreamMCPURL,
-	options ...transport.StreamableHTTPCOption,
-) (*upstreamSessionState, error) {
+func (m *mcpBrokerImpl) createUpstreamSession(ctx context.Context, host upstreamMCPURL, options ...transport.StreamableHTTPCOption) (*upstreamSessionState, error) {
 	retval := &upstreamSessionState{}
 
-	var err error
-	retval.client, err = client.NewStreamableHttpClient(string(host), options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create streamable client: %w", err)
+	// Find the server name for auth - look up in registered servers
+	var serverName string
+	for url, upstream := range m.mcpServers {
+		if url == host {
+			serverName = upstream.Name
+			break
+		}
 	}
 
-	_, err = retval.client.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities:    mcp.ClientCapabilities{},
-			ClientInfo: mcp.Implementation{
-				Name:    "kagenti-mcp-broker",
-				Version: "0.0.1",
-			},
-		},
-	})
+	var err error
+	retval.client, _, err = m.createMCPClient(ctx, string(host), serverName, ClientTypeSession, options...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
+		return nil, err
 	}
 
 	retval.initialized = true
@@ -577,6 +559,71 @@ func (m *mcpBrokerImpl) MCPServer() *server.MCPServer {
 	return m.listeningMCPServer
 }
 
+// HandleStatusRequest handles HTTP status endpoint requests
+func (m *mcpBrokerImpl) HandleStatusRequest(w http.ResponseWriter, r *http.Request) {
+	handler := NewStatusHandler(m, *m.logger)
+	handler.ServeHTTP(w, r)
+}
+
+// createMCPClient creates and initializes an MCP client with the appropriate configuration
+func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string, clientType ClientType, options ...transport.StreamableHTTPCOption) (*client.Client, *mcp.InitializeResult, error) {
+	// Add auth headers if needed
+	authHeader := getAuthorizationHeaderForUpstream(&upstreamMCP{
+		MCPServer: config.MCPServer{Name: name, URL: mcpURL},
+	})
+	if authHeader != "" {
+		options = append(options, transport.WithHTTPHeaders(map[string]string{
+			"Authorization": authHeader,
+		}))
+	}
+
+	httpClient, err := client.NewStreamableHttpClient(mcpURL, options...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Configure capabilities and client info based on type
+	var capabilities mcp.ClientCapabilities
+	var clientName string
+
+	switch clientType {
+	case ClientTypeValidation:
+		capabilities = mcp.ClientCapabilities{}
+		clientName = "kagenti-mcp-broker-validation"
+
+	case ClientTypeDiscovery:
+		capabilities = mcp.ClientCapabilities{
+			Roots: &struct {
+				ListChanged bool `json:"listChanged,omitempty"`
+			}{
+				ListChanged: true,
+			},
+		}
+		clientName = "kagenti-mcp-broker"
+
+	case ClientTypeSession:
+		capabilities = mcp.ClientCapabilities{}
+		clientName = "kagenti-mcp-broker"
+	}
+
+	initResp, err := httpClient.Initialize(ctx, mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			Capabilities:    capabilities,
+			ClientInfo: mcp.Implementation{
+				Name:    clientName,
+				Version: "0.0.1",
+			},
+		},
+	})
+	if err != nil {
+		_ = httpClient.Close()
+		return nil, nil, fmt.Errorf("initialization failed: %w", err)
+	}
+
+	return httpClient, initResp, nil
+}
+
 // Get the authorization header needed for a particular MCP upstream
 func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
@@ -623,7 +670,212 @@ func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool 
 	return tools
 }
 
-// diffTools compares two lists of tools, and returns a list of additions and a list of subtractions
+// validateMCPServer validates a single MCP server using existing session data
+func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolPrefix string) ServerValidationStatus {
+	// Use already-discovered data for registered servers
+	upstream, exists := m.mcpServers[upstreamMCPURL(mcpURL)]
+	if !exists {
+		m.logger.Warn("Server validation failed: server not registered", "url", mcpURL, "name", name)
+		return ServerValidationStatus{
+			URL:        mcpURL,
+			Name:       name,
+			ToolPrefix: toolPrefix,
+			ConnectionStatus: ConnectionStatus{
+				IsReachable: false,
+				Error:       "Server not registered",
+			},
+		}
+	}
+
+	connectionStatus := m.checkSessionHealth(upstream)
+
+	var protocolValidation ProtocolValidation
+	var tools []mcp.Tool
+
+	if upstream.initializeResult != nil {
+		protocolValidation = validateProtocol(upstream.initializeResult)
+		if !protocolValidation.IsValid {
+			m.logger.Warn("Protocol validation failed", "url", mcpURL,
+				"expected", protocolValidation.ExpectedVersion,
+				"actual", protocolValidation.SupportedVersion)
+		}
+	} else {
+		m.logger.Warn("No initialization result available for validation", "url", mcpURL)
+		protocolValidation = ProtocolValidation{
+			IsValid:         false,
+			ExpectedVersion: mcp.LATEST_PROTOCOL_VERSION,
+		}
+	}
+
+	if upstream.toolsResult != nil {
+		tools = upstream.toolsResult.Tools
+		if len(tools) == 0 {
+			m.logger.Warn("Server has no tools available", "url", mcpURL)
+		}
+	} else {
+		m.logger.Warn("No tools result available for validation", "url", mcpURL)
+	}
+
+	status := buildValidationStatus(connectionStatus, protocolValidation, tools, mcpURL, name, toolPrefix)
+	status.ToolConflicts = m.checkToolConflicts(tools, toolPrefix, mcpURL)
+
+	if len(status.ToolConflicts) > 0 {
+		m.logger.Warn("Tool conflicts detected", "url", mcpURL, "conflicts", len(status.ToolConflicts))
+	}
+
+	return status
+}
+
+// checkSessionHealth checks the health of an existing session and reinitializes if needed
+func (m *mcpBrokerImpl) checkSessionHealth(upstream *upstreamMCP) ConnectionStatus {
+	if upstream.mpcClient == nil {
+		// Create a temporary validation-only session
+		return m.validateServerConnectivity(upstream)
+	}
+
+	// Test existing session with a quick ping
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err := upstream.mpcClient.Ping(ctx)
+	if err != nil {
+		m.logger.Debug("Session ping failed during validation", "url", upstream.URL, "error", err)
+		return ConnectionStatus{
+			IsReachable: false,
+			Error:       fmt.Sprintf("Session ping failed: %v", err),
+		}
+	}
+
+	return ConnectionStatus{IsReachable: true}
+}
+
+// validateServerConnectivity creates a temporary session just for validation
+func (m *mcpBrokerImpl) validateServerConnectivity(upstream *upstreamMCP) ConnectionStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Create a temporary client just for validation
+	client, _, err := m.createMCPClient(ctx, upstream.URL, upstream.Name, ClientTypeValidation)
+	if err != nil {
+		return ConnectionStatus{
+			IsReachable: false,
+			Error:       fmt.Sprintf("Failed to connect: %v", err),
+		}
+	}
+
+	// Clean up immediately - this is just for validation
+	defer func() {
+		if client != nil {
+			_ = client.Close()
+		}
+	}()
+
+	return ConnectionStatus{IsReachable: true}
+}
+
+// validateProtocol validates the MCP protocol version
+func validateProtocol(initResp *mcp.InitializeResult) ProtocolValidation {
+	return ProtocolValidation{
+		IsValid:          initResp.ProtocolVersion == mcp.LATEST_PROTOCOL_VERSION,
+		SupportedVersion: initResp.ProtocolVersion,
+		ExpectedVersion:  mcp.LATEST_PROTOCOL_VERSION,
+	}
+}
+
+// buildValidationStatus constructs a ServerValidationStatus from validation results
+func buildValidationStatus(connectionStatus ConnectionStatus, protocolValidation ProtocolValidation, tools []mcp.Tool, mcpURL, name, toolPrefix string) ServerValidationStatus {
+	validation := CapabilitiesValidation{
+		IsValid:             true,
+		HasToolCapabilities: len(tools) > 0,
+		ToolCount:           len(tools),
+		MissingCapabilities: []string{},
+	}
+
+	if !validation.HasToolCapabilities {
+		validation.IsValid = false
+		validation.MissingCapabilities = append(validation.MissingCapabilities, "tools")
+	}
+
+	return ServerValidationStatus{
+		URL:                    mcpURL,
+		Name:                   name,
+		ToolPrefix:             toolPrefix,
+		ConnectionStatus:       connectionStatus,
+		ProtocolValidation:     protocolValidation,
+		CapabilitiesValidation: validation,
+		ToolConflicts:          []ToolConflict{},
+		LastValidated:          time.Now(),
+	}
+}
+
+// checkToolConflicts identifies tool name conflicts between servers
+func (m *mcpBrokerImpl) checkToolConflicts(tools []mcp.Tool, toolPrefix, currentURL string) []ToolConflict {
+	var conflicts []ToolConflict
+
+	for _, tool := range tools {
+		prefixedToolName := fmt.Sprintf("%s%s", toolPrefix, tool.Name)
+		var conflictingServers []string
+
+		for existingToolName, existingToolInfo := range m.toolMapping {
+			if string(existingToolName) == prefixedToolName && string(existingToolInfo.url) != currentURL {
+				conflictingServers = append(conflictingServers, string(existingToolInfo.url))
+			}
+		}
+
+		if len(conflictingServers) > 0 {
+			conflicts = append(conflicts, ToolConflict{
+				ToolName:      tool.Name,
+				PrefixedName:  prefixedToolName,
+				ConflictsWith: conflictingServers,
+			})
+		}
+	}
+
+	return conflicts
+}
+
+// ValidateAllServers performs comprehensive validation of all registered servers and returns status
+func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
+	response := StatusResponse{
+		Servers:          make([]ServerValidationStatus, 0),
+		OverallValid:     true,
+		TotalServers:     len(m.mcpServers),
+		HealthyServers:   0,
+		UnHealthyServers: 0,
+		ToolConflicts:    0,
+		Timestamp:        time.Now(),
+	}
+
+	for url, upstream := range m.mcpServers {
+		status := m.validateMCPServer(ctx, string(url), upstream.Name, upstream.ToolPrefix)
+		response.Servers = append(response.Servers, status)
+
+		response.ToolConflicts += len(status.ToolConflicts)
+
+		hasErrors := !status.ConnectionStatus.IsReachable ||
+			!status.ProtocolValidation.IsValid ||
+			!status.CapabilitiesValidation.IsValid
+
+		hasWarnings := len(status.ToolConflicts) > 0
+
+		if hasErrors || hasWarnings {
+			response.UnHealthyServers++
+			response.OverallValid = false
+		} else {
+			response.HealthyServers++
+		}
+	}
+
+	m.logger.Info("Server validation completed",
+		"totalServers", response.TotalServers,
+		"healthyServers", response.HealthyServers,
+		"unhealthyServers", response.UnHealthyServers,
+		"toolConflicts", response.ToolConflicts,
+		"overallValid", response.OverallValid)
+
+	return response
+}
+
 func diffTools(oldTools, newTools []mcp.Tool) ([]mcp.Tool, []mcp.Tool) {
 	oldToolMap := make(map[string]mcp.Tool)
 	for _, oldTool := range oldTools {
@@ -635,7 +887,6 @@ func diffTools(oldTools, newTools []mcp.Tool) ([]mcp.Tool, []mcp.Tool) {
 		newToolMap[newTool.Name] = newTool
 	}
 
-	// Any tools with name in the new map but not the old are additions
 	addedTools := make([]mcp.Tool, 0)
 	for _, newTool := range newToolMap {
 		_, ok := oldToolMap[newTool.Name]
@@ -644,7 +895,6 @@ func diffTools(oldTools, newTools []mcp.Tool) ([]mcp.Tool, []mcp.Tool) {
 		}
 	}
 
-	// Any tools with name in the old map but not the new are removals
 	removedTools := make([]mcp.Tool, 0)
 	for _, oldTool := range oldToolMap {
 		_, ok := newToolMap[oldTool.Name]

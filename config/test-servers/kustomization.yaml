@@ -22,4 +22,7 @@ resources:
   - server4-httproute.yaml
   - server4-httproute-ext.yaml
   - server4-secret.yaml
-
+  - broken-server-deployment.yaml
+  - broken-server-service.yaml
+  - broken-server-httproute.yaml
+  - broken-server-httproute-ext.yaml
