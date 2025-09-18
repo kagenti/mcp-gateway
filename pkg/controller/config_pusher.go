@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -75,7 +76,7 @@ func (p *ConfigPusher) PushConfig(ctx context.Context, servers []*config.MCPServ
 	for _, subset := range endpoints.Subsets {
 		for _, addr := range subset.Addresses {
 			// use the config port
-			url := fmt.Sprintf("http://%s:8181/config", addr.IP)
+			url := fmt.Sprintf("http://%s/config", net.JoinHostPort(addr.IP, "8181"))
 			addresses = append(addresses, url)
 		}
 	}

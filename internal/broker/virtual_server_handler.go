@@ -37,7 +37,7 @@ func (h *VirtualServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Check for x-mcp-virtualserver header
-	virtualServerHeader := r.Header.Get("x-mcp-virtualserver")
+	virtualServerHeader := r.Header.Get("X-Mcp-Virtualserver")
 	if virtualServerHeader == "" {
 		// No virtual server specified, pass through without filtering
 		h.mcpHandler.ServeHTTP(w, r)

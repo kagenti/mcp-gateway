@@ -202,12 +202,14 @@ func TestToolCallAfterMCPDisconnect(t *testing.T) {
 
 	// Tell the server to forget our broker's session ID
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", MCPAddrForgetAddr,
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, MCPAddrForgetAddr,
 		strings.NewReader(string(upstreamSessionState.sessionID)))
 	require.NoError(t, err)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	err = resp.Body.Close()
+	require.NoError(t, err)
 
 	// Make the same call
 	res, err = broker.CallTool(context.Background(), "test-session-id", mcp.CallToolRequest{
