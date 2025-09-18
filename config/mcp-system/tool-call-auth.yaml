@@ -14,7 +14,7 @@ spec:
       metadata:
         rbac: #fetches hard coded acl currrently
           http:
-            urlExpression: '"http://mcp-config.mcp-system.svc.cluster.local:8181/config/"+request.headers["x-mcp-toolid"]'
+            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers["x-mcp-toolid"]'
       authentication: #validates the token
         'keycloak':
           jwt:
@@ -23,7 +23,7 @@ spec:
         'allow-tool-call':
           patternMatching:
             patterns:
-              - predicate: request.headers['x-mcp-toolname'] in auth.metadata.rbac.acl[auth.identity.groups[0]]
+              - predicate: request.headers['x-mcp-toolname'] in auth.metadata.rbac.access[auth.identity.groups[0]]
       response: #duplicated content may be able to solve
         unauthorized:
           code: 401

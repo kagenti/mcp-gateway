@@ -45,13 +45,6 @@ func (h *ConfigUpdateHandler) GetConfig(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Obviously this would come from the config
-	server.Acl = map[string][]string{
-		"accounting": {"test_headers", "test2_headers"},
-		"developers": {"test2_headers"},
-		"admin":      {"*"},
-	}
-
 	enc := json.NewEncoder(w)
 	w.Header().Add("content-type", "application/json")
 	if err := enc.Encode(server); err != nil {
