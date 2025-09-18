@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -58,7 +59,7 @@ func (v *ServerValidator) ValidateServers(ctx context.Context) (*broker.StatusRe
 			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
 				for _, addr := range endpoint.Addresses {
 					// use the status port
-					url := fmt.Sprintf("http://%s:8080/status", addr)
+					url := fmt.Sprintf("http://%s/status", net.JoinHostPort(addr, "8080"))
 					addresses = append(addresses, url)
 				}
 			}
