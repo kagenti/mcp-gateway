@@ -324,14 +324,14 @@ func (s *ExtProcServer) createRoutingResponse(
 		},
 		{
 			Header: &basepb.HeaderValue{
-				Key:      methodHeader,
-				RawValue: []byte(method),
+				Key:      authorityHeader,
+				RawValue: []byte(hostname),
 			},
 		},
 		{
 			Header: &basepb.HeaderValue{
-				Key:      authorityHeader,
-				RawValue: []byte(hostname),
+				Key:      methodHeader,
+				RawValue: []byte(method),
 			},
 		},
 	}
