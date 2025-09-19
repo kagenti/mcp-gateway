@@ -1,6 +1,6 @@
 ## Auth with the MCP Gateway (Phase 1)
 
-To provide auth intetgration, the MCP gateway uses (Kuadrant)[https://kuadrant.io] and Gateway API in combination with Keycloak as an identity provider.
+To provide auth integration, the MCP gateway uses (Kuadrant)[https://kuadrant.io] and theGateway API in combination with Keycloak as an identity provider.
 
 We are bringing these components together to provide a reference implementation of the OAuth 2.0 Protected Resource Metadata as per the (MCP Authorization)[https://modelcontextprotocol.io/specification/draft/basic/authorization]  and a reference implementation for authorizing access to particular tool.
 
