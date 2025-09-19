@@ -57,6 +57,14 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		}
 	})
 
+	JustAfterEach(func() {
+		// dump logs if test failed
+		if CurrentSpecReport().Failed() {
+			DumpComponentLogs()
+			DumpTestServerLogs()
+		}
+	})
+
 	It("should aggregate MCP servers and manage HTTPRoute conditions", func() {
 		By("Creating HTTPRoutes")
 		// Clean up any existing resources first
