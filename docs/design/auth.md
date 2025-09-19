@@ -13,7 +13,7 @@ We are bringing these components together to provide a reference implementation 
 
 ### Protecting the MCP Gateway HTTP endpoint(s)
 
-In order to enforce authenticated access, the gateway listeners exposing the MCP gateway to clients, can use a kuadrant `AuthPolicy` resource. This resource can define what authentication must be met and also enforce Authz requirements at the gateway (Authorization Covered Below).
+In order to enforce authenticated access, the gateway listeners exposing the MCP gateway to clients, can use a Kuadrant `AuthPolicy` resource. This resource can define what authentication must be met and also enforce AuthZ requirements at the gateway (Authorization covered below).
 
 [Example AuthPolicy](./../../config/mcp-system/authpolicy.yaml)
 
