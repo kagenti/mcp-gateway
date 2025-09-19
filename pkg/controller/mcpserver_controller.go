@@ -413,7 +413,7 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 	if isExternal {
 		// use appProtocol from Service spec (standard k8s field)
 		for _, port := range service.Spec.Ports {
-			if backendRef.Port != nil && int32(port.Port) == int32(*backendRef.Port) {
+			if backendRef.Port != nil && port.Port == int32(*backendRef.Port) {
 				if port.AppProtocol != nil && strings.ToLower(*port.AppProtocol) == "https" {
 					protocol = "https"
 				}

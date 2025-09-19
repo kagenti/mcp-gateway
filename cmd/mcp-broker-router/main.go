@@ -224,7 +224,8 @@ func main() {
 	signal.Notify(stop, os.Interrupt)
 
 	grpcAddr := mcpRouterAddrFlag
-	lis, err := net.Listen("tcp", grpcAddr)
+	lc := net.ListenConfig{}
+	lis, err := lc.Listen(ctx, "tcp", grpcAddr)
 	if err != nil {
 		log.Fatalf("[grpc] listen error: %v", err)
 	}
