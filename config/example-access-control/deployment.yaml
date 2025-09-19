@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+  labels:
+    app: config-server
+spec:
+  selector:
+    matchLabels:
+      app: config-server
+  template:
+    metadata:
+      labels:
+        app: config-server
+    spec:
+      containers:
+        - name: server
+          image: quay.io/maleck13/config_server:latest
+          volumeMounts:
+            - name: config
+              mountPath: /static
+      volumes:
+        - name: config
+          configMap:
+            name: acl-config
