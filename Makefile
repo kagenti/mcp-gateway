@@ -329,6 +329,44 @@ keycloak-forward: ## Port forward Keycloak to localhost:8090
 keycloak-status: ## Show Keycloak URLs, credentials, and OIDC endpoints
 	@$(MAKE) -s -f build/keycloak.mk keycloak-status-impl
 
+.PHONY: oauth-example-setup
+oauth-example-setup: ## Complete OAuth example setup (requires: make local-env-setup)
+	@echo "========================================="
+	@echo "Setting up OAuth Example"
+	@echo "========================================="
+	@echo "Prerequisites: make local-env-setup should be completed"
+	@echo ""
+	@echo "Step 1: Setting up Keycloak realm..."
+	@$(MAKE) -s -f build/keycloak.mk keycloak-setup-mcp-realm
+	@echo ""
+	@echo "Step 2: Configuring mcp-broker with OAuth environment variables..."
+	@kubectl set env deployment/mcp-broker-router \
+		OAUTH_RESOURCE_NAME="MCP Server" \
+		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
+		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
+		OAUTH_BEARER_METHODS_SUPPORTED="header" \
+		OAUTH_SCOPES_SUPPORTED="basic,groups" \
+		-n mcp-system
+	@echo "✅ OAuth environment variables configured"
+	@echo ""
+	@echo "Step 3: Applying AuthPolicy configurations..."
+	@kubectl apply -f ./config/mcp-system/authpolicy.yaml
+	@kubectl apply -f ./config/mcp-system/tool-call-auth.yaml
+	@echo "✅ AuthPolicy configurations applied"
+	@echo ""
+	@echo "Step 4: Applying additional OAuth configurations..."
+	@kubectl apply -f ./config/keycloak/preflight_envoyfilter.yaml
+	@kubectl -n mcp-system apply -k ./config/example-access-control/
+	@echo "✅ Additional configurations applied"
+	@echo ""
+	@echo "🎉 OAuth example setup complete!"
+	@echo ""
+	@echo "The mcp-broker now serves OAuth discovery information at:"
+	@echo "  /.well-known/oauth-protected-resource"
+	@echo ""
+	@echo "Next step: Open MCP Inspector with 'make inspect-gateway'"
+	@echo "and go through the OAuth flow with credentials: mcp/mcp"
+
 .PHONY: kuadrant-install
 kuadrant-install: ## Install Kuadrant operator for API gateway policies
 	@$(MAKE) -s -f build/kuadrant.mk kuadrant-install-impl
