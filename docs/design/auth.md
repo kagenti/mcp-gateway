@@ -74,7 +74,7 @@ For phase1 this set of scopes will be aggreggated together via the MCP Server co
 
 ### Registering MCP Auth Severs
 
-Part of the response from the `oauth-protected-resource` endpoint is an array of `authorization_servers`. For phase 1 the gateway will only support a single auth server. The expectation is each of the MCPServers using OAuth is using the same auth server and will independantly validate the token against that auth server. The MCP Broker will be configured with this shared server separately via a flag or EnvVar.
+Part of the response from the `oauth-protected-resource` endpoint is an array of `authorization_servers`. For phase 1 the gateway will only support a single auth server. The expectation is that each of the MCPServers using OAuth are using the same auth server and will independently validate the token against that auth server. The MCP Broker will be configured with this shared server separately via a flag or EnvVar.
 
 > Note this doesn't include URL elicitation where an MCP server may request a user provide it access to a resource not protected by the defined auth server. Example a github resource/API. This is consisdered seaparate from the general Gateway authentication and authorization requirement.
 
