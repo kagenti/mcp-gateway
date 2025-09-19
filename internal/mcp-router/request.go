@@ -16,7 +16,6 @@ import (
 
 const (
 	toolHeader      = "x-mcp-toolname"
-	toolIDHeader    = "x-mcp-toolid" // internally used only
 	methodHeader    = "x-mcp-method" // internally used only
 	sessionHeader   = "mcp-session-id"
 	authorityHeader = ":authority"
@@ -321,12 +320,6 @@ func (s *ExtProcServer) createRoutingResponse(
 			Header: &basepb.HeaderValue{
 				Key:      toolHeader,
 				RawValue: []byte(toolName),
-			},
-		},
-		{
-			Header: &basepb.HeaderValue{
-				Key:      toolIDHeader,
-				RawValue: []byte(serverInfo.ToolPrefix),
 			},
 		},
 		{

@@ -1,7 +1,7 @@
 {
     "acls": [
         {
-            "id": "test_",
+            "id": "server1.mcp.local",
             "access": {
                 "accounting": [
                     "test_headers",
@@ -13,7 +13,7 @@
             }
         },
         {
-            "id": "test2_",
+            "id": "server2.mcp.local",
             "access": {
                 "accounting": [
                     "test2_headers",
