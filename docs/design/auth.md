@@ -19,7 +19,7 @@ In order to enforce authenticated access, the gateway listeners exposing the MCP
 
 [Example Oauth Setup](../../README.md#example-oauth-setup)
 
-With this policy in place any unauthenticated request not going to the /.well-known endpoints will get a 401 with a resource_metadata url specified. It is then up to the client to leverage this information to retrieve the resource metadata to know how to authenticate to access the resource (example resource would be /mcp). This resource metadata will be served via the MCP Broker component. 
+With this policy in place any unauthenticated request not going to the /.well-known endpoints will get a 401 with a resource_metadata URL specified. It is then up to the client to leverage this information to retrieve the resource metadata to know how to authenticate to access the resource (example resource would be /mcp). This resource metadata will be served via the MCP Broker component. 
 
 To understand the full flow including the defined Auth server take a look at [MCP Gateway Auth Sequence Diagram](./flows.md#mcp-gateway-request-authentication)
 
