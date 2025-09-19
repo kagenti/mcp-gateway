@@ -36,6 +36,13 @@ type MCPServerSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf || oldSelf == ''",message="toolPrefix is immutable once set"
 	ToolPrefix string `json:"toolPrefix,omitempty"`
 
+	// Path specifies the URL path where the MCP server endpoint is exposed.
+	// If not specified, defaults to "/mcp".
+	// This allows connecting to MCP servers that use custom paths like "/v1/mcp" or "/api/mcp".
+	// +optional
+	// +kubebuilder:default="/mcp"
+	Path string `json:"path,omitempty"`
+
 	// CredentialRef references a Secret containing authentication credentials for the MCP server.
 	// The Secret should contain a key with the authentication token or credentials.
 	// The controller will aggregate these credentials and make them available to the broker

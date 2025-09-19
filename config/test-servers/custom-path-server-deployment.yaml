@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-custom-path-server
+  namespace: mcp-test
+spec:
+  selector:
+    app: mcp-custom-path-server
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-custom-path-server
+  namespace: mcp-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-custom-path-server
+  template:
+    metadata:
+      labels:
+        app: mcp-custom-path-server
+    spec:
+      containers:
+      - name: mcp-custom-path-server
+        image: ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 20
