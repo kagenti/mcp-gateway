@@ -28,8 +28,8 @@ func NewConfigUpdateHandler(cfg *config.MCPServersConfig, authToken string, logg
 	}
 }
 
-// ServeHTTP handles config update requests
-func (h *ConfigUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// UpdateConfig handles config update requests
+func (h *ConfigUpdateHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	// method check handled by mux with "POST /config" pattern
 	if h.authToken != "" {
 		token := r.Header.Get("Authorization")

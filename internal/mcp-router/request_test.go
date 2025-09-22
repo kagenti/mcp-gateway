@@ -218,13 +218,16 @@ func TestHandleRequestBody(t *testing.T) {
 	require.IsType(t, &eppb.ProcessingResponse_RequestBody{}, resp[0].Response)
 	rb := resp[0].Response.(*eppb.ProcessingResponse_RequestBody)
 	require.NotNil(t, rb.RequestBody.Response)
-	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 3)
+	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 4)
 	require.Equal(t, "x-mcp-toolname", rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.Key)
 	require.Equal(t, []uint8("s_mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.RawValue)
 	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.Key)
 	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
-	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
-	require.Equal(t, []uint8("66"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
+	require.Equal(t, "x-mcp-method", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
+	require.Equal(t, []uint8("tools/call"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
+	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
+	require.Equal(t, []uint8("66"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
+
 	require.Equal(t,
 		[]byte(`{"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool"}}`),
 		rb.RequestBody.Response.BodyMutation.GetBody())

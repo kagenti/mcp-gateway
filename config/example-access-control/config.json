@@ -1,0 +1,23 @@
+{
+    "acls": [
+        {
+            "id": "server1.mcp.local",
+            "access": {
+                "accounting": [
+                    "test_headers"
+                ],
+                "developers": [
+                    "test_hello_world"
+                ]
+            }
+        },
+        {
+            "id": "server2.mcp.local",
+            "access": {
+                "accounting": [
+                    "test2_headers"
+                ]
+            }
+        }
+    ]
+}

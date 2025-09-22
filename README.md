@@ -40,42 +40,29 @@ This will start MCP Inspector and automatically open it with the correct URL for
 
 ## Example OAuth setup
 
-After running the Quick start above, configure OAuth by setting environment variables for the mcp-broker and applying an AuthPolicy that validates tokens on the /mcp endpoint.
-
-Configure the mcp-broker with OAuth environment variables:
+After running the Quick start above, configure OAuth authentication with a single command:
 
 ```bash
-# Configure OAuth discovery endpoint via environment variables
-export OAUTH_RESOURCE_NAME="MCP Server"
-export OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp"  
-export OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"
-export OAUTH_BEARER_METHODS_SUPPORTED="header"
-export OAUTH_SCOPES_SUPPORTED="basic"
-
-# Restart the broker to pick up the new configuration
-kubectl set env deployment/mcp-broker-router \
-  OAUTH_RESOURCE_NAME="$OAUTH_RESOURCE_NAME" \
-  OAUTH_RESOURCE="$OAUTH_RESOURCE" \
-  OAUTH_AUTHORIZATION_SERVERS="$OAUTH_AUTHORIZATION_SERVERS" \
-  OAUTH_BEARER_METHODS_SUPPORTED="$OAUTH_BEARER_METHODS_SUPPORTED" \
-  OAUTH_SCOPES_SUPPORTED="$OAUTH_SCOPES_SUPPORTED" \
-  -n mcp-system
-
-# Apply AuthPolicy for token validation
-kubectl apply -f ./config/mcp-system/authpolicy.yaml
+make oauth-example-setup
 ```
+
+This will:
+- Set up a Keycloak realm with user/groups/client scopes  
+- Configure the mcp-broker with OAuth environment variables
+- Apply AuthPolicy for token validation on the /mcp endpoint
+- Apply additional OAuth configurations
 
 The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
 
-### Keycloak Setup
+Finally, open MCP Inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
 
-Set up a new 'mcp' realm in keycloak with user/pass mcp/mcp:
+When you click connect with mcp inspector, you should be redirected to keycloak. There you will need to login as the mcp user with password mcp. You now should only be able to access tools based on the ACL configuration.
+
+You can modify the very basic ACL being used here [config](./config/example-access-control/config.json) and redeploy it with kustomize via :
 
 ```bash
-make keycloak-setup-mcp-realm
+kubectl appy -k config/example-access-control/
 ```
-
-Finally, open MCP Inspector with `make inspect-gateway` and go through the OAuth flow.
 
 ## Running Modes
 
@@ -190,7 +177,7 @@ export OAUTH_RESOURCE_NAME="Production MCP Server"
 export OAUTH_RESOURCE="https://mcp.example.com/mcp"
 export OAUTH_AUTHORIZATION_SERVERS="https://keycloak.example.com/realms/mcp"
 export OAUTH_BEARER_METHODS_SUPPORTED="header"
-export OAUTH_SCOPES_SUPPORTED="basic,read,write"
+export OAUTH_SCOPES_SUPPORTED="basic,read,write,groups"
 ```
 
 **Response format:**
