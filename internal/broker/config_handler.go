@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"sigs.k8s.io/yaml"
@@ -27,31 +26,6 @@ func NewConfigUpdateHandler(cfg *config.MCPServersConfig, authToken string, logg
 		authToken: authToken,
 		logger:    logger,
 	}
-}
-
-func (h *ConfigUpdateHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
-	// the server prefix has to be unique so it is effectively an id
-	serverPrefix := r.PathValue("serverID")
-	h.logger.Info("getting config for mcp ", "server", serverPrefix)
-	var server *config.MCPServer
-	for _, s := range h.config.Servers {
-		if strings.EqualFold(s.ToolPrefix, strings.TrimSpace(serverPrefix)) {
-			server = s
-			break
-		}
-	}
-	if server == nil {
-		w.WriteHeader(404)
-		return
-	}
-
-	enc := json.NewEncoder(w)
-	w.Header().Add("content-type", "application/json")
-	if err := enc.Encode(server); err != nil {
-		w.WriteHeader(500)
-		return
-	}
-
 }
 
 // ServeHTTP handles config update requests

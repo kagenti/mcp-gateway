@@ -179,7 +179,7 @@ func (s *ExtProcServer) HandleRequestBody(ctx context.Context, data map[string]a
 	mcpMethod := extractMCPMethod(data)
 	if toolName == "" && mcpMethod == "" {
 		slog.Debug(
-			"[EXT-PROC] HandleRequestBody No tool name or  method found in request",
+			"[EXT-PROC] HandleRequestBody No tool name or method found in request",
 		)
 		return s.createEmptyBodyResponse(), nil
 	}
