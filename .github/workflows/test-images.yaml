@@ -30,12 +30,23 @@ jobs:
           - server: server1
             context: tests/servers/server1
             dockerfile: Dockerfile
+            image-name: test-server1
           - server: server2
             context: tests/servers/server2
             dockerfile: Dockerfile
+            image-name: test-server2
           - server: server3
             context: tests/servers/server3
             dockerfile: Dockerfile
+            image-name: test-server3
+          - server: api-key-server
+            context: tests/servers/api-key-server
+            dockerfile: Dockerfile
+            image-name: test-api-key-server
+          - server: broken-server
+            context: tests/servers/broken-server
+            dockerfile: Dockerfile
+            image-name: test-broken-server
 
     steps:
       - name: Check out code
@@ -53,7 +64,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/test-${{ matrix.server }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image-name }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr

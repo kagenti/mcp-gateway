@@ -81,6 +81,7 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server1 --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server2 --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server3 --timeout=90s
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-api-key-server --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-broken-server --timeout=60s
 	@echo "All test servers ready, deploying MCPServer resources..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
@@ -96,6 +97,7 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/server1 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
 	cd tests/servers/server2 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
 	cd tests/servers/server3 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
+	cd tests/servers/api-key-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest .
 	cd tests/servers/broken-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-broken-server:latest .
 
 # Load test server images into Kind cluster
@@ -104,6 +106,7 @@ kind-load-test-servers: build-test-servers ## Load test server images into Kind 
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-broken-server:latest --name mcp-gateway
 
 # Deploy test servers

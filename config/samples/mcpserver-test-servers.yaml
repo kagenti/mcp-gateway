@@ -48,19 +48,19 @@ spec:
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
-  name: test-server4
+  name: api-key-server
   namespace: mcp-test
   labels:
     "kagenti/mcp": "true"
 spec:
-  toolPrefix: test4_
+  toolPrefix: apikey_
   targetRef:
-    # Server 4 - Go SDK based with authentication (same as server2 but requires auth)
+    # API key test server - validates Bearer token authentication
     group: gateway.networking.k8s.io
     kind: HTTPRoute
-    name: mcp-server4-route
+    name: mcp-api-key-server-route
   credentialRef:
-    name: server4-auth-credentials
+    name: api-key-server-credentials
     key: token
 ---
 apiVersion: mcp.kagenti.com/v1alpha1

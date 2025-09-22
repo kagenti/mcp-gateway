@@ -17,11 +17,11 @@ resources:
   - server3-service.yaml
   - server3-httproute.yaml
   - server3-httproute-ext.yaml
-  - server4-deployment.yaml
-  - server4-service.yaml
-  - server4-httproute.yaml
-  - server4-httproute-ext.yaml
-  - server4-secret.yaml
+  - api-key-server-deployment.yaml
+  - api-key-server-service.yaml
+  - api-key-server-httproute.yaml
+  - api-key-server-httproute-ext.yaml
+  - api-key-server-secret.yaml
   - broken-server-deployment.yaml
   - broken-server-service.yaml
   - broken-server-httproute.yaml

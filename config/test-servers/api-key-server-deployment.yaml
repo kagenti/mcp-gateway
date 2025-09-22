@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-test-server4
+  name: mcp-api-key-server
   namespace: mcp-test
   labels:
-    app: mcp-test-server4
+    app: mcp-api-key-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mcp-test-server4
+      app: mcp-api-key-server
   template:
     metadata:
       labels:
-        app: mcp-test-server4
+        app: mcp-api-key-server
     spec:
       containers:
       - name: server
-        image: ghcr.io/kagenti/mcp-gateway/test-server2:latest
+        image: ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9090
@@ -27,4 +27,4 @@ spec:
         - name: PORT
           value: "9090"
         - name: EXPECTED_AUTH
-          value: "Bearer test-server4-secret-token"
+          value: "Bearer test-api-key-secret-token"
