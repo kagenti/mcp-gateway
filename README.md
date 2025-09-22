@@ -56,6 +56,14 @@ The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-pro
 
 Finally, open MCP Inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
 
+When you click connect with mcp inspector, you should be redirected to keycloak. There you will need to login as the mcp user with password mcp. You now should only be able to access tools based on the ACL configuration.
+
+You can modify the very basic ACL being used here [config](./config/example-access-control/config.json) and redeploy it with kustomize via :
+
+```bash
+kubectl appy -k config/example-access-control/
+```
+
 ## Running Modes
 
 ### Standalone Mode (File-based)

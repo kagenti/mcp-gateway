@@ -495,7 +495,7 @@ func (s *ExtProcServer) HandleRequestHeaders(
 			}
 		}
 	}
-	// TODO change proccessing mode to not receive body if not interested in request based on headers
+	// TODO change processing mode to not receive body if not interested in request based on headers
 	return []*eppb.ProcessingResponse{
 		{
 			Response: &eppb.ProcessingResponse_RequestHeaders{
