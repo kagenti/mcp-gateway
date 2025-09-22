@@ -12,7 +12,7 @@ COPY pkg/ pkg/
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o mcp_gateway cmd/mcp-broker-router/main.go
 
-FROM alpine:latest
+FROM alpine:3.22.1
 
 RUN apk --no-cache add ca-certificates
 
