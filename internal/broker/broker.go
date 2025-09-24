@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -197,10 +198,31 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 	ctx context.Context,
 	mcpServer *config.MCPServer,
 ) error {
-	if m.IsRegistered(mcpServer.URL) {
-		m.logger.Info("mcp server is already registered", "mcpURL", mcpServer.URL)
-		return nil
+	existingUpstream, isRegistered := m.mcpServers[upstreamMCPURL(mcpServer.URL)]
+
+	// check if configuration changed for already registered server
+	if isRegistered {
+		configChanged := existingUpstream.Name != mcpServer.Name ||
+			existingUpstream.ToolPrefix != mcpServer.ToolPrefix ||
+			existingUpstream.Hostname != mcpServer.Hostname ||
+			existingUpstream.CredentialEnvVar != mcpServer.CredentialEnvVar
+
+		if !configChanged {
+			m.logger.Info("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
+			return nil
+		}
+
+		// config changed, unregister and re-register
+		m.logger.Info("mcp server config changed, re-registering",
+			"mcpURL", mcpServer.URL,
+			"oldPrefix", existingUpstream.ToolPrefix,
+			"newPrefix", mcpServer.ToolPrefix)
+
+		if err := m.UnregisterServer(ctx, mcpServer.URL); err != nil {
+			m.logger.Warn("failed to unregister before re-registration", "error", err)
+		}
 	}
+
 	slog.Info("Registering server", "mcpURL", mcpServer.URL, "prefix", mcpServer.ToolPrefix)
 
 	upstream := &upstreamMCP{
@@ -209,8 +231,12 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 
 	newTools, err := m.discoverTools(ctx, upstream)
 	if err != nil {
-		slog.Info("Failed to discover tools", "mcpURL", mcpServer.URL, "error", err)
-		return err
+		slog.Info("Failed to discover tools, will retry with backoff", "mcpURL", mcpServer.URL, "error", err)
+		// register server even if discovery fails, will retry in background
+		m.mcpServers[upstreamMCPURL(mcpServer.URL)] = upstream
+		// start background retry with exponential backoff
+		go m.retryDiscovery(context.Background(), upstream)
+		return nil // don't return error, allow partial registration
 	}
 	slog.Info("Discovered tools", "mcpURL", mcpServer.URL, "num tools", len(newTools))
 
@@ -242,11 +268,14 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error
 		return fmt.Errorf("unknown host")
 	}
 
-	err := upstream.mpcClient.Close()
-	if err != nil {
-		m.logger.Info("Failed to close upstream connection while unregistering",
-			"mcpURL", mcpURL,
-		)
+	// only close client if it exists (might be nil if discovery failed)
+	if upstream.mpcClient != nil {
+		err := upstream.mpcClient.Close()
+		if err != nil {
+			m.logger.Info("Failed to close upstream connection while unregistering",
+				"mcpURL", mcpURL,
+			)
+		}
 	}
 
 	delete(m.mcpServers, upstreamMCPURL(mcpURL))
@@ -376,10 +405,12 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 
 	// Keep the tools probe client open and monitor for tool changes
 	upstream.mpcClient.OnConnectionLost(func(err error) {
-		m.logger.Info("Broker OnConnectionLost",
+		m.logger.Info("Broker OnConnectionLost, will retry with backoff",
 			"err", err,
 			"upstream.URL", upstream.URL,
 			"sessionID", upstream.mpcClient.GetSessionId())
+		// start background retry when connection is lost
+		go m.retryDiscovery(context.Background(), upstream)
 	})
 
 	upstream.mpcClient.OnNotification(func(notification mcp.JSONRPCNotification) {
@@ -419,6 +450,74 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 	m.logger.Info("Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
 
 	return newTools, err
+}
+
+// retryDiscovery attempts to discover tools with exponential backoff
+func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMCP) {
+	// configurable via env vars with sensible defaults
+	baseDelay := 5 * time.Second
+	if v := os.Getenv("MCP_GATEWAY_DISCOVERY_RETRY_BASE_DELAY"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			baseDelay = d
+		}
+	}
+
+	maxDelay := 5 * time.Minute
+	if v := os.Getenv("MCP_GATEWAY_DISCOVERY_RETRY_MAX_DELAY"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			maxDelay = d
+		}
+	}
+
+	maxRetries := 10
+	if v := os.Getenv("MCP_GATEWAY_DISCOVERY_RETRY_MAX_ATTEMPTS"); v != "" {
+		if r, err := strconv.Atoi(v); err == nil && r > 0 {
+			maxRetries = r
+		}
+	}
+
+	for attempt := range maxRetries {
+		// calculate exponential backoff delay
+		delay := baseDelay * (1 << attempt) // 5s, 10s, 20s, 40s, 80s, 160s, 320s (5m max)
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+
+		m.logger.Info("waiting before retry discovery",
+			"url", upstream.URL,
+			"attempt", attempt+1,
+			"delay", delay)
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			m.logger.Info("retry discovery cancelled", "url", upstream.URL)
+			return
+		}
+
+		// attempt discovery
+		newTools, err := m.discoverTools(ctx, upstream)
+		if err != nil {
+			m.logger.Warn("retry discovery failed",
+				"url", upstream.URL,
+				"attempt", attempt+1,
+				"error", err)
+			continue
+		}
+
+		// success! add the tools
+		m.logger.Info("retry discovery succeeded",
+			"url", upstream.URL,
+			"attempt", attempt+1,
+			"tools", len(newTools))
+
+		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newTools)...)
+		return
+	}
+
+	m.logger.Error("max retries exceeded for discovery",
+		"url", upstream.URL,
+		"maxRetries", maxRetries)
 }
 
 // populateToolMapping maps tools to names that this gateway recognizes
