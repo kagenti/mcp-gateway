@@ -1,0 +1,38 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-custom-path-server
+  namespace: mcp-test
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mcp-gateway
+    namespace: gateway-system
+  hostnames:
+  - custom-path.mcp.local
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/special/mcp
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: mcp-custom-path-server
+      namespace: mcp-test
+      port: 8080
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: custom-path-server
+  namespace: mcp-test
+spec:
+  # custom path for this server
+  path: /v1/special/mcp
+  toolPrefix: custompath_
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-custom-path-server

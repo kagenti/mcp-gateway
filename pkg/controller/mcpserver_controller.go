@@ -422,7 +422,8 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		}
 	}
 
-	endpoint := fmt.Sprintf("%s://%s/mcp", protocol, nameAndEndpoint)
+	path := mcpServer.Spec.Path
+	endpoint := fmt.Sprintf("%s://%s%s", protocol, nameAndEndpoint, path)
 
 	// external services need actual hostname for routing
 	routingHostname := hostname

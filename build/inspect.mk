@@ -58,6 +58,23 @@ inspect-server3: ## Open MCP Inspector for test server 3
 inspect-api-key-server: ## Open MCP Inspector for API key test server (requires auth)
 	$(call inspect-server-template,API key test server,mcp-api-key-server,9093,hello_world tool with authentication,NOTE: This server requires Bearer token authentication)
 
+.PHONY: inspect-custom-path
+inspect-custom-path: ## Open MCP Inspector for custom path server
+	@echo "Setting up port-forward to custom path server..."
+	@kubectl -n mcp-test port-forward svc/mcp-custom-path-server 9094:8080 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
+		sleep 2; \
+		echo "Opening MCP Inspector for custom path server at http://localhost:9094/v1/special/mcp"; \
+		echo "NOTE: This server uses a custom path /v1/special/mcp instead of /mcp"; \
+		echo ""; \
+		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
+		sleep 2; \
+		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:9094/v1/special/mcp"; \
+		echo "Press Ctrl+C to stop and cleanup"; \
+		wait; \
+		kill $$PF_PID 2>/dev/null || true
+
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1
 

@@ -41,6 +41,10 @@ run-mcp-broker-router: run
 run-controller: mcp-broker-router
 	./bin/mcp-broker-router --controller --log-level=${LOG_LEVEL}
 
+# Generate CRDs from Go types
+generate-crds: ## Generate CRD manifests from Go types
+	controller-gen crd paths="./pkg/apis/..." output:dir=config/crd
+
 # Install CRD
 install-crd: ## Install MCPServer and MCPVirtualServer CRDs
 	kubectl apply -f config/crd/
@@ -83,6 +87,7 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server3 --timeout=90s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-api-key-server --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-broken-server --timeout=60s
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-custom-path-server --timeout=60s 2>/dev/null || true
 	@echo "All test servers ready, deploying MCPServer resources..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
 	@echo "Waiting for controller to process MCPServer..."
@@ -99,6 +104,7 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/server3 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
 	cd tests/servers/api-key-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest .
 	cd tests/servers/broken-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-broken-server:latest .
+	cd tests/servers/custom-path-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 
 # Load test server images into Kind cluster
 kind-load-test-servers: build-test-servers ## Load test server images into Kind cluster
@@ -108,6 +114,7 @@ kind-load-test-servers: build-test-servers ## Load test server images into Kind 
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest --name mcp-gateway
 	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-broken-server:latest --name mcp-gateway
+	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest --name mcp-gateway
 
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing

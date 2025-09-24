@@ -14,8 +14,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
@@ -59,8 +57,24 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		}
 	})
 
+	JustAfterEach(func() {
+		// dump logs if test failed
+		if CurrentSpecReport().Failed() {
+			DumpComponentLogs()
+			DumpTestServerLogs()
+		}
+	})
+
 	It("should aggregate MCP servers and manage HTTPRoute conditions", func() {
 		By("Creating HTTPRoutes")
+		// Clean up any existing resources first
+		_ = k8sClient.Delete(ctx, httpRoute1)
+		_ = k8sClient.Delete(ctx, httpRoute2)
+		_ = k8sClient.Delete(ctx, mcpServer1)
+		_ = k8sClient.Delete(ctx, mcpServer2)
+		// Wait a moment for deletion to process
+		time.Sleep(2 * time.Second)
+
 		Expect(k8sClient.Create(ctx, httpRoute1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, httpRoute2)).To(Succeed())
 
@@ -72,59 +86,91 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		VerifyMCPServerReady(ctx, k8sClient, mcpServer1.Name, mcpServer1.Namespace)
 		VerifyMCPServerReady(ctx, k8sClient, mcpServer2.Name, mcpServer2.Namespace)
 
-		By("Verifying ConfigMap is created with correct content")
-		VerifyConfigMapExists(ctx, k8sClient)
+		By("Setting up port-forward to broker for status check")
+		statusPortForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18081:8080")
+		defer statusPortForwardCmd.Process.Kill()
 
-		// wait for controller to aggregate both servers into configmap
-		configMap := &corev1.ConfigMap{}
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      ConfigMapName,
-				Namespace: SystemNamespace,
-			}, configMap)
+		// wait for port-forward to be ready
+		Eventually(func() error {
+			client := &http.Client{Timeout: 1 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
 			if err != nil {
-				return false
+				return err
 			}
-			configContent := configMap.Data["config.yaml"]
-			// check both servers are present
-			hasS1 := strings.Contains(configContent, "s1_")
-			hasS2 := strings.Contains(configContent, "s2_")
-			if !hasS1 || !hasS2 {
-				fmt.Printf("ConfigMap not ready yet - has s1_: %v, has s2_: %v\n", hasS1, hasS2)
-			}
-			return hasS1 && hasS2
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Both MCPServers should be in ConfigMap")
-
-		// parse and verify configmap content
-		configContent := configMap.Data["config.yaml"]
-		fmt.Printf("ConfigMap content:\n%s\n", configContent)
-		Expect(configContent).To(ContainSubstring("s1_"))
-		Expect(configContent).To(ContainSubstring("s2_"))
-		Expect(configContent).To(ContainSubstring("mcp-test-server1.mcp-test.svc.cluster.local"))
-		Expect(configContent).To(ContainSubstring("mcp-test-server2.mcp-test.svc.cluster.local"))
+			resp.Body.Close()
+			return nil
+		}, 30*time.Second, 1*time.Second).Should(Succeed(), "Port-forward should be ready")
 
 		By("Waiting for broker to register servers")
 		// wait for broker to load the config and be ready
 		// note: configmap volume mounts can take 60-120s to sync in kubernetes
 		// plus additional time for fsnotify to detect and reload
-		// we'll verify by checking if the broker pod has reloaded config
+		// use broker /status endpoint to reliably check server registration
+		type StatusResponse struct {
+			Servers []struct {
+				URL              string `json:"url"`
+				Name             string `json:"name"`
+				ToolPrefix       string `json:"toolPrefix"`
+				ConnectionStatus struct {
+					IsReachable bool `json:"isReachable"`
+				} `json:"connectionStatus"`
+			} `json:"servers"`
+			HealthyServers int `json:"healthyServers"`
+			TotalServers   int `json:"totalServers"`
+		}
+
 		Eventually(func() bool {
-			// check broker logs for config reload message
-			cmd := exec.Command("kubectl", "logs", "-n", SystemNamespace,
-				"deployment/mcp-broker-router", "--tail=20")
-			output, err := cmd.Output()
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
 			if err != nil {
+				GinkgoWriter.Printf("Failed to connect to broker status endpoint: %v\n", err)
 				return false
 			}
-			// look for evidence that config was loaded with our servers
-			return bytes.Contains(output, []byte("s1_")) &&
-				bytes.Contains(output, []byte("s2_"))
-		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
-			"Broker should load configuration with test servers")
+			defer resp.Body.Close()
 
-		By("Setting up port-forward to broker")
+			if resp.StatusCode != http.StatusOK {
+				GinkgoWriter.Printf("Broker status endpoint returned %d\n", resp.StatusCode)
+				return false
+			}
+
+			var status StatusResponse
+			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				GinkgoWriter.Printf("Failed to decode status response: %v\n", err)
+				return false
+			}
+
+			// check if both servers are registered and healthy
+			foundServer1 := false
+			foundServer2 := false
+			for _, server := range status.Servers {
+				if strings.Contains(server.URL, "mcp-test-server1") {
+					foundServer1 = server.ToolPrefix == "s1_" && server.ConnectionStatus.IsReachable
+					if !foundServer1 {
+						GinkgoWriter.Printf("Server1 found but not ready - prefix: %s, reachable: %v\n",
+							server.ToolPrefix, server.ConnectionStatus.IsReachable)
+					}
+				}
+				if strings.Contains(server.URL, "mcp-test-server2") {
+					foundServer2 = server.ToolPrefix == "s2_" && server.ConnectionStatus.IsReachable
+					if !foundServer2 {
+						GinkgoWriter.Printf("Server2 found but not ready - prefix: %s, reachable: %v\n",
+							server.ToolPrefix, server.ConnectionStatus.IsReachable)
+					}
+				}
+			}
+
+			if !foundServer1 || !foundServer2 {
+				GinkgoWriter.Printf("Broker status - Total: %d, Healthy: %d, Server1: %v, Server2: %v\n",
+					status.TotalServers, status.HealthyServers, foundServer1, foundServer2)
+			}
+
+			return foundServer1 && foundServer2 && status.HealthyServers >= 2
+		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
+			"Broker should register both test servers with correct prefixes and be healthy")
+
+		By("Setting up port-forward to broker MCP endpoint")
 		brokerURL := "http://localhost:18080/mcp"
-		portForwardCmd := setupPortForward("mcp-broker", SystemNamespace, "18080:8080")
+		portForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18080:8080")
 		defer portForwardCmd.Process.Kill() // ensure we clean up
 
 		// wait for port-forward to be ready by testing connection
@@ -188,15 +234,13 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		// check for tools with expected prefixes
 		var foundS1Tool, foundS2Tool bool
-		fmt.Printf("Found %d tools:\n", len(toolsList))
 		for _, tool := range toolsList {
 			toolMap := tool.(map[string]interface{})
 			name := toolMap["name"].(string)
-			fmt.Printf("  - %s\n", name)
-			if len(name) >= 3 && name[:3] == "s1_" {
+			if strings.HasPrefix(name, "s1_") {
 				foundS1Tool = true
 			}
-			if len(name) >= 3 && name[:3] == "s2_" {
+			if strings.HasPrefix(name, "s2_") {
 				foundS2Tool = true
 			}
 		}
@@ -206,30 +250,45 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		By("Deleting one MCPServer")
 		Expect(k8sClient.Delete(ctx, mcpServer1)).To(Succeed())
 
-		By("Verifying ConfigMap is updated")
+		By("Verifying broker removes the deleted server")
+		// use status endpoint to verify server removal
 		Eventually(func() bool {
-			configMap := &corev1.ConfigMap{}
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      ConfigMapName,
-				Namespace: SystemNamespace,
-			}, configMap)
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
 			if err != nil {
 				return false
 			}
-			// should still have s2_ but not s1_
-			configContent := configMap.Data["config.yaml"]
-			return !bytes.Contains([]byte(configContent), []byte("s1_")) &&
-				bytes.Contains([]byte(configContent), []byte("s2_"))
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue())
+			defer resp.Body.Close()
+
+			var status StatusResponse
+			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				return false
+			}
+
+			// should only have server2 now
+			hasServer1 := false
+			hasServer2 := false
+			for _, server := range status.Servers {
+				if strings.Contains(server.URL, "mcp-test-server1") {
+					hasServer1 = true
+				}
+				if strings.Contains(server.URL, "mcp-test-server2") {
+					hasServer2 = true
+				}
+			}
+
+			// server1 should be gone, server2 should remain
+			return !hasServer1 && hasServer2
+		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Broker should remove deleted server")
 
 		By("Test completed successfully")
 	})
 })
 
 // helper function to setup port-forward
-func setupPortForward(service, namespace, ports string) *exec.Cmd {
+func setupPortForward(resource, namespace, ports string) *exec.Cmd {
 	cmd := exec.Command("kubectl", "port-forward", "-n", namespace,
-		fmt.Sprintf("service/%s", service), ports)
+		fmt.Sprintf("deployment/%s", resource), ports)
 	err := cmd.Start()
 	Expect(err).ToNot(HaveOccurred())
 	return cmd
@@ -247,10 +306,6 @@ func makeMCPRequest(url string, payload map[string]interface{}) map[string]inter
 
 	body, err := io.ReadAll(resp.Body)
 	Expect(err).ToNot(HaveOccurred())
-
-	// debug output to see what we got
-	fmt.Printf("Response status: %d\n", resp.StatusCode)
-	fmt.Printf("Response body: %s\n", string(body))
 
 	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)

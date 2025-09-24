@@ -13,6 +13,10 @@ on:
       - 'tests/servers/**'
       - '.github/workflows/test-images.yaml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
@@ -47,6 +51,10 @@ jobs:
             context: tests/servers/broken-server
             dockerfile: Dockerfile
             image-name: test-broken-server
+          - server: custom-path-server
+            context: tests/servers/custom-path-server
+            dockerfile: Dockerfile
+            image-name: test-custom-path-server
 
     steps:
       - name: Check out code
