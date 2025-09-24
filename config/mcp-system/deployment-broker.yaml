@@ -40,6 +40,13 @@ spec:
                 secretKeyRef:
                   name: mcp-config-update-token
                   key: token
+            # retry configuration for failed server discovery (optional)
+            # - name: MCP_GATEWAY_DISCOVERY_RETRY_BASE_DELAY
+            #   value: "5s"  # initial retry delay (default: 5s)
+            # - name: MCP_GATEWAY_DISCOVERY_RETRY_MAX_DELAY
+            #   value: "5m"  # maximum retry delay (default: 5m)
+            # - name: MCP_GATEWAY_DISCOVERY_RETRY_MAX_ATTEMPTS
+            #   value: "10"  # maximum retry attempts (default: 10)
           envFrom:
             - secretRef:
                 name: mcp-aggregated-credentials
