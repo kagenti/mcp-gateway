@@ -41,6 +41,10 @@ run-mcp-broker-router: run
 run-controller: mcp-broker-router
 	./bin/mcp-broker-router --controller --log-level=${LOG_LEVEL}
 
+# Generate CRDs from Go types
+generate-crds: ## Generate CRD manifests from Go types
+	controller-gen crd paths="./pkg/apis/..." output:dir=config/crd
+
 # Install CRD
 install-crd: ## Install MCPServer and MCPVirtualServer CRDs
 	kubectl apply -f config/crd/
