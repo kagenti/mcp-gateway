@@ -27,8 +27,6 @@ const (
 	ConfigNamespace = "mcp-system"
 	// ConfigName is the name of the config
 	ConfigName = "mcp-gateway-config"
-	// DefaultMCPPath is the default path for MCP endpoints
-	DefaultMCPPath = "/mcp"
 )
 
 // generateCredentialEnvVar generates an environment variable name for credentials
@@ -424,12 +422,7 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		}
 	}
 
-	// use custom path if specified, otherwise default to DefaultMCPPath
 	path := mcpServer.Spec.Path
-	if path == "" {
-		path = DefaultMCPPath
-	}
-
 	endpoint := fmt.Sprintf("%s://%s%s", protocol, nameAndEndpoint, path)
 
 	// external services need actual hostname for routing
