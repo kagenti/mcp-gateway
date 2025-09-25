@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
+	"os/exec" // needed for setupPortForward
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
@@ -280,6 +284,121 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 			// server1 should be gone, server2 should remain
 			return !hasServer1 && hasServer2
 		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Broker should remove deleted server")
+
+		By("Testing server failure recovery")
+		// simulate server failure by scaling down
+		testServerDeployment := &appsv1.Deployment{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      "mcp-test-server2",
+			Namespace: TestNamespace,
+		}, testServerDeployment)).To(Succeed())
+
+		By("Scaling down test-server2 to simulate failure")
+		zero := int32(0)
+		testServerDeployment.Spec.Replicas = &zero
+		Expect(k8sClient.Update(ctx, testServerDeployment)).To(Succeed())
+
+		By("Waiting for broker to detect server2 is unreachable")
+		Eventually(func() bool {
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
+			if err != nil {
+				return false
+			}
+			defer resp.Body.Close()
+
+			var status StatusResponse
+			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				return false
+			}
+
+			// check if server2 is marked as unreachable or removed
+			for _, server := range status.Servers {
+				if strings.Contains(server.URL, "mcp-test-server2") {
+					return !server.ConnectionStatus.IsReachable
+				}
+			}
+			// if not found, that's also acceptable
+			return true
+		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Server2 should become unreachable")
+
+		By("Verifying server remains unreachable for a few seconds")
+		// Just verify the server stays unreachable for a bit to ensure retry is happening
+		// We already confirmed it's unreachable above, this just ensures it doesn't immediately recover
+		Consistently(func() bool {
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
+			if err != nil {
+				return true // connection error means still down
+			}
+			defer resp.Body.Close()
+
+			var status StatusResponse
+			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				return true // decode error means still down
+			}
+
+			// check if server2 is still unreachable
+			for _, server := range status.Servers {
+				if strings.Contains(server.URL, "mcp-test-server2") {
+					return !server.ConnectionStatus.IsReachable
+				}
+			}
+			// not found means it's been removed, which is fine
+			return true
+		}, "3s", "1s").Should(BeTrue(), "Server should remain unreachable while down")
+
+		By("Scaling test-server2 back up")
+		// refresh deployment to avoid resource version conflicts
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      "mcp-test-server2",
+			Namespace: TestNamespace,
+		}, testServerDeployment)).To(Succeed())
+		one := int32(1)
+		testServerDeployment.Spec.Replicas = &one
+		Expect(k8sClient.Update(ctx, testServerDeployment)).To(Succeed())
+
+		By("Waiting for pod to be running")
+		Eventually(func() bool {
+			pods := &corev1.PodList{}
+			err := k8sClient.List(ctx, pods,
+				client.InNamespace(TestNamespace),
+				client.MatchingLabels{"app": "mcp-test-server2"})
+			if err != nil || len(pods.Items) == 0 {
+				return false
+			}
+			for _, pod := range pods.Items {
+				if pod.Status.Phase == corev1.PodRunning {
+					return true
+				}
+			}
+			return false
+		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue())
+
+		By("Verifying broker reconnects to server2")
+		Eventually(func() bool {
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Get("http://localhost:18081/status")
+			if err != nil {
+				return false
+			}
+			defer resp.Body.Close()
+
+			var status StatusResponse
+			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				return false
+			}
+
+			// check if server2 is back and healthy
+			for _, server := range status.Servers {
+				if strings.Contains(server.URL, "mcp-test-server2") {
+					GinkgoWriter.Printf("Server2 recovery status - Reachable: %v\n",
+						server.ConnectionStatus.IsReachable)
+					return server.ConnectionStatus.IsReachable
+				}
+			}
+			return false
+		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(), "Server2 should recover and reconnect")
 
 		By("Test completed successfully")
 	})
