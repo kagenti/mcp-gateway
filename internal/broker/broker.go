@@ -16,6 +16,7 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var _ config.Observer = &mcpBrokerImpl{}
@@ -208,12 +209,12 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 			existingUpstream.CredentialEnvVar != mcpServer.CredentialEnvVar
 
 		if !configChanged {
-			m.logger.Info("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
+			m.logger.Info("MCP server is already registered with same config", "mcpURL", mcpServer.URL)
 			return nil
 		}
 
 		// config changed, unregister and re-register
-		m.logger.Info("mcp server config changed, re-registering",
+		m.logger.Info("MCP server config changed, re-registering",
 			"mcpURL", mcpServer.URL,
 			"oldPrefix", existingUpstream.ToolPrefix,
 			"newPrefix", mcpServer.ToolPrefix)
@@ -274,6 +275,7 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error
 		if err != nil {
 			m.logger.Info("Failed to close upstream connection while unregistering",
 				"mcpURL", mcpURL,
+				"error", err,
 			)
 		}
 	}
@@ -476,48 +478,50 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 		}
 	}
 
-	for attempt := range maxRetries {
-		// calculate exponential backoff delay
-		delay := baseDelay * (1 << attempt) // 5s, 10s, 20s, 40s, 80s, 160s, 320s (5m max)
-		if delay > maxDelay {
-			delay = maxDelay
-		}
+	backoff := wait.Backoff{
+		Duration: baseDelay,
+		Factor:   2.0,
+		Steps:    maxRetries,
+		Cap:      maxDelay,
+	}
 
-		m.logger.Info("waiting before retry discovery",
+	attempt := 0
+	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		attempt++
+		m.logger.Info("attempting discovery",
 			"url", upstream.URL,
-			"attempt", attempt+1,
-			"delay", delay)
+			"attempt", attempt)
 
-		select {
-		case <-time.After(delay):
-		case <-ctx.Done():
-			m.logger.Info("retry discovery cancelled", "url", upstream.URL)
-			return
-		}
-
-		// attempt discovery
 		newTools, err := m.discoverTools(ctx, upstream)
 		if err != nil {
 			m.logger.Warn("retry discovery failed",
 				"url", upstream.URL,
-				"attempt", attempt+1,
+				"attempt", attempt,
 				"error", err)
-			continue
+			return false, nil
 		}
 
-		// success! add the tools
 		m.logger.Info("retry discovery succeeded",
 			"url", upstream.URL,
-			"attempt", attempt+1,
+			"attempt", attempt,
 			"tools", len(newTools))
 
 		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newTools)...)
-		return
-	}
+		return true, nil
+	})
 
-	m.logger.Error("max retries exceeded for discovery",
-		"url", upstream.URL,
-		"maxRetries", maxRetries)
+	if err != nil {
+		if wait.Interrupted(err) {
+			m.logger.Error("max retries exceeded for discovery",
+				"url", upstream.URL,
+				"maxRetries", maxRetries,
+				"error", err)
+		} else {
+			m.logger.Info("retry discovery cancelled",
+				"url", upstream.URL,
+				"error", err)
+		}
+	}
 }
 
 // populateToolMapping maps tools to names that this gateway recognizes
