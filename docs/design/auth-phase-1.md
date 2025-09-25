@@ -2,7 +2,7 @@
 
 **Goals**
 
-- Provide OAuth integration at the gateway that aligns with the (MCP Spec Authorization)[https://modelcontextprotocol.io/specification/draft/basic/authorization] leveraging resource_metadata, dynamic client registration and token validation.
+- Provide OAuth integration at the gateway that aligns with the [MCP Spec Authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization) leveraging resource_metadata, dynamic client registration and token validation.
 - Provide examples for authorizing access to specific tools.
 - Enabled exchange from bearer token to legacy API key via vault
 
@@ -26,7 +26,7 @@
 
 ## Overview
 
-To provide auth integration, the MCP gateway uses (Kuadrant)[https://kuadrant.io], in particular (AuthPolicy)[https://docs.kuadrant.io/1.2.x/kuadrant-operator/doc/reference/authpolicy/], Gateway API and Keycloak as an identity provider. This is our reference implementation, but it is of course possible to use other components that offer these capabilities and integrate with Envoy. The MCP Gateway components don't stray into client auth and remain focused on routing and brokering.
+To provide auth integration, the MCP gateway uses [Kuadrant](https://kuadrant.io), in particular [AuthPolicy](https://docs.kuadrant.io/1.2.x/kuadrant-operator/doc/reference/authpolicy/), Gateway API and Keycloak as an identity provider. This is our reference implementation, but it is of course possible to use other components that offer these capabilities and integrate with Envoy. The MCP Gateway components don't stray into client auth and remain focused on routing and brokering.
 
 > Note while we use Keycloak in our examples, other IDPs could also be used.
 > Note while we use Kuadrant to enforce auth requirements, it could be done in other ways.
