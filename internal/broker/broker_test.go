@@ -258,24 +258,18 @@ func TestOauthResourceHandler(t *testing.T) {
 		bearerMethod = "header"
 		scopes       = "groups,audience,roles"
 	)
-	os.Setenv(ENV_OAUTH_RESOURCE_NAME, resourceName)
-	os.Setenv(ENV_OAUTH_RESOURCE, resource)
-	os.Setenv(ENV_OAUTH_AUTHORIZATION_SERVERS, idp)
-	os.Setenv(ENV_OAUTH_BEARER_METHODS_SUPPORTED, bearerMethod)
-	os.Setenv(ENV_OAUTH_SCOPES_SUPPORTED, scopes)
-	defer func() {
-		os.Unsetenv(ENV_OAUTH_RESOURCE_NAME)
-		os.Unsetenv(ENV_OAUTH_AUTHORIZATION_SERVERS)
-		os.Unsetenv(ENV_OAUTH_BEARER_METHODS_SUPPORTED)
-		os.Unsetenv(ENV_OAUTH_RESOURCE)
-		os.Unsetenv(ENV_OAUTH_SCOPES_SUPPORTED)
-	}()
+	t.Setenv(envOAuthResourceName, resourceName)
+	t.Setenv(envOAuthResource, resource)
+	t.Setenv(envOAuthAuthorizationServers, idp)
+	t.Setenv(envOAuthBearerMethodsSupported, bearerMethod)
+	t.Setenv(envOAuthScopesSupported, scopes)
+
 	r := &http.Request{
-		Method: "GET",
+		Method: http.MethodGet,
 	}
-	h := &ProtectedResourceHandler{Logger: logger}
+	pr := &ProtectedResourceHandler{Logger: logger}
 	recorder := &simpleResponseWriter{}
-	h.ProtectedResourceHandler(recorder, r)
+	pr.Handle(recorder, r)
 	if recorder.Status != 200 {
 		t.Fatalf("expected 200 status code got %v", recorder.Status)
 	}

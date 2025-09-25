@@ -9,13 +9,14 @@ import (
 )
 
 const (
-	ENV_OAUTH_RESOURCE_NAME            = "OAUTH_RESOURCE_NAME"
-	ENV_OAUTH_RESOURCE                 = "OAUTH_RESOURCE"
-	ENV_OAUTH_AUTHORIZATION_SERVERS    = "OAUTH_AUTHORIZATION_SERVERS"
-	ENV_OAUTH_BEARER_METHODS_SUPPORTED = "OAUTH_BEARER_METHODS_SUPPORTED"
-	ENV_OAUTH_SCOPES_SUPPORTED         = "OAUTH_SCOPES_SUPPORTED"
+	envOAuthResourceName           = "OAUTH_RESOURCE_NAME"
+	envOAuthResource               = "OAUTH_RESOURCE"
+	envOAuthAuthorizationServers   = "OAUTH_AUTHORIZATION_SERVERS"
+	envOAuthBearerMethodsSupported = "OAUTH_BEARER_METHODS_SUPPORTED" // #nosec G101
+	envOAuthScopesSupported        = "OAUTH_SCOPES_SUPPORTED"
 )
 
+// ProtectedResourceHandler  is the HTTP handler for the oauth protectected resource config
 type ProtectedResourceHandler struct {
 	Logger *slog.Logger
 }
@@ -41,15 +42,15 @@ func getOAuthConfig() *OAuthProtectedResource {
 	}
 
 	// Override with environment variables if provided
-	if resourceName := os.Getenv(ENV_OAUTH_RESOURCE_NAME); resourceName != "" {
+	if resourceName := os.Getenv(envOAuthResourceName); resourceName != "" {
 		oauthConfig.ResourceName = resourceName
 	}
 
-	if resource := os.Getenv(ENV_OAUTH_RESOURCE); resource != "" {
+	if resource := os.Getenv(envOAuthResource); resource != "" {
 		oauthConfig.Resource = resource
 	}
 
-	if authServers := os.Getenv(ENV_OAUTH_AUTHORIZATION_SERVERS); authServers != "" {
+	if authServers := os.Getenv(envOAuthAuthorizationServers); authServers != "" {
 		// Split by comma and trim whitespace
 		servers := strings.Split(authServers, ",")
 		oauthConfig.AuthorizationServers = make([]string, len(servers))
@@ -58,7 +59,7 @@ func getOAuthConfig() *OAuthProtectedResource {
 		}
 	}
 
-	if bearerMethods := os.Getenv(ENV_OAUTH_BEARER_METHODS_SUPPORTED); bearerMethods != "" {
+	if bearerMethods := os.Getenv(envOAuthBearerMethodsSupported); bearerMethods != "" {
 		// Split by comma and trim whitespace
 		methods := strings.Split(bearerMethods, ",")
 		oauthConfig.BearerMethodsSupported = make([]string, len(methods))
@@ -67,7 +68,7 @@ func getOAuthConfig() *OAuthProtectedResource {
 		}
 	}
 
-	if scopes := os.Getenv(ENV_OAUTH_SCOPES_SUPPORTED); scopes != "" {
+	if scopes := os.Getenv(envOAuthScopesSupported); scopes != "" {
 		// Split by comma and trim whitespace
 		scopeList := strings.Split(scopes, ",")
 		oauthConfig.ScopesSupported = make([]string, len(scopeList))
@@ -79,8 +80,8 @@ func getOAuthConfig() *OAuthProtectedResource {
 	return oauthConfig
 }
 
-// oauthProtectedResourceHandler handles the /.well-known/oauth-protected-resource endpoint
-func (prh *ProtectedResourceHandler) ProtectedResourceHandler(w http.ResponseWriter, r *http.Request) {
+// Handle handles the /.well-known/oauth-protected-resource endpoint
+func (prh *ProtectedResourceHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	prh.Logger.Info("service protected resource endpoint")
 	oauthConfig := getOAuthConfig()
 	// Set CORS headers

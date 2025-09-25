@@ -41,15 +41,6 @@ var (
 	scheme    = runtime.NewScheme()
 )
 
-// OAuthProtectedResource represents the OAuth protected resource response
-type OAuthProtectedResource struct {
-	ResourceName           string   `json:"resource_name"`
-	Resource               string   `json:"resource"`
-	AuthorizationServers   []string `json:"authorization_servers"`
-	BearerMethodsSupported []string `json:"bearer_methods_supported"`
-	ScopesSupported        []string `json:"scopes_supported"`
-}
-
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = mcpv1alpha1.AddToScheme(scheme)
@@ -173,7 +164,7 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 
 	// Add OAuth protected resource endpoint
 	oauthHandler := broker.ProtectedResourceHandler{Logger: logger}
-	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthHandler.ProtectedResourceHandler)
+	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthHandler.Handle)
 
 	httpSrv := &http.Server{
 		Addr:         address,
