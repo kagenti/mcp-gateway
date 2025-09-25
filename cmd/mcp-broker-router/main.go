@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"time"
 
@@ -56,84 +54,6 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = mcpv1alpha1.AddToScheme(scheme)
 	_ = gatewayv1.Install(scheme)
-}
-
-// getOAuthConfig parses OAuth configuration from environment variables
-func getOAuthConfig() *OAuthProtectedResource {
-	// Set defaults
-	oauthConfig := &OAuthProtectedResource{
-		ResourceName:           "MCP Server",
-		Resource:               "/mcp",
-		AuthorizationServers:   []string{},
-		BearerMethodsSupported: []string{"header"},
-		ScopesSupported:        []string{"basic"},
-	}
-
-	// Override with environment variables if provided
-	if resourceName := os.Getenv("OAUTH_RESOURCE_NAME"); resourceName != "" {
-		oauthConfig.ResourceName = resourceName
-	}
-
-	if resource := os.Getenv("OAUTH_RESOURCE"); resource != "" {
-		oauthConfig.Resource = resource
-	}
-
-	if authServers := os.Getenv("OAUTH_AUTHORIZATION_SERVERS"); authServers != "" {
-		// Split by comma and trim whitespace
-		servers := strings.Split(authServers, ",")
-		oauthConfig.AuthorizationServers = make([]string, len(servers))
-		for i, server := range servers {
-			oauthConfig.AuthorizationServers[i] = strings.TrimSpace(server)
-		}
-	}
-
-	if bearerMethods := os.Getenv("OAUTH_BEARER_METHODS_SUPPORTED"); bearerMethods != "" {
-		// Split by comma and trim whitespace
-		methods := strings.Split(bearerMethods, ",")
-		oauthConfig.BearerMethodsSupported = make([]string, len(methods))
-		for i, method := range methods {
-			oauthConfig.BearerMethodsSupported[i] = strings.TrimSpace(method)
-		}
-	}
-
-	if scopes := os.Getenv("OAUTH_SCOPES_SUPPORTED"); scopes != "" {
-		// Split by comma and trim whitespace
-		scopeList := strings.Split(scopes, ",")
-		oauthConfig.ScopesSupported = make([]string, len(scopeList))
-		for i, scope := range scopeList {
-			oauthConfig.ScopesSupported[i] = strings.TrimSpace(scope)
-		}
-	}
-
-	return oauthConfig
-}
-
-// oauthProtectedResourceHandler handles the /.well-known/oauth-protected-resource endpoint
-func oauthProtectedResourceHandler(oauthConfig *OAuthProtectedResource) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin, X-Requested-With")
-		w.Header().Set("Access-Control-Max-Age", "3600")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-		// Handle preflight requests
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		// Set content type and return JSON response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		if err := json.NewEncoder(w).Encode(oauthConfig); err != nil {
-			logger.Error("Failed to encode OAuth protected resource response", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
 }
 
 func main() {
@@ -252,9 +172,8 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker) {
 	})
 
 	// Add OAuth protected resource endpoint
-	oauthConfig := getOAuthConfig()
-	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthProtectedResourceHandler(oauthConfig))
-	logger.Info("OAuth protected resource endpoint configured", "config", oauthConfig)
+	oauthHandler := broker.ProtectedResourceHandler{Logger: logger}
+	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthHandler.ProtectedResourceHandler)
 
 	httpSrv := &http.Server{
 		Addr:         address,
