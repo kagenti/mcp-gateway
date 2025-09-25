@@ -10,6 +10,8 @@ const (
 	mcpServerNameHeader = "x-mcp-servername"
 	toolHeader          = "x-mcp-toolname"
 	methodHeader        = "x-mcp-method"
+	//nolint:gosec // not a credential, just a header name
+	mcpAPIKeyHeader     = "x-mcp-api-key" // header for backend API keys to avoid OAuth conflicts
 	sessionHeader       = "mcp-session-id"
 	authorityHeader     = ":authority"
 	authorizationHeader = "authorization"
@@ -49,6 +51,17 @@ func (hb *HeadersBuilder) WithAuth(cred string) *HeadersBuilder {
 		Header: &basepb.HeaderValue{
 			Key:      authorizationHeader,
 			RawValue: []byte(cred),
+		},
+	})
+	return hb
+}
+
+// WithAPIKey will set the x-mcp-api-key header
+func (hb *HeadersBuilder) WithAPIKey(apiKey string) *HeadersBuilder {
+	hb.headers = append(hb.headers, &basepb.HeaderValueOption{
+		Header: &basepb.HeaderValue{
+			Key:      mcpAPIKeyHeader,
+			RawValue: []byte(apiKey),
 		},
 	})
 	return hb

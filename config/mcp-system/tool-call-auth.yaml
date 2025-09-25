@@ -25,12 +25,18 @@ spec:
             patterns:
               - predicate: auth.identity.groups.exists(g, request.headers['x-mcp-toolname'] in auth.metadata.rbac.access[g])
       response: #duplicated content may be able to solve
+        success:
+          headers:
+            # copy X-MCP-API-Key to authorization after OAuth validation
+            # this allows OAuth and backend API keys to coexist (issue #201)
+            'authorization':
+              value: "{request.headers['x-mcp-api-key']}"
         unauthorized:
           code: 403
           body:
             value: |
               {
-                "error": "Forbidden", 
+                "error": "Forbidden",
                 "message": "MCP Tool Access denied. Insufficient permissions for this tool."
               }
         unauthenticated:

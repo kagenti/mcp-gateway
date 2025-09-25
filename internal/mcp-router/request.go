@@ -136,7 +136,31 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 
 	headers.WithAuthority(serverInfo.Hostname)
 	if serverInfo.Credential() != "" {
-		headers.WithAuth(serverInfo.Credential())
+		// always set x-mcp-api-key for AuthPolicy to use
+		headers.WithAPIKey(serverInfo.Credential())
+
+		// also set authorization if there isn't one already (for backwards compat)
+		hasAuthHeader := false
+		if s.requestHeaders != nil && s.requestHeaders.Headers != nil {
+			for _, header := range s.requestHeaders.Headers.Headers {
+				if strings.ToLower(header.Key) == "authorization" {
+					hasAuthHeader = true
+					break
+				}
+			}
+		}
+
+		if !hasAuthHeader {
+			// no existing authorization header, safe to set it
+			headers.WithAuth(serverInfo.Credential())
+			slog.Info("Adding API key headers for routing",
+				"server", serverInfo.Name,
+				"headers", "x-mcp-api-key, authorization")
+		} else {
+			slog.Info("Adding API key header for routing (Authorization exists)",
+				"server", serverInfo.Name,
+				"headers", "x-mcp-api-key only")
+		}
 	}
 
 	calculatedResponse, err := s.HeaderAndBodyResponse(headers, mcpReq)
@@ -186,7 +210,7 @@ func (s *ExtProcServer) HeaderAndBodyResponse(headers *HeadersBuilder, req *MCPR
 		return nil, fmt.Errorf("failed to convert modified mcp request to bytes ")
 	}
 	headers.WithContentLength(len(body))
-	// headers all set
+
 	if s.streaming {
 		headersResp := s.HeaderResponse(headers.Build())
 		slog.Info("Using streaming mode - returning header response first")

@@ -24,6 +24,12 @@ spec:
               - predicate: size(auth.identity.groups) >=0
               - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # add method header
       response:
+        success:
+          headers:
+            # copy X-MCP-API-Key to authorization after OAuth validation (if present)
+            # this allows OAuth and backend API keys to coexist (issue #201)
+            'authorization':
+              value: "{request.headers['x-mcp-api-key']}"
         unauthorized:
           code: 401
           headers:
