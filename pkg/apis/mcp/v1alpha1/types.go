@@ -7,6 +7,13 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=mcpsrv
+// +kubebuilder:printcolumn:name="Prefix",type="string",JSONPath=".spec.toolPrefix",description="Tool prefix for federation"
+// +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".spec.targetRef.name",description="Target HTTPRoute"
+// +kubebuilder:printcolumn:name="Path",type="string",JSONPath=".spec.path",description="MCP endpoint path"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Ready status"
+// +kubebuilder:printcolumn:name="Tools",type="integer",JSONPath=".status.discoveredTools",description="Number of discovered tools"
+// +kubebuilder:printcolumn:name="Credentials",type="string",JSONPath=".spec.credentialRef.name"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // MCPServer defines a collection of MCP (Model Context Protocol) servers to be aggregated by the gateway.
 // It enables discovery and federation of tools from multiple backend MCP servers through HTTPRoute references,
@@ -91,6 +98,10 @@ type MCPServerStatus struct {
 	// Conditions represent the latest available observations of the MCPServer's state.
 	// Common conditions include 'Ready' to indicate if all referenced servers are accessible.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// DiscoveredTools is the number of tools discovered from this MCPServer
+	// +optional
+	DiscoveredTools int `json:"discoveredTools,omitempty"`
 }
 
 // +kubebuilder:object:root=true

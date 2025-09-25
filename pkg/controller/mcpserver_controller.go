@@ -112,7 +112,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
 	if err != nil {
 		log.Error(err, "Failed to discover servers from HTTPRoutes")
-		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
+		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error(), 0)
 	}
 
 	validator := NewServerValidator(r.Client)
@@ -120,16 +120,16 @@ func (r *MCPReconciler) reconcileMCPServer(
 	if err != nil {
 		log.Error(err, "Failed to validate server status via broker")
 		ready, message := false, fmt.Sprintf("Validation failed: %v", err)
-		if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
+		if err := r.updateStatus(ctx, mcpServer, ready, message, 0); err != nil {
 			log.Error(err, "Failed to update status")
 			return reconcile.Result{}, err
 		}
 		return r.regenerateAggregatedConfig(ctx)
 	}
 
-	ready, message := r.evaluateValidationResults(statusResponse, serverInfos)
+	ready, message, toolCount := r.evaluateValidationResults(statusResponse, serverInfos)
 
-	if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
+	if err := r.updateStatus(ctx, mcpServer, ready, message, toolCount); err != nil {
 		log.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -595,9 +595,9 @@ func (r *MCPReconciler) updateHTTPRouteStatus(
 func (r *MCPReconciler) evaluateValidationResults(
 	statusResponse *broker.StatusResponse,
 	serverInfos []ServerInfo,
-) (bool, string) {
+) (bool, string, int) {
 	if statusResponse == nil {
-		return true, "No validation data available"
+		return true, "No validation data available", 0
 	}
 
 	// Create a map of server endpoints for quick lookup
@@ -609,6 +609,7 @@ func (r *MCPReconciler) evaluateValidationResults(
 	var errors []string
 	validServers := 0
 	totalRelatedServers := 0
+	totalToolCount := 0
 
 	// Check each server in the status response
 	for _, server := range statusResponse.Servers {
@@ -647,18 +648,20 @@ func (r *MCPReconciler) evaluateValidationResults(
 			errors = append(errors, fmt.Sprintf("Server %s: %s", server.Name, allServerErrors))
 		} else {
 			validServers++
+			// add tool count for valid servers
+			totalToolCount += server.CapabilitiesValidation.ToolCount
 		}
 	}
 
 	if len(errors) > 0 {
-		return false, strings.Join(errors, "; ")
+		return false, strings.Join(errors, "; "), totalToolCount
 	}
 
 	if totalRelatedServers == 0 {
-		return true, fmt.Sprintf("MCPServer successfully reconciled with %d servers (no broker validation data yet)", len(serverInfos))
+		return true, fmt.Sprintf("MCPServer successfully reconciled with %d servers (no broker validation data yet)", len(serverInfos)), 0
 	}
 
-	return true, fmt.Sprintf("MCPServer successfully reconciled and validated %d servers", validServers)
+	return true, fmt.Sprintf("MCPServer successfully reconciled and validated %d servers with %d tools", validServers, totalToolCount), totalToolCount
 }
 
 func (r *MCPReconciler) updateStatus(
@@ -666,6 +669,7 @@ func (r *MCPReconciler) updateStatus(
 	mcpServer *mcpv1alpha1.MCPServer,
 	ready bool,
 	message string,
+	discoveredTools int,
 ) error {
 	condition := metav1.Condition{
 		Type:               "Ready",
@@ -691,6 +695,9 @@ func (r *MCPReconciler) updateStatus(
 	if !found {
 		mcpServer.Status.Conditions = append(mcpServer.Status.Conditions, condition)
 	}
+
+	// update discovered tools count
+	mcpServer.Status.DiscoveredTools = discoveredTools
 
 	return r.Status().Update(ctx, mcpServer)
 }

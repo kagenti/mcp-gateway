@@ -16,7 +16,34 @@ spec:
     singular: mcpserver
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Tool prefix for federation
+      jsonPath: .spec.toolPrefix
+      name: Prefix
+      type: string
+    - description: Target HTTPRoute
+      jsonPath: .spec.targetRef.name
+      name: Target
+      type: string
+    - description: MCP endpoint path
+      jsonPath: .spec.path
+      name: Path
+      type: string
+    - description: Ready status
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - description: Number of discovered tools
+      jsonPath: .status.discoveredTools
+      name: Tools
+      type: integer
+    - jsonPath: .spec.credentialRef.name
+      name: Credentials
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
@@ -181,6 +208,10 @@ spec:
                   - type
                   type: object
                 type: array
+              discoveredTools:
+                description: DiscoveredTools is the number of tools discovered from
+                  this MCPServer
+                type: integer
             type: object
         type: object
     served: true
