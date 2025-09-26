@@ -2,12 +2,12 @@
 
 # CI setup - lighter weight than local-env-setup, assumes Kind is already created
 .PHONY: ci-setup
-ci-setup: ## Setup environment for CI (creates Kind cluster if needed)
+ci-setup: kind ## Setup environment for CI (creates Kind cluster if needed)
 	@echo "Setting up CI environment..."
 	# Create Kind cluster if it doesn't exist
-	@if ! kind get clusters | grep -q mcp-gateway; then \
+	@if ! $(KIND) get clusters | grep -q mcp-gateway; then \
 		echo "Creating Kind cluster..."; \
-		kind create cluster --name mcp-gateway --config config/kind/cluster.yaml; \
+		$(KIND) create cluster --name mcp-gateway --config config/kind/cluster.yaml; \
 	else \
 		echo "Kind cluster 'mcp-gateway' already exists"; \
 	fi
@@ -17,7 +17,7 @@ ci-setup: ## Setup environment for CI (creates Kind cluster if needed)
 	# Build and load image
 	$(MAKE) docker-build
 	docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
-	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	# Install CRDs and deploy
 	$(MAKE) install-crd
 	$(MAKE) deploy
