@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/pkg/credentials"
 )
 
 const (
@@ -363,7 +363,7 @@ func (s *ExtProcServer) createRoutingResponse(
 
 	// add auth header if needed
 	if serverInfo != nil && serverInfo.CredentialEnvVar != "" {
-		authValue := os.Getenv(serverInfo.CredentialEnvVar)
+		authValue := credentials.Get(serverInfo.CredentialEnvVar)
 		if authValue != "" {
 			slog.Info("Adding Authorization header for routing",
 				"server", serverName,

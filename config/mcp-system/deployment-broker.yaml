@@ -23,6 +23,11 @@ spec:
         - name: config-volume
           configMap:
             name: mcp-gateway-config
+        - name: mcp-credentials
+          secret:
+            secretName: mcp-aggregated-credentials
+            defaultMode: 0400
+            optional: true  # broker can still work without credentials
       containers:
         - name: mcp-broker-router
           image: ghcr.io/kagenti/mcp-gateway:latest
@@ -40,13 +45,6 @@ spec:
                 secretKeyRef:
                   name: mcp-config-update-token
                   key: token
-            # retry configuration for failed server discovery (optional)
-            # - name: MCP_GATEWAY_DISCOVERY_RETRY_BASE_DELAY
-            #   value: "5s"  # initial retry delay (default: 5s)
-            # - name: MCP_GATEWAY_DISCOVERY_RETRY_MAX_DELAY
-            #   value: "5m"  # maximum retry delay (default: 5m)
-            # - name: MCP_GATEWAY_DISCOVERY_RETRY_MAX_ATTEMPTS
-            #   value: "10"  # maximum retry attempts (default: 10)
           envFrom:
             - secretRef:
                 name: mcp-aggregated-credentials
@@ -54,6 +52,9 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /config
+            - name: mcp-credentials
+              mountPath: /etc/mcp-credentials
+              readOnly: true
           ports:
             - name: http
               containerPort: 8080

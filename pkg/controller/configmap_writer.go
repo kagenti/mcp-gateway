@@ -121,11 +121,12 @@ func convertToInternalFormat(servers []config.ServerConfig) []*internalconfig.MC
 	result := make([]*internalconfig.MCPServer, len(servers))
 	for i, s := range servers {
 		result[i] = &internalconfig.MCPServer{
-			Name:       s.Name,
-			URL:        s.URL,
-			ToolPrefix: s.ToolPrefix,
-			Enabled:    s.Enabled,
-			Hostname:   s.Hostname,
+			Name:             s.Name,
+			URL:              s.URL,
+			ToolPrefix:       s.ToolPrefix,
+			Enabled:          s.Enabled,
+			Hostname:         s.Hostname,
+			CredentialEnvVar: s.CredentialEnvVar,
 		}
 	}
 	return result
