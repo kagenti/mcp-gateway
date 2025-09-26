@@ -2,10 +2,12 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -230,4 +232,73 @@ func TestToolCallAfterMCPDisconnect(t *testing.T) {
 	require.NoError(t, err)
 
 	_ = broker.Shutdown(context.Background())
+}
+
+var _ http.ResponseWriter = &simpleResponseWriter{}
+
+type simpleResponseWriter struct {
+	Status  int
+	Body    []byte
+	Headers []http.Header
+}
+
+func (srw *simpleResponseWriter) Header() http.Header {
+	h := http.Header{}
+	srw.Headers = append(srw.Headers, h)
+	return h
+}
+
+func (srw *simpleResponseWriter) WriteHeader(status int) {
+	srw.Status = status
+}
+func (srw *simpleResponseWriter) Write(b []byte) (int, error) {
+	srw.Body = b
+	return len(b), nil
+}
+
+func TestOauthResourceHandler(t *testing.T) {
+	var (
+		resourceName = "mcp gateway"
+		resource     = "https://test.com/mcp"
+		idp          = "https://idp.com"
+		bearerMethod = "header"
+		scopes       = "groups,audience,roles"
+	)
+	t.Setenv(envOAuthResourceName, resourceName)
+	t.Setenv(envOAuthResource, resource)
+	t.Setenv(envOAuthAuthorizationServers, idp)
+	t.Setenv(envOAuthBearerMethodsSupported, bearerMethod)
+	t.Setenv(envOAuthScopesSupported, scopes)
+
+	r := &http.Request{
+		Method: http.MethodGet,
+	}
+	pr := &ProtectedResourceHandler{Logger: logger}
+	recorder := &simpleResponseWriter{}
+	pr.Handle(recorder, r)
+	if recorder.Status != 200 {
+		t.Fatalf("expected 200 status code got %v", recorder.Status)
+	}
+	config := &OAuthProtectedResource{}
+	if err := json.Unmarshal(recorder.Body, config); err != nil {
+		t.Fatalf("unexpected error %s", err)
+	}
+	if !slices.Contains(config.AuthorizationServers, idp) {
+		t.Fatalf("expected %s to be in %v", idp, config.AuthorizationServers)
+	}
+	if config.Resource != resource {
+		t.Fatalf("expected resource to be %s but was %s", resource, config.Resource)
+	}
+	if config.ResourceName != resourceName {
+		t.Fatalf("expected resource to be %s but was %s", resourceName, config.ResourceName)
+	}
+	if !slices.ContainsFunc(config.ScopesSupported, func(val string) bool {
+		return slices.Contains(strings.Split(scopes, ","), val)
+	}) {
+		t.Fatalf("expected %s to be in %v", scopes, config.ScopesSupported)
+	}
+	if !slices.Contains(config.BearerMethodsSupported, bearerMethod) {
+		t.Fatalf("expected %s to be in %v", bearerMethod, config.BearerMethodsSupported)
+	}
+
 }
