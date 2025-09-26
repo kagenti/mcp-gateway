@@ -14,6 +14,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
@@ -283,7 +286,214 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		By("Test completed successfully")
 	})
+
+	It("should handle credential changes and re-register servers", func() {
+		By("Creating HTTPRoute for api-key-server")
+		httpRouteApiKey := BuildTestHTTPRoute("e2e-apikey-route", TestNamespace,
+			"apikey.mcp.example.com", "mcp-api-key-server", 9090)
+		_ = k8sClient.Delete(ctx, httpRouteApiKey)
+		time.Sleep(2 * time.Second)
+		Expect(k8sClient.Create(ctx, httpRouteApiKey)).To(Succeed())
+		defer CleanupResource(ctx, k8sClient, httpRouteApiKey)
+
+		By("Creating credential secret with valid token")
+		credentialSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "e2e-apikey-credentials",
+				Namespace: TestNamespace,
+				Labels: map[string]string{
+					"mcp.kagenti.com/credential": "true",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			StringData: map[string]string{
+				"token": "Bearer test-api-key-secret-token", // valid token
+			},
+		}
+		_ = k8sClient.Delete(ctx, credentialSecret)
+		time.Sleep(2 * time.Second)
+		Expect(k8sClient.Create(ctx, credentialSecret)).To(Succeed())
+		defer CleanupResource(ctx, k8sClient, credentialSecret)
+
+		By("Creating MCPServer with credential reference")
+		mcpServerApiKey := &mcpv1alpha1.MCPServer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "e2e-apikey-server",
+				Namespace: TestNamespace,
+			},
+			Spec: mcpv1alpha1.MCPServerSpec{
+				ToolPrefix: "e2ecred_", // unique prefix to avoid conflicts
+				TargetRef: mcpv1alpha1.TargetReference{
+					Group: "gateway.networking.k8s.io",
+					Kind:  "HTTPRoute",
+					Name:  "e2e-apikey-route",
+				},
+				CredentialRef: &mcpv1alpha1.SecretReference{
+					Name: "e2e-apikey-credentials",
+					Key:  "token",
+				},
+			},
+		}
+		_ = k8sClient.Delete(ctx, mcpServerApiKey)
+		time.Sleep(2 * time.Second)
+		Expect(k8sClient.Create(ctx, mcpServerApiKey)).To(Succeed())
+		defer CleanupResource(ctx, k8sClient, mcpServerApiKey)
+
+		By("Verifying MCPServer becomes ready with valid credentials")
+		VerifyMCPServerReady(ctx, k8sClient, mcpServerApiKey.Name, mcpServerApiKey.Namespace)
+
+		By("Setting up port-forward to broker for status check")
+		statusPortForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18083:8080")
+		defer statusPortForwardCmd.Process.Kill()
+
+		// wait for port-forward to be ready
+		Eventually(func() error {
+			client := &http.Client{Timeout: 1 * time.Second}
+			resp, err := client.Get("http://localhost:18083/status")
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+			return nil
+		}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+		By("Verifying server is registered with valid credentials")
+		// Initial registration may need to wait for volume mount sync
+		// Periodically trigger config reloads to prompt registration once credentials are available
+		Eventually(func() bool {
+			// trigger config reload to prompt re-registration
+			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
+			if mcpServerApiKey.Annotations == nil {
+				mcpServerApiKey.Annotations = make(map[string]string)
+			}
+			mcpServerApiKey.Annotations["reconcile-initial"] = fmt.Sprintf("%d", time.Now().Unix())
+			_ = k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch)
+
+			// wait a moment for config push
+			time.Sleep(2 * time.Second)
+
+			// check if server is registered and reachable
+			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
+			return err == nil && reachable
+		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
+			"Server should be registered and reachable with valid credentials after volume mount sync")
+
+		By("Updating credential to invalid value")
+		// patch secret with invalid token
+		patch := client.MergeFrom(credentialSecret.DeepCopy())
+		credentialSecret.StringData = map[string]string{
+			"token": "Bearer invalid-token",
+		}
+		Expect(k8sClient.Patch(ctx, credentialSecret, patch)).To(Succeed())
+
+		By("Waiting for volume mount to sync credential change")
+		// Volume mounts can take 60-120s to sync in Kubernetes
+		// We'll wait and periodically trigger config reloads until the broker detects the change
+		Eventually(func() bool {
+			// trigger config reload by annotating mcpserver
+			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
+			if mcpServerApiKey.Annotations == nil {
+				mcpServerApiKey.Annotations = make(map[string]string)
+			}
+			mcpServerApiKey.Annotations["reconcile"] = fmt.Sprintf("%d", time.Now().Unix())
+			if err := k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch); err != nil {
+				return false
+			}
+
+			// wait a moment for the config push to process
+			time.Sleep(2 * time.Second)
+
+			// check if server became unreachable (indicating credential change was detected)
+			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", false)
+			if err != nil {
+				// server might be completely removed from status
+				return true
+			}
+			return !reachable
+		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
+			"Broker should detect credential change after volume mount syncs")
+
+		By("Verifying server becomes unreachable with invalid credentials")
+		Eventually(func() bool {
+			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", false)
+			if err != nil {
+				// server might be completely removed from status
+				return true
+			}
+			return !reachable // we expect it to be unreachable
+		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(),
+			"Server should be unreachable or removed with invalid credentials")
+
+		By("Updating credential back to valid value")
+		patch = client.MergeFrom(credentialSecret.DeepCopy())
+		credentialSecret.StringData = map[string]string{
+			"token": "Bearer test-api-key-secret-token",
+		}
+		Expect(k8sClient.Patch(ctx, credentialSecret, patch)).To(Succeed())
+
+		By("Waiting for volume mount to sync valid credential and broker to re-register")
+		// Periodically trigger config reloads until the broker detects the valid credential
+		Eventually(func() bool {
+			// trigger config reload
+			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
+			if mcpServerApiKey.Annotations == nil {
+				mcpServerApiKey.Annotations = make(map[string]string)
+			}
+			mcpServerApiKey.Annotations["reconcile"] = fmt.Sprintf("%d", time.Now().Unix())
+			if err := k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch); err != nil {
+				return false
+			}
+
+			// wait a moment for the config push to process
+			time.Sleep(2 * time.Second)
+
+			// check if server became reachable again
+			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
+			return err == nil && reachable
+		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
+			"Server should be reachable again with valid credentials after volume mount syncs")
+
+		By("Test completed successfully")
+	})
 })
+
+// helper to check if server exists in broker status and its reachability
+func verifyServerInBrokerStatus(statusURL, serverNamePart string, expectReachable bool) (bool, error) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(statusURL)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("status endpoint returned %d", resp.StatusCode)
+	}
+
+	type StatusResponse struct {
+		Servers []struct {
+			URL              string `json:"url"`
+			Name             string `json:"name"`
+			ConnectionStatus struct {
+				IsReachable bool `json:"isReachable"`
+			} `json:"connectionStatus"`
+		} `json:"servers"`
+	}
+
+	var status StatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return false, err
+	}
+
+	for _, server := range status.Servers {
+		if strings.Contains(server.URL, serverNamePart) {
+			return server.ConnectionStatus.IsReachable == expectReachable, nil
+		}
+	}
+
+	// server not found in status
+	return false, fmt.Errorf("server %s not found in status", serverNamePart)
+}
 
 // helper function to setup port-forward
 func setupPortForward(resource, namespace, ports string) *exec.Cmd {
