@@ -10,7 +10,7 @@ ci-setup: ## Setup environment for CI (assumes Kind cluster exists)
 	# Build and load image
 	$(MAKE) docker-build
 	docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
-	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	# Install CRDs and deploy
 	$(MAKE) install-crd
 	$(MAKE) deploy
