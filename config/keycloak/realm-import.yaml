@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: realm-import
+  namespace: keycloak
+data:
+  realm-import.json: |
+    {
+      "id": "mcp",
+      "realm": "mcp",
+      "enabled": true,
+      "accessTokenLifespan": 1800,
+      "groups": [
+        {
+          "name": "accounting"
+        }
+      ],
+      "users": [
+        {
+          "username": "mcp",
+          "email": "mcp@example.com",
+          "firstName": "mcp",
+          "lastName": "mcp",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "mcp",
+              "temporary": false
+            }
+          ],
+          "groups": [
+            "accounting"
+          ]
+        }
+      ],
+      "clientScopes": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "attributes": {
+            "display.on.consent.screen": "false",
+            "include.in.token.scope": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "groups",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "config": {
+                "claim.name": "groups",
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        }
+      ],
+      "defaultOptionalClientScopes": [
+        "groups"
+      ],
+      "components": {
+        "org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy": [
+          {
+            "name": "Trusted Hosts",
+            "providerId": "trusted-hosts",
+            "subType": "anonymous",
+            "subComponents": {},
+            "config": {
+              "host-sending-registration-request-must-match": [
+                "false"
+              ],
+              "client-uris-must-match": [
+                "false"
+              ]
+            }
+          }
+        ]
+      }
+    }
