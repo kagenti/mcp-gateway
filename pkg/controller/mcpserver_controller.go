@@ -11,9 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -27,10 +29,19 @@ const (
 	ConfigNamespace = "mcp-system"
 	// ConfigName is the name of the config
 	ConfigName = "mcp-gateway-config"
+
+	// SecretManagedByLabel is the label for managed secrets
+	SecretManagedByLabel = "mcp.kagenti.com/managed-by" //nolint:gosec // not a credential, just a label name
+	// SecretManagedByValue is the value for managed secrets
+	SecretManagedByValue = "mcp-gateway"
+
+	// CredentialSecretLabel is the required label for credential secrets
+	CredentialSecretLabel = "mcp.kagenti.com/credential" //nolint:gosec // not a credential, just a label name
+	// CredentialSecretValue is the required value for credential secrets
+	CredentialSecretValue = "true"
 )
 
-// generateCredentialEnvVar generates an environment variable name for credentials
-// following the pattern KAGENTAI_{MCP_NAME}_CRED (note: KAGENTAI with AI at the end)
+// generates credential env var name: KAGENTAI_{MCP_NAME}_CRED
 func generateCredentialEnvVar(mcpServerName string) string {
 	// convert to uppercase and replace hyphens with underscores
 	// e.g., "weather-service" -> "WEATHER_SERVICE"
@@ -52,7 +63,8 @@ type ServerInfo struct {
 // MCPReconciler reconciles both MCPServer and MCPVirtualServer resources
 type MCPReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	APIReader client.Reader // uncached reader for fetching secrets
 }
 
 // +kubebuilder:rbac:groups=mcp.kagenti.com,resources=mcpservers,verbs=get;list;watch;create;update;patch;delete
@@ -109,9 +121,25 @@ func (r *MCPReconciler) reconcileMCPServer(
 	log := log.FromContext(ctx)
 	log.Info("Reconciling MCPServer", "name", mcpServer.Name, "namespace", mcpServer.Namespace)
 
+	// validate credential secret if configured
+	if mcpServer.Spec.CredentialRef != nil {
+		if err := r.validateCredentialSecret(ctx, mcpServer); err != nil {
+			log.Error(err, "Credential validation failed")
+			// still regenerate config to ensure other servers work
+			if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
+				log.Error(configErr, "Failed to regenerate config after credential validation error")
+			}
+			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err), 0)
+		}
+	}
+
 	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
 	if err != nil {
 		log.Error(err, "Failed to discover servers from HTTPRoutes")
+		// still regenerate config to ensure credentials are aggregated
+		if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
+			log.Error(configErr, "Failed to regenerate config after discovery error")
+		}
 		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error(), 0)
 	}
 
@@ -743,6 +771,15 @@ func (r *MCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForHTTPRoute),
+		).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForSecret),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				// only watch secrets with the credential label
+				secret := obj.(*corev1.Secret)
+				return secret.Labels != nil && secret.Labels[CredentialSecretLabel] == CredentialSecretValue
+			})),
 		)
 
 	// Perform startup reconciliation to ensure config exists even with zero MCPServers
@@ -781,6 +818,73 @@ func (r *MCPReconciler) findMCPServersForHTTPRoute(ctx context.Context, obj clie
 	return requests
 }
 
+// validates credential secret has required label
+func (r *MCPReconciler) validateCredentialSecret(ctx context.Context, mcpServer *mcpv1alpha1.MCPServer) error {
+	if mcpServer.Spec.CredentialRef == nil {
+		return nil // no credentials to validate
+	}
+
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      mcpServer.Spec.CredentialRef.Name,
+		Namespace: mcpServer.Namespace,
+	}, secret)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("credential secret %s not found", mcpServer.Spec.CredentialRef.Name)
+		}
+		return fmt.Errorf("failed to get credential secret: %w", err)
+	}
+
+	// check for required label
+	if secret.Labels == nil || secret.Labels[CredentialSecretLabel] != CredentialSecretValue {
+		return fmt.Errorf("credential secret %s is missing required label %s=%s",
+			mcpServer.Spec.CredentialRef.Name, CredentialSecretLabel, CredentialSecretValue)
+	}
+
+	// validate key exists
+	key := mcpServer.Spec.CredentialRef.Key
+	if key == "" {
+		key = "token" // default
+	}
+	if _, exists := secret.Data[key]; !exists {
+		return fmt.Errorf("credential secret %s is missing key %s",
+			mcpServer.Spec.CredentialRef.Name, key)
+	}
+
+	return nil
+}
+
+// finds mcpservers referencing the given secret
+func (r *MCPReconciler) findMCPServersForSecret(ctx context.Context, obj client.Object) []reconcile.Request {
+	secret := obj.(*corev1.Secret)
+	log := log.FromContext(ctx).WithValues("Secret", secret.Name, "namespace", secret.Namespace)
+
+	// list mcpservers in same namespace
+	mcpServerList := &mcpv1alpha1.MCPServerList{}
+	if err := r.List(ctx, mcpServerList, client.InNamespace(secret.Namespace)); err != nil {
+		log.Error(err, "Failed to list MCPServers")
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, mcpServer := range mcpServerList.Items {
+		// check if references this secret
+		if mcpServer.Spec.CredentialRef != nil && mcpServer.Spec.CredentialRef.Name == secret.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      mcpServer.Name,
+					Namespace: mcpServer.Namespace,
+				},
+			})
+		}
+	}
+
+	// mcpvirtualservers don't have credentials
+
+	return requests
+}
+
 // startupReconciler ensures initial configuration is written even with zero MCPServers
 type startupReconciler struct {
 	reconciler *MCPReconciler
@@ -813,12 +917,27 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 			continue // skip if no credentials configured
 		}
 
-		// fetch the referenced secret
+		// fetch the referenced secret - use APIReader to bypass cache for credentials
+		// this ensures we always get the latest credential values when secrets change
 		secret := &corev1.Secret{}
-		err := r.Get(ctx, types.NamespacedName{
-			Name:      mcpServer.Spec.CredentialRef.Name,
-			Namespace: mcpServer.Namespace,
-		}, secret)
+		var err error
+		if r.APIReader != nil {
+			log.V(1).Info("Using APIReader to bypass cache for credential secret read",
+				"mcpserver", mcpServer.Name,
+				"secret", mcpServer.Spec.CredentialRef.Name)
+			err = r.APIReader.Get(ctx, types.NamespacedName{
+				Name:      mcpServer.Spec.CredentialRef.Name,
+				Namespace: mcpServer.Namespace,
+			}, secret)
+		} else {
+			log.Info("WARNING: APIReader is nil, using cached client for credential secret read",
+				"mcpserver", mcpServer.Name,
+				"secret", mcpServer.Spec.CredentialRef.Name)
+			err = r.Get(ctx, types.NamespacedName{
+				Name:      mcpServer.Spec.CredentialRef.Name,
+				Namespace: mcpServer.Namespace,
+			}, secret)
+		}
 		if err != nil {
 			if errors.IsNotFound(err) {
 				log.Error(err, "Referenced secret not found",
@@ -827,6 +946,15 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 				continue // skip this one but continue with others
 			}
 			return fmt.Errorf("failed to get secret %s: %w", mcpServer.Spec.CredentialRef.Name, err)
+		}
+
+		// validate label
+		if secret.Labels == nil || secret.Labels[CredentialSecretLabel] != CredentialSecretValue {
+			log.Error(nil, "Credential secret missing required label",
+				"mcpserver", mcpServer.Name,
+				"secret", mcpServer.Spec.CredentialRef.Name,
+				"requiredLabel", fmt.Sprintf("%s=%s", CredentialSecretLabel, CredentialSecretValue))
+			continue // skip this one but continue with others
 		}
 
 		// determine which key to use
@@ -857,6 +985,7 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 			Labels: map[string]string{
 				"app":                        "mcp-gateway",
 				"mcp.kagenti.com/aggregated": "true",
+				SecretManagedByLabel:         SecretManagedByValue,
 			},
 		},
 		Data: aggregatedData,
@@ -881,6 +1010,25 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 			return fmt.Errorf("failed to get aggregated secret: %w", err)
 		}
 	} else {
+		// check if update is needed by comparing data
+		dataChanged := false
+		if len(existing.Data) != len(aggregatedData) {
+			dataChanged = true
+		} else {
+			for key, newValue := range aggregatedData {
+				if existingValue, exists := existing.Data[key]; !exists || string(existingValue) != string(newValue) {
+					dataChanged = true
+					break
+				}
+			}
+		}
+
+		if !dataChanged {
+			log.V(1).Info("Aggregated credentials unchanged, skipping update",
+				"credentialCount", len(aggregatedData))
+			return nil
+		}
+
 		// update existing secret
 		existing.Data = aggregatedData
 		if err := r.Update(ctx, existing); err != nil {

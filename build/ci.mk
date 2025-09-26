@@ -2,8 +2,27 @@
 
 # CI setup - lighter weight than local-env-setup, assumes Kind is already created
 .PHONY: ci-setup
-ci-setup: ## Setup environment for CI (assumes Kind cluster exists)
+ci-setup: ## Setup environment for CI (creates Kind cluster if needed)
 	@echo "Setting up CI environment..."
+	# Create Kind cluster if it doesn't exist
+	@if ! kind get clusters | grep -q mcp-gateway; then \
+		echo "Creating Kind cluster..."; \
+		kind create cluster --name mcp-gateway --config - <<EOF; \
+kind: Cluster \
+apiVersion: kind.x-k8s.io/v1alpha4 \
+nodes: \
+- role: control-plane \
+  extraPortMappings: \
+  - containerPort: 8080 \
+    hostPort: 8080 \
+    protocol: TCP \
+  - containerPort: 8443 \
+    hostPort: 8443 \
+    protocol: TCP \
+EOF \
+	else \
+		echo "Kind cluster 'mcp-gateway' already exists"; \
+	fi
 	# Install Gateway API CRDs
 	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
 	$(KUBECTL) wait --for condition=Established --timeout=60s crd/gateways.gateway.networking.k8s.io
@@ -19,9 +38,13 @@ ci-setup: ## Setup environment for CI (assumes Kind cluster exists)
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-broker-router -n mcp-system
 	# Deploy test servers
 	$(MAKE) deploy-test-servers
+	# Wait for all test server deployments to be available
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-server1 -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-server2 -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-server3 -n mcp-test
+	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-api-key-server -n mcp-test
+	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-broken-server -n mcp-test
+	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-custom-path-server -n mcp-test
 
 # Collect debug info on failure
 .PHONY: ci-debug-logs

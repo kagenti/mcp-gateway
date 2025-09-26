@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"slices"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/pkg/credentials"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -197,10 +197,39 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 	ctx context.Context,
 	mcpServer *config.MCPServer,
 ) error {
-	if m.IsRegistered(mcpServer.URL) {
-		m.logger.Info("mcp server is already registered", "mcpURL", mcpServer.URL)
-		return nil
+	existingUpstream, isRegistered := m.mcpServers[upstreamMCPURL(mcpServer.URL)]
+
+	// check if configuration changed for already registered server
+	if isRegistered {
+		configChanged := existingUpstream.Name != mcpServer.Name ||
+			existingUpstream.ToolPrefix != mcpServer.ToolPrefix ||
+			existingUpstream.Hostname != mcpServer.Hostname ||
+			existingUpstream.CredentialEnvVar != mcpServer.CredentialEnvVar
+
+		// also check if credential VALUE changed (not just env var name)
+		credentialValueChanged := false
+		if mcpServer.CredentialEnvVar != "" {
+			oldCred := credentials.Get(existingUpstream.CredentialEnvVar)
+			newCred := credentials.Get(mcpServer.CredentialEnvVar)
+			credentialValueChanged = oldCred != newCred
+		}
+
+		if !configChanged && !credentialValueChanged {
+			m.logger.Info("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
+			return nil
+		}
+
+		// config or credentials changed, unregister and re-register
+		m.logger.Info("mcp server config or credentials changed, re-registering",
+			"mcpURL", mcpServer.URL,
+			"configChanged", configChanged,
+			"credentialValueChanged", credentialValueChanged)
+
+		if err := m.UnregisterServer(ctx, mcpServer.URL); err != nil {
+			m.logger.Warn("failed to unregister before re-registration", "error", err)
+		}
 	}
+
 	slog.Info("Registering server", "mcpURL", mcpServer.URL, "prefix", mcpServer.ToolPrefix)
 
 	upstream := &upstreamMCP{
@@ -628,12 +657,16 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string
 func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
 	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
 	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
+	var credName string
 	if upstream.CredentialEnvVar != "" {
-		return os.Getenv(upstream.CredentialEnvVar)
+		credName = upstream.CredentialEnvVar
+	} else {
+		// The format is KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
+		// e.g. KAGENTAI_test_CRED="Bearer 1234"
+		credName = fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name)
 	}
-	// The format is KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
-	// e.g. KAGENTAI_test_CRED="Bearer 1234"
-	return os.Getenv(fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name))
+
+	return credentials.Get(credName)
 }
 
 // prefixedName returns the name the gateway will advertise the tool as
