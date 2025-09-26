@@ -9,38 +9,59 @@ spec:
     kind: Gateway
     name: mcp-gateway
     sectionName: mcps
-  defaults:
-    rules:
-      metadata:
-        rbac: #fetches hard coded acl currrently
-          http:
-            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers[":authority"]'
-      authentication: #validates the token
-        'keycloak':
-          jwt:
-            issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
-      authorization: #authorizes the tool call
-        'allow-tool-call':
-          patternMatching:
-            patterns:
-              - predicate: auth.identity.groups.exists(g, request.headers['x-mcp-toolname'] in auth.metadata.rbac.access[g])
-      response: #duplicated content may be able to solve
-        unauthorized:
-          code: 403
-          body:
-            value: |
-              {
-                "error": "Forbidden", 
-                "message": "MCP Tool Access denied. Insufficient permissions for this tool."
-              }
-        unauthenticated:
-          code: 401
+  rules:
+    authentication: #validates the token
+      'keycloak':
+        jwt:
+          issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+    metadata:
+      token-exchange:
+        http:
+          url: http://keycloak.keycloak.svc.cluster.local/realms/mcp/protocol/openid-connect/token # FIXME: this will make the token exchange request fail with 'Invalid Token' due to unmatching Keycloak hostname compared to what's in the `iss` claim of the subject token
+          method: POST
           headers:
-            'WWW-Authenticate':
-              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
-          body:
-            value: |
-              {
-                "error": "Forbidden",
-                "message": "MCP Tool Access denied. Unauthenticated."
-              }
+            Authorization:
+              value: 'Basic YXV0aG9yaW5vOnNlY3JldA==' # authorino:secret
+          bodyParameters:
+            grant_type:
+              value: urn:ietf:params:oauth:grant-type:token-exchange
+            subject_token:
+              expression: request.headers['authorization'].split('Bearer ')[1] # remove "Bearer "
+            subject_token_type:
+              value: urn:ietf:params:oauth:token-type:access_token
+            audience:
+              expression: request.host
+            scope:
+              value: openid
+    authorization:
+      'allow-tool-access':
+        patternMatching:
+          patterns:
+            - predicate: |
+                request.headers['x-mcp-toolname'] in (has(auth.identity.resource_access) && auth.identity.resource_access.exists(p, p == request.host) ? auth.identity.resource_access[request.host].roles : [])
+    response:
+      success:
+        headers:
+          authorization:
+            plain:
+              expression: |
+                "Bearer " + (auth.metadata.exists(m, m == "token-exchange") && auth.metadata["token-exchange"].exists(k, k == "access_token") ? auth.metadata["token-exchange"]["access_token"] : request.headers["authorization"].split("Bearer ")[1])
+      unauthenticated:
+        code: 401
+        headers:
+          'WWW-Authenticate':
+            value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+        body:
+          value: |
+            {
+              "error": "Forbidden",
+              "message": "MCP Tool Access denied. Unauthenticated."
+            }
+      unauthorized:
+        code: 403
+        body:
+          value: |
+            {
+              "error": "Forbidden",
+              "message": "MCP Tool Access denied. Insufficient permissions for this tool."
+            }

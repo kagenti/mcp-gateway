@@ -67,7 +67,6 @@ keycloak-status-impl:
 		echo "  Valid Redirect URIs: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/*"; \
 		echo "  Web Origins: +"; \
 		echo ""; \
-		echo "Note: Create the test client manually in the Keycloak admin console"; \
 		echo "========================================"; \
 	else \
 		echo "Keycloak is not installed. Run: make keycloak-install"; \
@@ -81,14 +80,3 @@ keycloak-url: # Get Keycloak URLs
 	@echo ""
 	@echo "To access: make keycloak-forward"
 	@echo "Credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
-
-.PHONY: keycloak-create-client
-keycloak-create-client: # Create a test OIDC client for MCP
-	@echo "Creating test client in Keycloak..."
-	@echo "First, port-forward Keycloak and login to admin console"
-	@echo "Then create a client with:"
-	@echo "  - Client ID: mcp-gateway"
-	@echo "  - Client Protocol: openid-connect"
-	@echo "  - Root URL: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
-	@echo "  - Valid Redirect URIs: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/*"
-	@echo "  - Web Origins: +"
