@@ -999,11 +999,17 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 		secret := &corev1.Secret{}
 		var err error
 		if r.APIReader != nil {
+			log.V(1).Info("Using APIReader to bypass cache for credential secret read",
+				"mcpserver", mcpServer.Name,
+				"secret", mcpServer.Spec.CredentialRef.Name)
 			err = r.APIReader.Get(ctx, types.NamespacedName{
 				Name:      mcpServer.Spec.CredentialRef.Name,
 				Namespace: mcpServer.Namespace,
 			}, secret)
 		} else {
+			log.Info("WARNING: APIReader is nil, using cached client for credential secret read",
+				"mcpserver", mcpServer.Name,
+				"secret", mcpServer.Spec.CredentialRef.Name)
 			err = r.Get(ctx, types.NamespacedName{
 				Name:      mcpServer.Spec.CredentialRef.Name,
 				Namespace: mcpServer.Namespace,

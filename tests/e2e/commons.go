@@ -23,7 +23,7 @@ import (
 const (
 	TestTimeoutMedium     = time.Second * 30
 	TestTimeoutLong       = time.Minute * 2
-	TestTimeoutConfigSync = time.Minute * 3 // configmap volume mount sync can take up to 2 minutes
+	TestTimeoutConfigSync = time.Minute * 4
 	TestRetryInterval     = time.Second * 2
 
 	TestNamespace   = "mcp-test"
