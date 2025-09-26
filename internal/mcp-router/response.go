@@ -57,16 +57,6 @@ func (s *ExtProcServer) HandleResponseHeaders(
 	}
 
 
-	// Look for mcp-session-id header that needs reverse mapping (reusing variable from above)
-	if mcpSessionID == "" {
-		for _, header := range headers.Headers.Headers {
-			if strings.ToLower(header.Key) == "mcp-session-id" {
-				mcpSessionID = string(header.RawValue)
-				break
-			}
-		}
-	}
-
 	if mcpSessionID == "" {
 		slog.Info("[EXT-PROC] No mcp-session-id in response headers")
 		return []*eppb.ProcessingResponse{
