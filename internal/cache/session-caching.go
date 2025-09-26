@@ -51,8 +51,19 @@ func (c *Cache) GetOrInit(ctx context.Context, serverName string, authority stri
 	return sessionID, nil
 }
 
-// Invalidate removes the session from the cache for the given server and gateway session.
-func (c *Cache) Invalidate(serverName string, gwSessionID string) {
-	k := key{serverName: serverName, gw: gwSessionID}
-	c.sessions.Delete(k)
+// InvalidateByMCPSessionID removes the session entry that contains the given MCP session ID
+func (c *Cache) InvalidateByMCPSessionID(mcpSessionID string) {
+	var keyToDelete *key
+	c.sessions.Range(func(k, v interface{}) bool {
+		if v.(string) == mcpSessionID {
+			key := k.(key)
+			keyToDelete = &key
+			return false // stop iteration
+		}
+		return true // continue iteration
+	})
+
+	if keyToDelete != nil {
+		c.sessions.Delete(*keyToDelete)
+	}
 }

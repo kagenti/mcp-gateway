@@ -53,8 +53,8 @@ func TestCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "upstreamID1A", upstreamID)
 
-	// Verify we can invalidate
-	cache.Invalidate("serverA", "downstreamID1A")
+	// Verify we can invalidate by MCP session ID
+	cache.InvalidateByMCPSessionID("upstreamID1A")
 
 	// Verify we can re-register
 	upstreamID, err = cache.GetOrInit(ctx, "serverA", "", "downstreamIDUnk")
