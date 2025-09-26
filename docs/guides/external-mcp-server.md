@@ -205,7 +205,32 @@ spec:
 EOF
 ```
 
-## Step 6: Create the MCPServer Resource
+## Step 6: Create Secret with Authentication
+
+Create a secret containing your GitHub PAT token with the Bearer prefix. The required label enables the controller to watch for credential changes:
+
+```bash
+# Create the secret with Bearer prefix and required label
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-token
+  namespace: mcp-test
+  labels:
+    mcp.kagenti.com/credential: "true"  # Required label for credential secrets
+type: Opaque
+stringData:
+  token: "Bearer $GITHUB_PAT"
+EOF
+```
+
+**Important:** The `mcp.kagenti.com/credential=true` label is **required** for all credential secrets. Without this label:
+- The secret will not be watched for changes
+- The MCPServer will fail validation with an error in its status
+- Automatic credential updates will not work
+
+## Step 7: Create the MCPServer Resource
 
 Create the `MCPServer` resource that registers the GitHub MCP server with the gateway:
 
@@ -228,16 +253,21 @@ spec:
 EOF
 ```
 
-## Step 7: Create Secret with Authentication
+## Step 8: Wait for Configuration Sync
 
-Create a secret containing your GitHub PAT token with the Bearer prefix:
+Wait for the configuration to sync to the broker (this typically takes 10-15 seconds with volume-mounted credentials):
 
 ```bash
-# Create the secret with Bearer prefix
-kubectl create secret generic github-token \
-  --namespace=mcp-test \
-  --from-literal=token="Bearer $GITHUB_PAT"
+# Wait for GitHub tools to be discovered
+echo "Waiting for GitHub tools to be discovered..."
+until kubectl logs -n mcp-system deploy/mcp-broker-router --tail=100 | grep -q "Discovered.*github.*94"; do
+  echo "Still waiting..."
+  sleep 5
+done
+echo "GitHub tools discovered!"
 ```
+
+**Note:** With labeled secrets and volume mounts, credentials update automatically without pod restarts.
 
 ## Verification
 
