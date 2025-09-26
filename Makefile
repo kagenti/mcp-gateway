@@ -378,7 +378,7 @@ istioctl: ## Download and install istioctl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development
-	@echo "Installing Keycloak - using official image with H2 database"
+	@echo "Installing Keycloak - using official image with dev-file database"
 	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
 
 .PHONY: keycloak-forward
@@ -396,10 +396,7 @@ oauth-example-setup: ## Complete OAuth example setup (requires: make local-env-s
 	@echo "========================================="
 	@echo "Prerequisites: make local-env-setup should be completed"
 	@echo ""
-	@echo "Step 1: Setting up Keycloak realm..."
-	@$(MAKE) -s -f build/keycloak.mk keycloak-setup-mcp-realm
-	@echo ""
-	@echo "Step 2: Configuring mcp-broker with OAuth environment variables..."
+	@echo "Configuring mcp-broker with OAuth environment variables..."
 	@kubectl set env deployment/mcp-broker-router \
 		OAUTH_RESOURCE_NAME="MCP Server" \
 		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
