@@ -32,14 +32,30 @@ func (s *ExtProcServer) HandleResponseHeaders(
 		}, nil
 	}
 
-	// Look for mcp-session-id header that needs reverse mapping
+	// Check for HTTP 404 status indicating invalid session
+	var httpStatus string
 	var mcpSessionID string
 	for _, header := range headers.Headers.Headers {
+		if header.Key == ":status" {
+			httpStatus = string(header.RawValue)
+		}
 		if strings.ToLower(header.Key) == "mcp-session-id" {
 			mcpSessionID = string(header.RawValue)
-			break
 		}
 	}
+
+	// Handle 404 responses from MCP servers
+	if httpStatus == "404" {
+		slog.Info("[EXT-PROC] Detected HTTP 404 from MCP server, invalidating router cache",
+			"sessionID", mcpSessionID)
+
+		if s.SessionCache != nil && mcpSessionID != "" {
+			s.SessionCache.InvalidateByMCPSessionID(mcpSessionID)
+			slog.Info("[EXT-PROC] Router cache invalidated for invalid MCP session",
+				"invalidMcpSession", mcpSessionID)
+		}
+	}
+
 
 	if mcpSessionID == "" {
 		slog.Info("[EXT-PROC] No mcp-session-id in response headers")
