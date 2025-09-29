@@ -37,11 +37,11 @@ dev-reset: # Reset to in-cluster service configuration
 
 # Port forward to access the gateway locally
 .PHONY: dev-gateway-forward
-dev-gateway-forward: ## Port forward the gateway to localhost:8888
-	@echo "Forwarding gateway to localhost:8888..."
-	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:8888"
-	@echo "Try: curl -H http://mcp.127-0-0-1.sslip.io:8888"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 8889:8081
+dev-gateway-forward: ## Port forward the gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP)
+	@echo "Forwarding gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP)..."
+	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)"
+	@echo "Try: curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)"
+	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP):8080
 
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway
@@ -55,7 +55,7 @@ dev-test: # Test MCP request through the gateway
 	curl -X POST \
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' \
-		http://mcp.127-0-0-1.sslip.io:8888/mcp
+		http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)/mcp
 
 # Clean up port forwards
 .PHONY: dev-stop-forward

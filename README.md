@@ -28,6 +28,10 @@ Also sets up an Istio Gateway API Gateway, and HTTPRoutes for test mcp servers, 
 
 ```bash
 make local-env-setup
+
+# Or with custom ports (defaults: 8080/8443 for Kind, 8888/8889 for Gateway)
+KIND_HOST_PORT_HTTP=8090 KIND_HOST_PORT_HTTPS=8453 make local-env-setup
+GATEWAY_LOCAL_PORT_HTTP=9000 GATEWAY_LOCAL_PORT_HTTPS=9001 make dev-gateway-forward
 ```
 
 Run the mcp-inspector and connect to the gateway (This also port forwards to the gateway)
