@@ -21,6 +21,13 @@ type ConfigUpdateHandler struct {
 
 // NewConfigUpdateHandler creates a new config update handler
 func NewConfigUpdateHandler(cfg *config.MCPServersConfig, authToken string, logger *slog.Logger) *ConfigUpdateHandler {
+	if cfg == nil {
+		panic("cfg cannot be nil")
+	}
+	if logger == nil {
+		panic("logger cannot be nil")
+	}
+
 	return &ConfigUpdateHandler{
 		config:    cfg,
 		authToken: authToken,
