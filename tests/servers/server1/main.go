@@ -8,9 +8,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -156,6 +158,13 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{Name: "time", Description: "get current time"}, timeTool)
 	mcp.AddTool(server, &mcp.Tool{Name: "slow", Description: "delay N seconds"}, slowTool)
 	mcp.AddTool(server, &mcp.Tool{Name: "headers", Description: "get headers"}, headersTool)
+	mcp.AddTool(server, &mcp.Tool{Name: "always_404", Description: "test 404 session invalidation"}, func(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+		return &mcp.CallToolResultFor[struct{}]{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "This should never return"},
+			},
+		}, nil
+	})
 
 	server.AddPrompt(&mcp.Prompt{Name: "greet"}, promptHi)
 
@@ -171,18 +180,20 @@ func main() {
 			return server
 		}, nil)
 
-		// Create a new HTTP handler that records headers
-		handler2 := mcpRecordHeaders{
-			Handler: handler,
+		// Wrap with 404 interceptor for always_404 tool
+		handler2 := &tool404Handler{
+			handler: mcpRecordHeaders{
+				Handler: handler,
+			},
 		}
 
 		log.Printf("MCP handler will listen at %s", *httpAddr)
-		server := &http.Server{
+		httpServer := &http.Server{
 			Addr:              *httpAddr,
 			Handler:           handler2,
 			ReadHeaderTimeout: 3 * time.Second,
 		}
-		_ = server.ListenAndServe()
+		_ = httpServer.ListenAndServe()
 	} else {
 		log.Printf("MCP handler use stdio")
 		t := mcp.NewLoggingTransport(mcp.NewStdioTransport(), os.Stderr)
@@ -251,4 +262,30 @@ func handleEmbeddedResource(
 			{URI: params.URI, MIMEType: "text/plain", Text: text},
 		},
 	}, nil
+}
+
+// tool404Handler intercepts requests for the always_404 tool and returns 404
+type tool404Handler struct {
+	handler http.Handler
+}
+
+func (h *tool404Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		body, err := io.ReadAll(r.Body)
+		if err == nil && bytes.Contains(body, []byte("always_404")) {
+			log.Printf("Intercepting always_404 tool call - returning HTTP 404")
+			r.Body = io.NopCloser(bytes.NewReader(body))
+
+			sessionID := r.Header.Get("mcp-session-id")
+			if sessionID != "" {
+				w.Header().Set("mcp-session-id", sessionID)
+			}
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error": "Tool not found", "code": 404}`))
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+
+	h.handler.ServeHTTP(w, r)
 }

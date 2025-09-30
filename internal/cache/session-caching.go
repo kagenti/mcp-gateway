@@ -54,6 +54,14 @@ func (c *Cache) GetOrInit(ctx context.Context, serverName string, authority stri
 
 // InvalidateByMCPSessionID removes the session entry that contains the given MCP session ID
 func (c *Cache) InvalidateByMCPSessionID(mcpSessionID string) {
+	// Log cache before deletion
+	var beforeCount int
+	c.sessions.Range(func(_, _ interface{}) bool {
+		beforeCount++
+		return true
+	})
+	slog.Debug("Before deletion", "count", beforeCount, "mcpSessionID", mcpSessionID)
+
 	var keyToDelete *key
 	c.sessions.Range(func(k, v interface{}) bool {
 		if v.(string) == mcpSessionID {
@@ -66,11 +74,18 @@ func (c *Cache) InvalidateByMCPSessionID(mcpSessionID string) {
 
 	if keyToDelete != nil {
 		c.sessions.Delete(*keyToDelete)
-		slog.Info("[CACHE] Deleted session from cache",
+
+		// Log cache after deletion
+		var afterCount int
+		c.sessions.Range(func(_, _ interface{}) bool {
+			afterCount++
+			return true
+		})
+		slog.Debug("After deletion", "count", afterCount,
 			"mcpSessionID", mcpSessionID,
 			"serverName", keyToDelete.serverName,
 			"gwSessionID", keyToDelete.gw)
 	} else {
-		slog.Info("[CACHE] Session not found in cache", "mcpSessionID", mcpSessionID)
+		slog.Debug("Session not found in cache", "mcpSessionID", mcpSessionID)
 	}
 }
