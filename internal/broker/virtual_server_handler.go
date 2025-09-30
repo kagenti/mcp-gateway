@@ -21,6 +21,13 @@ type VirtualServerHandler struct {
 
 // NewVirtualServerHandler creates a new virtual server handler
 func NewVirtualServerHandler(mcpHandler http.Handler, config *config.MCPServersConfig, logger *slog.Logger) *VirtualServerHandler {
+	if mcpHandler == nil {
+		panic("mcpHandler cannot be nil")
+	}
+	if config == nil {
+		panic("config cannot be nil")
+	}
+
 	return &VirtualServerHandler{
 		mcpHandler: mcpHandler,
 		config:     config,
@@ -112,12 +119,11 @@ func (h *VirtualServerHandler) handleToolsListWithFiltering(
 	var toolsResponse mcp.JSONRPCResponse
 	if err := json.Unmarshal(responseCapture.body.Bytes(), &toolsResponse); err != nil {
 		h.logger.Error("Failed to parse tools/list response", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusBadGateway)
 		return
 	}
 
-	// Parse the result as ListToolsResult
-	var listToolsResult mcp.ListToolsResult
+	// Re-encode (so that we may re-parse)
 	resultBytes, err := json.Marshal(toolsResponse.Result)
 	if err != nil {
 		h.logger.Error("Failed to marshal tools result", "error", err)
@@ -125,9 +131,11 @@ func (h *VirtualServerHandler) handleToolsListWithFiltering(
 		return
 	}
 
+	// Parse the result as ListToolsResult
+	var listToolsResult mcp.ListToolsResult
 	if err := json.Unmarshal(resultBytes, &listToolsResult); err != nil {
 		h.logger.Error("Failed to unmarshal tools result", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusBadGateway)
 		return
 	}
 
