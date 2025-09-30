@@ -4,6 +4,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -65,5 +66,11 @@ func (c *Cache) InvalidateByMCPSessionID(mcpSessionID string) {
 
 	if keyToDelete != nil {
 		c.sessions.Delete(*keyToDelete)
+		slog.Info("[CACHE] Deleted session from cache",
+			"mcpSessionID", mcpSessionID,
+			"serverName", keyToDelete.serverName,
+			"gwSessionID", keyToDelete.gw)
+	} else {
+		slog.Info("[CACHE] Session not found in cache", "mcpSessionID", mcpSessionID)
 	}
 }

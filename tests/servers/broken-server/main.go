@@ -8,8 +8,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -27,7 +29,7 @@ var httpAddr = flag.String(
 var simulateFailure = flag.String(
 	"failure-mode",
 	"protocol",
-	"type of failure to simulate: protocol, no-tools, tool-conflicts",
+	"type of failure to simulate: protocol, no-tools, tool-conflicts, 404-tool",
 )
 
 func main() {
@@ -49,6 +51,10 @@ func main() {
 	case "tool-conflicts":
 		log.Printf("Simulating server with conflicting tool names...")
 		createServerWithConflictingTools()
+
+	case "404-tool":
+		log.Printf("Simulating server with tool that always returns 404...")
+		createServerWith404Tool()
 
 	default: // "protocol"
 		log.Printf("Simulating server with wrong protocol version...")
@@ -197,4 +203,79 @@ func createServerWithConflictingTools() {
 	} else {
 		log.Printf("Conflicting tools server using stdio - not supported in this version")
 	}
+}
+
+func createServerWith404Tool() {
+	// Create a normal MCP server but with a tool that always returns 404 via HTTP handler
+	server := mcp.NewServer(&mcp.Implementation{Name: "404-tool-test-server", Version: "1.0.0"}, nil)
+
+	// Add a tool that appears normal but we'll intercept its HTTP responses
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "always_404",
+		Description: "A tool that always returns HTTP 404 to test router detection",
+	}, func(_ context.Context, _ *mcp.ServerSession, _ *mcp.CallToolParamsFor[struct{}]) (*mcp.CallToolResultFor[struct{}], error) {
+		return &mcp.CallToolResultFor[struct{}]{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "This tool should never return successfully due to 404 intercept"},
+			},
+		}, nil
+	})
+
+	if *httpAddr != "" {
+		log.Printf("404-tool server will listen at %s", *httpAddr)
+
+		// Create the MCP handler
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+			return server
+		}, nil)
+
+		// Wrap with 404 interceptor for specific tool calls
+		handler := &tool404Handler{
+			handler: mcpHandler,
+		}
+
+		httpServer := &http.Server{
+			Addr:              *httpAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: 3 * time.Second,
+		}
+
+		if err := httpServer.ListenAndServe(); err != nil {
+			log.Printf("HTTP server error: %v", err)
+		}
+	} else {
+		log.Printf("404-tool server using stdio - not supported in this version")
+	}
+}
+
+// tool404Handler intercepts requests for the always_404 tool and returns 404
+type tool404Handler struct {
+	handler http.Handler
+}
+
+func (h *tool404Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Check if this is a tool call for our 404 tool
+	if r.Method == "POST" {
+		// Read the body to check if it's calling the always_404 tool
+		body, err := io.ReadAll(r.Body)
+		if err == nil && bytes.Contains(body, []byte("always_404")) {
+			log.Printf("Intercepting always_404 tool call - returning HTTP 404")
+			// Restore the body for potential logging
+			r.Body = io.NopCloser(bytes.NewReader(body))
+
+			// Return HTTP 404 with session ID header if present
+			sessionID := r.Header.Get("mcp-session-id")
+			if sessionID != "" {
+				w.Header().Set("mcp-session-id", sessionID)
+			}
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error": "Tool not found", "code": 404}`))
+			return
+		}
+		// Restore the body for normal processing
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+
+	// For all other requests, pass through normally
+	h.handler.ServeHTTP(w, r)
 }
