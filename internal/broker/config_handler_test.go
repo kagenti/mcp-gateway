@@ -44,7 +44,7 @@ func TestConfigUpdateHandlerNoAuth(t *testing.T) {
 	res := w.Result()
 	require.Equal(t, 200, res.StatusCode)
 
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint: errcheck
 	data, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	m := make(map[string]interface{})
@@ -64,7 +64,7 @@ func TestConfigUpdateHandlerAuth(t *testing.T) {
 	res := w.Result()
 	require.Equal(t, 401, res.StatusCode)
 
-	defer res.Body.Close()
+	defer res.Body.Close() //nolint: errcheck
 	data, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 	require.Equal(t, "Unauthorized\n", string(data))
