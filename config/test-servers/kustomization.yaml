@@ -22,9 +22,5 @@ resources:
   - api-key-server-httproute.yaml
   - api-key-server-httproute-ext.yaml
   - api-key-server-secret.yaml
-  - broken-server-deployment.yaml
-  - broken-server-service.yaml
-  - broken-server-httproute.yaml
-  - broken-server-httproute-ext.yaml
   - custom-path-server-deployment.yaml
   - custom-path-server-httproute.yaml

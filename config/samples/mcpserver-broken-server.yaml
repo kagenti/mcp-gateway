@@ -1,0 +1,24 @@
+# Separate deployment of the broken-server, if needed for testing
+# Not deployed by default
+
+# Deploy with:
+
+# kubectl apply -f config/samples/mcpserver-broken-server.yaml
+# kubectl apply -f config/test-servers/broken-server-deployment.yaml
+# kubectl apply -f config/test-servers/broken-server-service.yaml
+# kubectl apply -f config/test-servers/broken-server-httproute.yaml
+# kubectl apply -f config/test-servers/broken-server-httproute-ext.yaml
+
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-broken-server
+  namespace: mcp-test
+  labels:
+    "kagenti/mcp": "true"
+spec:
+  toolPrefix: broke_
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-broken-server-route
