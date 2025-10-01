@@ -9,7 +9,7 @@ import (
 const (
 	mcpServerNameHeader = "x-mcp-servername"
 	toolHeader          = "x-mcp-toolname"
-	methodHeader        = "x-mcp-method" // internally used only
+	methodHeader        = "x-mcp-method"
 	sessionHeader       = "mcp-session-id"
 	authorityHeader     = ":authority"
 	authorizationHeader = "authorization"

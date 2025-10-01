@@ -29,6 +29,7 @@ func TestMCPRequestValid(t *testing.T) {
 				JSONRPC: "2.0",
 				Method:  "initialize",
 				Params:  map[string]any{},
+				ID:      2,
 			},
 			ExpectErr: nil,
 		},
@@ -46,6 +47,15 @@ func TestMCPRequestValid(t *testing.T) {
 			Input: &MCPRequest{
 				JSONRPC: "2.0",
 				Method:  "",
+				Params:  map[string]any{},
+			},
+			ExpectErr: ErrInvalidRequest,
+		},
+		{
+			Name: "test with missing id ",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "tools/call",
 				Params:  map[string]any{},
 			},
 			ExpectErr: ErrInvalidRequest,
