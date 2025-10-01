@@ -60,7 +60,6 @@ func (p *ConfigPusher) PushConfig(ctx context.Context, servers []*config.MCPServ
 	}
 
 	// get endpoints for the config service
-	// using endpoints api (simpler than endpointslice for our needs)
 	endpoints := &corev1.Endpoints{} //nolint:staticcheck
 	err = p.k8sClient.Get(ctx, client.ObjectKey{
 		Namespace: p.namespace,
