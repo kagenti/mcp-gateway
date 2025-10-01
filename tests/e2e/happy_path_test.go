@@ -72,14 +72,6 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 	It("should aggregate MCP servers and manage HTTPRoute conditions", func() {
 		By("Creating HTTPRoutes")
-		// Clean up any existing resources first
-		_ = k8sClient.Delete(ctx, httpRoute1)
-		_ = k8sClient.Delete(ctx, httpRoute2)
-		_ = k8sClient.Delete(ctx, mcpServer1)
-		_ = k8sClient.Delete(ctx, mcpServer2)
-		// Wait a moment for deletion to process
-		time.Sleep(2 * time.Second)
-
 		Expect(k8sClient.Create(ctx, httpRoute1)).To(Succeed())
 		Expect(k8sClient.Create(ctx, httpRoute2)).To(Succeed())
 
@@ -408,8 +400,6 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		By("Creating HTTPRoute for api-key-server")
 		httpRouteApiKey := BuildTestHTTPRoute("e2e-apikey-route", TestNamespace,
 			"apikey.mcp.example.com", "mcp-api-key-server", 9090)
-		_ = k8sClient.Delete(ctx, httpRouteApiKey)
-		time.Sleep(2 * time.Second)
 		Expect(k8sClient.Create(ctx, httpRouteApiKey)).To(Succeed())
 		defer CleanupResource(ctx, k8sClient, httpRouteApiKey)
 
@@ -427,8 +417,6 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 				"token": "Bearer test-api-key-secret-token", // valid token
 			},
 		}
-		_ = k8sClient.Delete(ctx, credentialSecret)
-		time.Sleep(2 * time.Second)
 		Expect(k8sClient.Create(ctx, credentialSecret)).To(Succeed())
 		defer CleanupResource(ctx, k8sClient, credentialSecret)
 
@@ -468,8 +456,6 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 				},
 			},
 		}
-		_ = k8sClient.Delete(ctx, mcpServerApiKey)
-		time.Sleep(2 * time.Second)
 		Expect(k8sClient.Create(ctx, mcpServerApiKey)).To(Succeed())
 		defer CleanupResource(ctx, k8sClient, mcpServerApiKey)
 
@@ -531,24 +517,12 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		By("Verifying server is registered with valid credentials")
 		// Initial registration may need to wait for volume mount sync
-		// Periodically trigger config reloads to prompt registration once credentials are available
+		// check if server is registered and reachable
 		Eventually(func() bool {
-			// trigger config reload to prompt re-registration
-			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
-			if mcpServerApiKey.Annotations == nil {
-				mcpServerApiKey.Annotations = make(map[string]string)
-			}
-			mcpServerApiKey.Annotations["reconcile-initial"] = fmt.Sprintf("%d", time.Now().Unix())
-			_ = k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch)
-
-			// wait a moment for config push
-			time.Sleep(2 * time.Second)
-
-			// check if server is registered and reachable
 			// Look for the actual service name: mcp-api-key-server
 			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
 			return err == nil && reachable
-		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
+		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
 			"Server should be registered and reachable with valid credentials after volume mount sync")
 
 		By("Updating credential to invalid value")
@@ -561,29 +535,15 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		By("Waiting for volume mount to sync credential change")
 		// Volume mounts can take 60-120s to sync in Kubernetes
-		// We'll wait and periodically trigger config reloads until the broker detects the change
+		// check if server became unreachable (indicating credential change was detected)
 		Eventually(func() bool {
-			// trigger config reload by annotating mcpserver
-			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
-			if mcpServerApiKey.Annotations == nil {
-				mcpServerApiKey.Annotations = make(map[string]string)
-			}
-			mcpServerApiKey.Annotations["reconcile"] = fmt.Sprintf("%d", time.Now().Unix())
-			if err := k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch); err != nil {
-				return false
-			}
-
-			// wait a moment for the config push to process
-			time.Sleep(2 * time.Second)
-
-			// check if server became unreachable (indicating credential change was detected)
 			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", false)
 			if err != nil {
 				// server might be completely removed from status
 				return true
 			}
 			return !reachable
-		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
+		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
 			"Broker should detect credential change after volume mount syncs")
 
 		By("Verifying server becomes unreachable with invalid credentials")
@@ -605,20 +565,8 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 		Expect(k8sClient.Patch(ctx, credentialSecret, patch)).To(Succeed())
 
 		By("Waiting for volume mount to sync valid credential and broker to re-register")
-		// Periodically trigger config reloads until the broker detects the valid credential
+		// wait for broker to detect the valid credential and reconnect
 		Eventually(func() bool {
-			// trigger config reload
-			mcpServerPatch := client.MergeFrom(mcpServerApiKey.DeepCopy())
-			if mcpServerApiKey.Annotations == nil {
-				mcpServerApiKey.Annotations = make(map[string]string)
-			}
-			mcpServerApiKey.Annotations["reconcile"] = fmt.Sprintf("%d", time.Now().Unix())
-			if err := k8sClient.Patch(ctx, mcpServerApiKey, mcpServerPatch); err != nil {
-				return false
-			}
-
-			// wait a moment for the config push to process
-			time.Sleep(2 * time.Second)
 
 			// check if server became reachable again
 			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
