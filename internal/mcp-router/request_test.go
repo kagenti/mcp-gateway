@@ -197,9 +197,9 @@ func TestHandleRequestBody(t *testing.T) {
 	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
 	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
 	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.Key)
-	require.Equal(t, []uint8("82"), rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.RawValue)
+	require.Equal(t, []uint8("89"), rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.RawValue)
 
 	require.Equal(t,
-		`{"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
+		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
 		string(rb.RequestBody.Response.BodyMutation.GetBody()))
 }
