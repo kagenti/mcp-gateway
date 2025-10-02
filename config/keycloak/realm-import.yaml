@@ -532,6 +532,12 @@ data:
           ]
         }
       ],
+      "defaultDefaultClientScopes": [
+        "basic",
+        "email",
+        "profile",
+        "roles"
+      ],
       "defaultOptionalClientScopes": [
         "groups"
       ],
