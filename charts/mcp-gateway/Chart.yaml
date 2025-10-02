@@ -1,0 +1,20 @@
+apiVersion: v2
+name: mcp-gateway
+description: A Kubernetes gateway for aggregating and routing Model Context Protocol (MCP) servers
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/kagenti/mcp-gateway
+sources:
+  - https://github.com/kagenti/mcp-gateway
+maintainers:
+  - name: Kagenti Team
+    url: https://github.com/kagenti
+keywords:
+  - mcp
+  - model-context-protocol
+  - gateway
+  - broker
+  - controller
+annotations:
+  category: Infrastructure

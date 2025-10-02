@@ -1,0 +1,112 @@
+name: Verify CRD Sync
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pkg/apis/**'
+      - 'config/crd/**'
+      - 'charts/mcp-gateway/crds/**'
+  push:
+    branches: [main]
+    paths:
+      - 'pkg/apis/**'
+      - 'config/crd/**'
+      - 'charts/mcp-gateway/crds/**'
+  workflow_dispatch:
+
+concurrency:
+  group: crd-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-crd-sync:
+    runs-on: ubuntu-latest
+    name: Verify CRDs are synchronized
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Install controller-gen
+      run: |
+        go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+    - name: Generate CRDs
+      run: |
+        make generate-crds
+
+    - name: Check if Helm CRDs exist
+      run: |
+        if [ ! -d "charts/mcp-gateway/crds" ]; then
+          echo "❌ Helm CRDs directory doesn't exist"
+          echo "Run 'make update-helm-crds' to create and sync CRDs"
+          exit 1
+        fi
+
+    - name: Verify CRDs are in sync
+      run: |
+        echo "Checking if CRDs are synchronized between config/crd/ and charts/mcp-gateway/crds/..."
+        
+        # Check if files exist in both locations
+        for crd_file in config/crd/*.yaml; do
+          filename=$(basename "$crd_file")
+          helm_crd="charts/mcp-gateway/crds/$filename"
+          
+          if [ ! -f "$helm_crd" ]; then
+            echo "❌ Missing CRD in Helm chart: $filename"
+            echo "Run 'make update-helm-crds' to sync CRDs"
+            exit 1
+          fi
+        done
+        
+        # Compare content of CRD files
+        if ! diff -r config/crd/ charts/mcp-gateway/crds/ >/dev/null 2>&1; then
+          echo "❌ CRDs are out of sync!"
+          echo ""
+          echo "Differences found:"
+          diff -r config/crd/ charts/mcp-gateway/crds/ || true
+          echo ""
+          echo "To fix this, run:"
+          echo "  make update-helm-crds"
+          echo ""
+          echo "Or if you want to regenerate from Go types:"
+          echo "  make generate-crds-all"
+          exit 1
+        fi
+        
+        echo "✅ All CRDs are synchronized!"
+
+    - name: Verify Helm chart can be templated
+      run: |
+        # Install Helm
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        
+        # Test that the chart templates correctly with current CRDs
+        helm template test charts/mcp-gateway --debug >/dev/null
+        echo "✅ Helm chart templates successfully with current CRDs"
+
+    - name: Generate sync instructions on failure
+      if: failure()
+      run: |
+        echo "## CRD Synchronization Failed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The CRDs in \`config/crd/\` and \`charts/mcp-gateway/crds/\` are out of sync." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### To fix this issue:" >> $GITHUB_STEP_SUMMARY
+        echo "1. If you modified Go types, run:" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "   make generate-crds-all" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "2. If you only need to sync existing CRDs:" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "   make update-helm-crds" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "3. Commit the updated files and push again" >> $GITHUB_STEP_SUMMARY

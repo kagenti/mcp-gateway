@@ -31,3 +31,11 @@ jobs:
 
       - name: Run lint checks
         run: make lint
+
+      - name: Check CRD synchronization
+        run: |
+          # Install controller-gen if not available
+          go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+          
+          # Check if CRDs are synchronized
+          make check-crd-sync
