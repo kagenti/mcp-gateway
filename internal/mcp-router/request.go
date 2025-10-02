@@ -36,7 +36,7 @@ func (mr *MCPRequest) Validate() (bool, error) {
 		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no method set in json rpc payload"))
 	}
 	if mr.ID == nil {
-		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload."))
+		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload"))
 	}
 
 	return true, nil
