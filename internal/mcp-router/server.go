@@ -81,23 +81,35 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 
 		case *extProcV3.ProcessingRequest_RequestBody:
-			var data map[string]any
-			if len(r.RequestBody.Body) > 0 {
-				if err := json.Unmarshal(r.RequestBody.Body, &data); err != nil {
-					slog.Error(fmt.Sprintf("Error unmarshalling request body: %v", err))
+			var mcpRequest = &MCPRequest{}
+			var responses []*extProcV3.ProcessingResponse
+			if s.requestHeaders == nil || s.requestHeaders.Headers == nil {
+				slog.Error(fmt.Sprintf("Error unmarshalling request body: %v", err))
+				if err := stream.Send(s.doNothing()); err != nil {
+					slog.Error(fmt.Sprintf("Error sending response: %v", err))
+					return err
 				}
 			}
-			if data == nil {
-				for _, response := range s.createEmptyBodyResponse() {
-					slog.Info(fmt.Sprintf("No MCP data found, sending pass-through instructions to Envoy: %+v", response))
-					if err := stream.Send(response); err != nil {
+
+			if len(r.RequestBody.Body) > 0 {
+				if err := json.Unmarshal(r.RequestBody.Body, &mcpRequest); err != nil {
+					slog.Error(fmt.Sprintf("Error unmarshalling request body: %v", err))
+					if err := stream.Send(s.doNothing()); err != nil {
 						slog.Error(fmt.Sprintf("Error sending response: %v", err))
 						return err
 					}
 				}
-				continue
 			}
-			responses, _ := s.HandleRequestBody(stream.Context(), data, s.RoutingConfig)
+			if _, err := mcpRequest.Validate(); err != nil {
+				slog.Error(fmt.Sprintf("Error request is not valid MCPRequest: %v", err))
+				if err := stream.Send(s.doNothing()); err != nil {
+					slog.Error(fmt.Sprintf("Error sending response: %v", err))
+					return err
+				}
+
+			}
+
+			responses = s.HandleMCPRequest(stream.Context(), mcpRequest, s.RoutingConfig)
 			for _, response := range responses {
 				slog.Info(fmt.Sprintf("Sending MCP routing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {

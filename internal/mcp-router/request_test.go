@@ -2,164 +2,144 @@ package mcprouter
 
 import (
 	"context"
+
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/broker"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
-func TestExtractMCPToolName(t *testing.T) {
+func TestMCPRequestValid(t *testing.T) {
 
-	testcases := []struct {
-		input  map[string]any
-		output string
+	testCases := []struct {
+		Name      string
+		Input     *MCPRequest
+		ExpectErr error
 	}{
 		{
-			// No version
-			input:  map[string]any{},
-			output: "",
+			Name: "test with valid request",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "initialize",
+				Params:  map[string]any{},
+				ID:      2,
+			},
+			ExpectErr: nil,
 		},
 		{
-			// Unsupported version
-			input: map[string]any{
-				"jsonrpc": "1.9",
-				"method":  "update",
+			Name: "test with invalid version",
+			Input: &MCPRequest{
+				JSONRPC: "1.0",
+				Method:  "initialize",
+				Params:  map[string]any{},
 			},
-			output: "",
+			ExpectErr: ErrInvalidRequest,
 		},
 		{
-			// Numeric version
-			input: map[string]any{
-				"jsonrpc": 2.0,
-				"method":  "tools/call",
+			Name: "test with invalid method",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "",
+				Params:  map[string]any{},
 			},
-			output: "",
+			ExpectErr: ErrInvalidRequest,
 		},
 		{
-			// No method
-			input: map[string]any{
-				"jsonrpc": "2.0",
+			Name: "test with missing id ",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "tools/call",
+				Params:  map[string]any{},
 			},
-			output: "",
-		},
-		{
-			// Boolean method
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  false,
-			},
-			output: "",
-		},
-		{
-			// non-MCP method
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "update",
-			},
-			output: "",
-		},
-		{
-			// no name param method
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "tools/call",
-			},
-			output: "",
-		},
-		{
-			// invalid params
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "tools/call",
-				"params":  "dummy",
-			},
-			output: "",
-		},
-		{
-			// no name param method
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "tools/call",
-				"params":  map[string]any{},
-			},
-			output: "",
-		},
-		{
-			// invalid name
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "tools/call",
-				"params": map[string]any{
-					"name": 2.0,
-				},
-			},
-			output: "",
-		},
-		{
-			// invalid name
-			input: map[string]any{
-				"jsonrpc": "2.0",
-				"method":  "tools/call",
-				"params": map[string]any{
-					"name": "dummy",
-				},
-			},
-			output: "dummy",
+			ExpectErr: ErrInvalidRequest,
 		},
 	}
 
-	for _, testcase := range testcases {
-		tool := extractMCPToolName(testcase.input)
-		require.Equal(t, testcase.output, tool)
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			valid, err := tc.Input.Validate()
+			if tc.ExpectErr != nil {
+				if errors.Is(tc.ExpectErr, err) {
+					t.Fatalf("expected an error but got none")
+				}
+				if valid {
+					t.Fatalf("mcp request should not have been marked valid")
+				}
+			} else {
+				if !valid {
+					t.Fatalf("expected the mcp request to be valid")
+				}
+			}
+
+		})
 	}
 }
 
-func TestGetServerInfo(t *testing.T) {
-	serverInfo := getServerInfo("", nil)
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("dummy", nil)
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("s_dummy", nil)
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("s_dummy", &config.MCPServersConfig{})
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("s_dummy", &config.MCPServersConfig{
-		Servers: []*config.MCPServer{},
-	})
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("s_dummy", &config.MCPServersConfig{
-		Servers: []*config.MCPServer{
-			{},
-		},
-	})
-	require.Nil(t, serverInfo)
-
-	serverInfo = getServerInfo("s_dummy", &config.MCPServersConfig{
-		Servers: []*config.MCPServer{
-			{
-				Name:       "dummy",
-				URL:        "http://localhost:8080/mcp",
-				ToolPrefix: "s_",
-				Enabled:    true,
-				Hostname:   "localhost",
+func TestMCPRequestToolName(t *testing.T) {
+	testCases := []struct {
+		Name       string
+		Input      *MCPRequest
+		ExpectTool string
+	}{
+		{
+			Name: "test with valid request",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "tools/call",
+				Params: map[string]any{
+					"name": "test_tool",
+				},
 			},
+			ExpectTool: "test_tool",
 		},
-	})
-	require.NotNil(t, serverInfo)
-	require.Equal(t, "localhost", serverInfo.Hostname)
-	require.Equal(t, "dummy", serverInfo.ServerName)
-	require.Equal(t, "s_", serverInfo.ToolPrefix)
-	require.Equal(t, "http://localhost:8080/mcp", serverInfo.URL)
+		{
+			Name: "test with no tool",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "tools/call",
+				Params: map[string]any{
+					"name": "",
+				},
+			},
+			ExpectTool: "",
+		},
+		{
+			Name: "test with not a tool call",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "intialise",
+				Params: map[string]any{
+					"name": "test",
+				},
+			},
+			ExpectTool: "",
+		},
+		{
+			Name: "test with not a tool call",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "intialise",
+				Params: map[string]any{
+					"name": 2,
+				},
+			},
+			ExpectTool: "",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			if tc.Input.ToolName() != tc.ExpectTool {
+				t.Fatalf("expected mcp request tool call to have tool %s but got %s", tc.ExpectTool, tc.Input.ToolName())
+			}
+		})
+	}
 }
 
 func TestHandleRequestBody(t *testing.T) {
@@ -179,11 +159,12 @@ func TestHandleRequestBody(t *testing.T) {
 		Broker: broker.NewBroker(logger),
 	}
 
-	data := map[string]any{
-		"jsonrpc": "2.0",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "s_mytool",
+	data := &MCPRequest{
+		JSONRPC: "2.0",
+		Method:  "tools/call",
+		Params: map[string]any{
+			"name":  "s_mytool",
+			"other": "other",
 		},
 	}
 	cfg := &config.MCPServersConfig{
@@ -198,7 +179,6 @@ func TestHandleRequestBody(t *testing.T) {
 		},
 	}
 
-	var err error
 	var resp []*eppb.ProcessingResponse
 
 	// Inject a request session ID for testing
@@ -212,23 +192,24 @@ func TestHandleRequestBody(t *testing.T) {
 			},
 		},
 	}
-	resp, err = server.HandleRequestBody(context.Background(), data, cfg)
-	require.NoError(t, err)
+	resp = server.HandleMCPRequest(context.Background(), data, cfg)
 	require.Len(t, resp, 1)
 	require.IsType(t, &eppb.ProcessingResponse_RequestBody{}, resp[0].Response)
 	rb := resp[0].Response.(*eppb.ProcessingResponse_RequestBody)
 	require.NotNil(t, rb.RequestBody.Response)
-	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 4)
-	require.Equal(t, "x-mcp-toolname", rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.Key)
-	require.Equal(t, []uint8("s_mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.RawValue)
-	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.Key)
-	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
-	require.Equal(t, "x-mcp-method", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
-	require.Equal(t, []uint8("tools/call"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
-	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
-	require.Equal(t, []uint8("66"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
+	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 5)
+	require.Equal(t, "x-mcp-method", rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.Key)
+	require.Equal(t, []uint8("tools/call"), rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.RawValue)
+	require.Equal(t, "x-mcp-toolname", rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.Key)
+	require.Equal(t, []uint8("s_mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
+	require.Equal(t, "x-mcp-servername", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
+	require.Equal(t, []uint8("dummy"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
+	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
+	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
+	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.Key)
+	require.Equal(t, []uint8("89"), rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.RawValue)
 
 	require.Equal(t,
-		[]byte(`{"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool"}}`),
-		rb.RequestBody.Response.BodyMutation.GetBody())
+		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
+		string(rb.RequestBody.Response.BodyMutation.GetBody()))
 }
