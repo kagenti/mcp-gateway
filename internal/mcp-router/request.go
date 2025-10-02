@@ -20,7 +20,7 @@ var ErrInvalidRequest = fmt.Errorf("MCP Request is invalid")
 
 // MCPRequest encapsulates a mcp protocol request to the gateway
 type MCPRequest struct {
-	ID        int            `json:"id"`
+	ID        *int           `json:"id"`
 	JSONRPC   string         `json:"jsonrpc"`
 	Method    string         `json:"method"`
 	Params    map[string]any `json:"params"`
@@ -35,8 +35,8 @@ func (mr *MCPRequest) Validate() (bool, error) {
 	if mr.Method == "" {
 		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no method set in json rpc payload"))
 	}
-	if mr.ID == 0 {
-		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload. ID cannot be 0"))
+	if mr.ID == nil {
+		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload."))
 	}
 
 	return true, nil

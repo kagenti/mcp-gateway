@@ -4,6 +4,7 @@ import (
 	"context"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"k8s.io/utils/ptr"
 
 	"errors"
 	"log/slog"
@@ -29,7 +30,7 @@ func TestMCPRequestValid(t *testing.T) {
 				JSONRPC: "2.0",
 				Method:  "initialize",
 				Params:  map[string]any{},
-				ID:      2,
+				ID:      ptr.To(2),
 			},
 			ExpectErr: nil,
 		},
@@ -39,6 +40,7 @@ func TestMCPRequestValid(t *testing.T) {
 				JSONRPC: "1.0",
 				Method:  "initialize",
 				Params:  map[string]any{},
+				ID:      ptr.To(2),
 			},
 			ExpectErr: ErrInvalidRequest,
 		},
@@ -48,6 +50,7 @@ func TestMCPRequestValid(t *testing.T) {
 				JSONRPC: "2.0",
 				Method:  "",
 				Params:  map[string]any{},
+				ID:      ptr.To(2),
 			},
 			ExpectErr: ErrInvalidRequest,
 		},
@@ -160,6 +163,7 @@ func TestHandleRequestBody(t *testing.T) {
 	}
 
 	data := &MCPRequest{
+		ID:      ptr.To(0),
 		JSONRPC: "2.0",
 		Method:  "tools/call",
 		Params: map[string]any{
