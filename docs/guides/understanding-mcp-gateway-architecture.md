@@ -312,7 +312,7 @@ The `tools/list` method returns all available tools from all servers.
 
 The broker returns the cached aggregated tool list.
 
-**Expected logs:**
+**Expected logs with debug logging enabled:**
 ```
 DEBUG [EXT-PROC] HandleRequestBody None tool call setting method header onlytools/list
 INFO Sending MCP routing instructions to Envoy: request_body:{response:{header_mutation:{set_headers:{header:{key:"x-mcp-method" raw_value:"tools/list"}}}}}
