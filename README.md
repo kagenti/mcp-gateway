@@ -20,7 +20,43 @@ Running in Kubernetes gets you:
 ### Bring Your Own Policies
 The router sets metadata on requests that any Envoy filter can use. We use Kuadrant in our examples for auth and rate limiting, but you can plug in whatever you want - custom ext_authz, WASM modules, or any other Envoy-compatible policy engine.
 
-## Quick Start with mcp-inspector
+## Quick Install
+
+### minimal installation (bring your own infrastructure)
+
+If you already have a Kubernetes cluster with [Gateway API](https://gateway-api.sigs.k8s.io/guides/) installed, install just the MCP Gateway components:
+
+```bash
+# Install Gateway API CRDs
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+# Install MCP Gateway (quotes required for zsh)
+kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'
+```
+
+This installs:
+- MCP gateway CRDs
+- Broker/router deployment
+- Controller deployment
+- RBAC resources
+
+see [config/install/README.md](./config/install/README.md) for details and prerequisites.
+
+### Development Environment
+
+For a complete local environment with all dependencies (Istio, Gateway API, Keycloak, MCP test servers):
+
+```bash
+make local-env-setup
+```
+
+this sets up:
+- a `kind` cluster
+- Istio as a Gateway API provider
+- MCP Gateway components (Broker / Router / Controller)
+- Test MCP servers
+- example configurations
+
+## Quick start with mcp-inspector
 
 Set up a local kind cluster with the Broker, Router & Controller running.
 These components are built during the make target into a single image and loaded into the cluster.
