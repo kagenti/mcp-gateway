@@ -1,0 +1,89 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-controller
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: controller
+rules:
+  - apiGroups: ["mcp.kagenti.com"]
+    resources: ["mcpservers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["mcp.kagenti.com"]
+    resources: ["mcpservers/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["mcp.kagenti.com"]
+    resources: ["mcpvirtualservers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-controller
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "mcp-gateway.fullname" . }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mcp-gateway.controllerServiceAccountName" . }}
+    namespace: {{ include "mcp-gateway.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-broker-router
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: broker-router
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["mcp-gateway-config"]
+    verbs: ["get", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-broker-router
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: broker-router
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mcp-gateway.fullname" . }}-broker-router
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mcp-gateway.brokerServiceAccountName" . }}
+    namespace: {{ include "mcp-gateway.namespace" . }}

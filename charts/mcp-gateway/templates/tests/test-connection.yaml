@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "mcp-gateway.fullname" . }}-test-connection"
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-connection
+    image: curlimages/curl:8.5.0
+    command: ['sh', '-c']
+    args:
+      - |
+        set -e
+        echo "Testing MCP Gateway broker connection..."
+        
+        # Test broker health endpoint
+        echo "Checking broker health endpoint..."
+        curl -f http://{{ include "mcp-gateway.fullname" . }}-broker.{{ include "mcp-gateway.namespace" . }}.svc.cluster.local:8080/healthz
+        
+        # Test config service health
+        echo "Checking config service..."
+        curl -f http://{{ include "mcp-gateway.fullname" . }}-config.{{ include "mcp-gateway.namespace" . }}.svc.cluster.local:8181/config
+        
+        echo "All tests passed!"

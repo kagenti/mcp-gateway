@@ -1,0 +1,8 @@
+{{- if ne (include "mcp-gateway.namespace" .) "default" }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+{{- end }}

@@ -45,6 +45,35 @@ run-controller: mcp-broker-router
 generate-crds: ## Generate CRD manifests from Go types
 	controller-gen crd paths="./pkg/apis/..." output:dir=config/crd
 
+# Update Helm chart CRDs from generated ones
+update-helm-crds: generate-crds ## Update Helm chart CRDs (run after generate-crds)
+	@echo "Copying CRDs to Helm chart..."
+	@mkdir -p charts/mcp-gateway/crds
+	cp config/crd/*.yaml charts/mcp-gateway/crds/
+	@echo "✅ Helm chart CRDs updated"
+
+# Generate CRDs and update Helm chart in one step
+generate-crds-all: update-helm-crds ## Generate CRDs and update Helm chart
+	@echo "✅ All CRDs generated and synchronized"
+
+# Check if CRDs are synchronized between config/crd and charts/
+check-crd-sync: ## Check if CRDs are synchronized between config/crd and charts/mcp-gateway/crds
+	@echo "Checking CRD synchronization..."
+	@if [ ! -d "charts/mcp-gateway/crds" ]; then \
+		echo "❌ Helm CRDs directory doesn't exist. Run 'make update-helm-crds'"; \
+		exit 1; \
+	fi
+	@if ! diff -r config/crd/ charts/mcp-gateway/crds/ >/dev/null 2>&1; then \
+		echo "❌ CRDs are out of sync!"; \
+		echo "Differences:"; \
+		diff -r config/crd/ charts/mcp-gateway/crds/ || true; \
+		echo ""; \
+		echo "Run 'make update-helm-crds' to sync, or 'make generate-crds-all' to regenerate and sync"; \
+		exit 1; \
+	else \
+		echo "✅ CRDs are synchronized"; \
+	fi
+
 # Install CRD
 install-crd: ## Install MCPServer and MCPVirtualServer CRDs
 	kubectl apply -f config/crd/

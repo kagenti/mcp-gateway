@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "mcp-gateway.fullname" . }}-test-status"
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-status
+    image: curlimages/curl:8.5.0
+    command: ['sh', '-c']
+    args:
+      - |
+        set -e
+        echo "Testing MCP Gateway status endpoint..."
+        
+        # Test status endpoint returns valid JSON
+        response=$(curl -s http://{{ include "mcp-gateway.fullname" . }}-broker.{{ include "mcp-gateway.namespace" . }}.svc.cluster.local:8080/status)
+        echo "Status response: $response"
+        
+        # Check if response contains expected fields
+        echo "$response" | grep -q "servers" || (echo "Status response missing 'servers' field" && exit 1)
+        echo "$response" | grep -q "totalServers" || (echo "Status response missing 'totalServers' field" && exit 1)
+        
+        echo "Status endpoint test passed!"
