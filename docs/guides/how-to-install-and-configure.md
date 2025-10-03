@@ -8,11 +8,21 @@ This guide demonstrates how to install and configure MCP Gateway to aggregate mu
 
 ## Install via Helm
 
-TODO
+```shell
+helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
+```
 
-## Further reading
+## Install via kustomize
 
-- configuring mcp servers (internal and external)
-- configuring authentication
-- configuring authorization
-- configuring virtual mcp servers
+```shell
+kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install
+```
+
+## Next Steps
+
+- [Configure MCP Gateway listener and route](./configure-mcp-gateway-listener-and-router.md)
+- [Configure MCP servers](./configure-mcp-servers.md)
+- [Connect to external MCP servers](./external-mcp-server.md)
+- [Configure authentication](./authentication.md)
+- [Configure authorization](./authorization.md)  
+- [Configure virtual MCP servers](./virtual-mcp-servers.md)
