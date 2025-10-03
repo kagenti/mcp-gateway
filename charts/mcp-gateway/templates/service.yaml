@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-broker
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: broker
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "mcp-gateway.selectorLabels" . | nindent 4 }}
+    component: broker-router
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-config
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: config-api
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "mcp-gateway.selectorLabels" . | nindent 4 }}
+    component: broker-router
+  ports:
+    - name: http
+      port: 8181
+      targetPort: 8181
+      protocol: TCP

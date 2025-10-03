@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-broker-router
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    component: broker-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mcp-gateway.selectorLabels" . | nindent 6 }}
+      component: broker-router
+  template:
+    metadata:
+      labels:
+        {{- include "mcp-gateway.selectorLabels" . | nindent 8 }}
+        component: broker-router
+    spec:
+      serviceAccountName: {{ include "mcp-gateway.brokerServiceAccountName" . }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: mcp-gateway-config
+            optional: true
+        - name: mcp-credentials
+          secret:
+            secretName: mcp-aggregated-credentials
+            defaultMode: 0400
+            optional: true
+      containers:
+        - name: mcp-broker-router
+          image: {{ include "mcp-gateway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - ./mcp_gateway
+            - --mcp-gateway-config=/config/config.yaml
+            - --mcp-broker-public-address=0.0.0.0:8080
+            - --mcp-broker-config-address=0.0.0.0:8181
+            - --mcp-router-address=0.0.0.0:50051
+            - --log-level=-4
+          env:
+            - name: CONFIG_UPDATE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mcp-gateway.fullname" . }}-config-update-token
+                  key: token
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - secretRef:
+                name: mcp-aggregated-credentials
+                optional: true
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+            - name: mcp-credentials
+              mountPath: /etc/mcp-credentials
+              readOnly: true
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: config
+              containerPort: 8181
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

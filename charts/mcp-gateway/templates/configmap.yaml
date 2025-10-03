@@ -1,0 +1,28 @@
+{{- if .Values.configMap.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-gateway-config
+  namespace: {{ include "mcp-gateway.namespace" . }}
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+    app: mcp-gateway
+    mcp.kagenti.com/aggregated: "true"
+  {{- with .Values.configMap.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  {{- if .Values.configMap.data }}
+  {{- toYaml .Values.configMap.data | nindent 2 }}
+  {{- else }}
+  # Default empty configuration - controller will populate this with actual MCP servers
+  config.yaml: |
+    # MCP Gateway Configuration
+    # This initial empty config allows the broker to start successfully.
+    # The controller will update this ConfigMap with actual server configurations
+    # when MCPServer resources are created.
+    servers: []
+    virtualServers: []
+  {{- end }}
+{{- end }}

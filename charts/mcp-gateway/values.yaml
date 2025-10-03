@@ -1,0 +1,21 @@
+# Default values for mcp-gateway.
+# This is a YAML-formatted file.
+
+# Image configuration
+image:
+  repository: ghcr.io/kagenti/mcp-gateway
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ConfigMap for MCP gateway configuration
+configMap:
+  # Create a ConfigMap with default empty configuration
+  # The controller will update this with actual MCP server configurations
+  create: true
+
+# EnvoyFilter for Istio integration
+envoyFilter:
+  # Create EnvoyFilter to route requests through MCP Gateway external processor
+  create: true
+  # Namespace where EnvoyFilter should be created (usually istio-system)
+  namespace: istio-system
