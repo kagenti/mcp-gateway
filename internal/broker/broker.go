@@ -106,6 +106,17 @@ type MCPBroker interface {
 	config.Observer
 }
 
+type mcpServers map[upstreamMCPURL]*upstreamMCP
+
+func (mcps mcpServers) findByHost(host string) *upstreamMCP {
+	for _, mcp := range mcps {
+		if mcp.Hostname == host {
+			return mcp
+		}
+	}
+	return nil
+}
+
 // mcpBrokerImpl implements MCPBroker
 type mcpBrokerImpl struct {
 	// Static map of session IDs we offer to downstream clients
@@ -117,7 +128,7 @@ type mcpBrokerImpl struct {
 	serverSessions map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState
 
 	// mcpServers tracks the known servers
-	mcpServers map[upstreamMCPURL]*upstreamMCP
+	mcpServers mcpServers
 
 	// toolMapping tracks the unique gateway'ed tool name to its upstream MCP server implementation
 	toolMapping map[toolName]*upstreamToolInfo
@@ -126,13 +137,30 @@ type mcpBrokerImpl struct {
 	listeningMCPServer *server.MCPServer
 
 	logger *slog.Logger
+
+	//allowUnfilteredList
+	enforceToolFilter bool
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
+type BrokerOpts struct {
+	EnforceToolFilter bool
+}
+
 // NewBroker creates a new MCPBroker
-func NewBroker(logger *slog.Logger) MCPBroker {
+func NewBroker(logger *slog.Logger, opts BrokerOpts) MCPBroker {
+
+	mcpBkr := &mcpBrokerImpl{
+		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
+		serverSessions:    map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
+		mcpServers:        map[upstreamMCPURL]*upstreamMCP{},
+		toolMapping:       map[toolName]*upstreamToolInfo{},
+		logger:            logger,
+		enforceToolFilter: opts.EnforceToolFilter,
+	}
+
 	hooks := &server.Hooks{}
 
 	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
@@ -154,19 +182,17 @@ func NewBroker(logger *slog.Logger) MCPBroker {
 		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
-	return &mcpBrokerImpl{
-		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
-		serverSessions: map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
-		mcpServers:     map[upstreamMCPURL]*upstreamMCP{},
-		toolMapping:    map[toolName]*upstreamToolInfo{},
-		listeningMCPServer: server.NewMCPServer(
-			"Kagenti MCP Broker",
-			"0.0.1",
-			server.WithHooks(hooks),
-			server.WithToolCapabilities(true),
-		),
-		logger: logger,
-	}
+	hooks.AddAfterListTools(mcpBkr.FilteredTools)
+
+	mcpBkr.listeningMCPServer = server.NewMCPServer(
+		"Kagenti MCP Broker",
+		"0.0.1",
+		server.WithHooks(hooks),
+		server.WithToolCapabilities(true),
+	)
+
+	return mcpBkr
+
 }
 
 func (m *mcpBrokerImpl) IsRegistered(mcpURL string) bool {

@@ -75,47 +75,47 @@ data:
           ],
           "server1.mcp.local": [
             {
-              "name": "test_greet"
+              "name": "greet"
             },
             {
-              "name": "test_headers"
+              "name": "headers"
             },
             {
-              "name": "test_slow"
+              "name": "slow"
             },
             {
-              "name": "test_time"
+              "name": "time"
             }
           ],
           "server2.mcp.local": [
             {
-              "name": "test2_auth1234"
+              "name": "auth1234"
             },
             {
-              "name": "test2_headers"
+              "name": "headers"
             },
             {
-              "name": "test2_hello_world"
+              "name": "hello_world"
             },
             {
-              "name": "test2_slow"
+              "name": "slow"
             },
             {
-              "name": "test2_time"
+              "name": "time"
             }
           ],
           "server3.mcp.local": [
             {
-              "name": "test3_time"
+              "name": "time"
             },
             {
-              "name": "test3_add"
+              "name": "add"
             },
             {
-              "name": "test3_dozen"
+              "name": "dozen"
             },
             {
-              "name": "test3_pi"
+              "name": "pi"
             }
           ]
         }
@@ -133,10 +133,10 @@ data:
           "name": "accounting",
           "clientRoles": {
             "server1.mcp.local": [
-              "test_greet"
+              "greet"
             ],
             "server3.mcp.local": [
-              "test3_add"
+              "add"
             ]
           }
         }
