@@ -85,7 +85,7 @@ func (r *MCPReconciler) Reconcile(
 	req reconcile.Request,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling MCP resource", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("Reconciling MCP resource", "name", req.Name, "namespace", req.Namespace)
 
 	// Try MCPServer first
 	mcpServer := &mcpv1alpha1.MCPServer{}
@@ -120,7 +120,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 	mcpServer *mcpv1alpha1.MCPServer,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling MCPServer", "name", mcpServer.Name, "namespace", mcpServer.Namespace)
+	log.V(1).Info("Reconciling MCPServer", "name", mcpServer.Name, "namespace", mcpServer.Namespace)
 
 	// validate credential secret if configured
 	if mcpServer.Spec.CredentialRef != nil {
@@ -235,7 +235,7 @@ func (r *MCPReconciler) reconcileMCPVirtualServer(
 	mcpVirtualServer *mcpv1alpha1.MCPVirtualServer,
 ) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling MCPVirtualServer", "name", mcpVirtualServer.Name, "namespace", mcpVirtualServer.Namespace)
+	log.V(1).Info("Reconciling MCPVirtualServer", "name", mcpVirtualServer.Name, "namespace", mcpVirtualServer.Namespace)
 
 	// For now, just trigger config regeneration like the existing logic
 	// This keeps the same behavior as before
@@ -344,7 +344,7 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 		// the broker can still work without credentials
 	}
 
-	log.Info("Successfully regenerated aggregated configuration",
+	log.V(1).Info("Successfully regenerated aggregated configuration",
 		"serverCount", len(brokerConfig.Servers),
 		"virtualServerCount", len(brokerConfig.VirtualServers))
 
@@ -671,7 +671,7 @@ func (r *MCPReconciler) updateHTTPRouteStatus(
 		return fmt.Errorf("failed to update HTTPRoute status: %w", err)
 	}
 
-	log.Info("Updated HTTPRoute status",
+	log.V(1).Info("Updated HTTPRoute status",
 		"HTTPRoute", httpRoute.Name,
 		"namespace", httpRoute.Namespace,
 		"affected", affected)
@@ -896,7 +896,7 @@ func (r *MCPReconciler) findMCPServersForHTTPRoute(ctx context.Context, obj clie
 
 	var requests []reconcile.Request
 	for _, mcpServer := range mcpServerList.Items {
-		log.Info("Found MCPServer referencing HTTPRoute via index",
+		log.V(1).Info("Found MCPServer referencing HTTPRoute via index",
 			"MCPServer", mcpServer.Name,
 			"MCPServerNamespace", mcpServer.Namespace)
 		requests = append(requests, reconcile.Request{
@@ -1096,7 +1096,7 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 			if err := r.Create(ctx, aggregatedSecret); err != nil {
 				return fmt.Errorf("failed to create aggregated secret: %w", err)
 			}
-			log.Info("Created aggregated credentials secret",
+			log.V(1).Info("Created aggregated credentials secret",
 				"credentialCount", len(aggregatedData))
 		} else {
 			return fmt.Errorf("failed to get aggregated secret: %w", err)
@@ -1126,7 +1126,7 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 		if err := r.Update(ctx, existing); err != nil {
 			return fmt.Errorf("failed to update aggregated secret: %w", err)
 		}
-		log.Info("Updated aggregated credentials secret",
+		log.V(1).Info("Updated aggregated credentials secret",
 			"credentialCount", len(aggregatedData))
 	}
 
