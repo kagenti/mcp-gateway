@@ -50,8 +50,8 @@ keycloak-status-impl:
 		echo ""; \
 		echo "Test Client Configuration:"; \
 		echo "  Client ID: mcp-gateway"; \
-		echo "  Root URL: http://localhost:8888"; \
-		echo "  Valid Redirect URIs: http://localhost:8888/*"; \
+		echo "  Root URL: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP)"; \
+		echo "  Valid Redirect URIs: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP)/*"; \
 		echo "  Web Origins: +"; \
 		echo ""; \
 		echo "Note: Create the test client manually in the Keycloak admin console"; \
@@ -76,8 +76,8 @@ keycloak-create-client: # Create a test OIDC client for MCP
 	@echo "Then create a client with:"
 	@echo "  - Client ID: mcp-gateway"
 	@echo "  - Client Protocol: openid-connect"
-	@echo "  - Root URL: http://localhost:8888"
-	@echo "  - Valid Redirect URIs: http://localhost:8888/*"
+	@echo "  - Root URL: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP)"
+	@echo "  - Valid Redirect URIs: http://localhost:$(GATEWAY_LOCAL_PORT_HTTP)/*"
 	@echo "  - Web Origins: +"
 
 .PHONY: keycloak-setup-mcp-realm
@@ -85,11 +85,11 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	@echo "========================================="
 	@echo "Setting up MCP Realm"
 	@echo "========================================="
-	@echo "Assuming Keycloak is available at http://keycloak.127-0-0-1.sslip.io:8889"
+	@echo "Assuming Keycloak is available at http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)"
 	@echo "(Run 'make inspect-gateway' or 'make dev-gateway-forward' to enable port forwarding)"
 	@echo ""
 	@echo "Getting admin access token..."
-	@TOKEN=$$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8889/realms/master/protocol/openid-connect/token" \
+	@TOKEN=$$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/realms/master/protocol/openid-connect/token" \
 		-H "Content-Type: application/x-www-form-urlencoded" \
 		-d "username=$(KEYCLOAK_ADMIN_USER)" \
 		-d "password=$(KEYCLOAK_ADMIN_PASSWORD)" \
@@ -106,7 +106,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	echo "✅ Successfully obtained access token"; \
 	echo ""; \
 	echo "Creating MCP realm..."; \
-	REALM_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms" \
+	REALM_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"realm":"mcp","enabled":true}'); \
@@ -120,7 +120,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Updating MCP realm token settings..."; \
-	REALM_UPDATE_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp" \
+	REALM_UPDATE_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"realm":"mcp","enabled":true,"ssoSessionIdleTimeout":1800,"accessTokenLifespan":1800}'); \
@@ -135,7 +135,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Creating MCP user..."; \
-	USER_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users" \
+	USER_RESPONSE=$$(curl -s -w "%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/users" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"username":"mcp","email":"mcp@example.com","firstName":"mcp","lastName":"mcp","enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"mcp","temporary":false}]}'); \
@@ -149,7 +149,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Creating accounting group..."; \
-	GROUP_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/groups" \
+	GROUP_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/groups" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"name":"accounting"}'); \
@@ -165,7 +165,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Adding mcp user to accounting group..."; \
-	USERS_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users?username=mcp" \
+	USERS_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/users?username=mcp" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Accept: application/json"); \
 	USER_ID=$$(echo "$$USERS_LIST" | jq -r '.[0].id // empty' 2>/dev/null); \
@@ -173,7 +173,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 		echo "❌ Failed to find mcp user"; \
 		exit 1; \
 	fi; \
-	GROUPS_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/groups" \
+	GROUPS_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/groups" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Accept: application/json"); \
 	GROUP_ID=$$(echo "$$GROUPS_LIST" | jq -r '.[] | select(.name == "accounting") | .id // empty' 2>/dev/null); \
@@ -181,7 +181,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 		echo "❌ Failed to find accounting group"; \
 		exit 1; \
 	fi; \
-	ADD_USER_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users/$$USER_ID/groups/$$GROUP_ID" \
+	ADD_USER_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/users/$$USER_ID/groups/$$GROUP_ID" \
 		-H "Authorization: Bearer $$TOKEN"); \
 	ADD_USER_CODE=$$(echo "$$ADD_USER_RESPONSE" | grep -o "HTTPCODE:[0-9]*" | cut -d: -f2); \
 	if [ "$$ADD_USER_CODE" = "204" ]; then \
@@ -193,7 +193,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	echo ""; \
 	echo "Creating groups client scope..."; \
 	echo "Request payload: {\"name\":\"groups\",\"protocol\":\"openid-connect\",\"attributes\":{\"display.on.consent.screen\":\"false\",\"include.in.token.scope\":\"true\"}}"; \
-	SCOPE_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes" \
+	SCOPE_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/client-scopes" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"name":"groups","protocol":"openid-connect","attributes":{"display.on.consent.screen":"false","include.in.token.scope":"true"}}'); \
@@ -211,7 +211,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Reading back groups client scope for debugging..."; \
-	SCOPES_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes" \
+	SCOPES_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/client-scopes" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Accept: application/json"); \
 	SCOPE_DETAILS=$$(echo "$$SCOPES_LIST" | jq '.[] | select(.name == "groups")' 2>/dev/null); \
@@ -219,7 +219,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	echo "$$SCOPE_DETAILS"; \
 	echo ""; \
 	echo "Adding groups mapper to client scope..."; \
-	SCOPES_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes" \
+	SCOPES_LIST=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/client-scopes" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Accept: application/json"); \
 	SCOPE_ID=$$(echo "$$SCOPES_LIST" | jq -r '.[] | select(.name == "groups") | .id // empty' 2>/dev/null); \
@@ -227,7 +227,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 		echo "❌ Failed to find groups client scope"; \
 		exit 1; \
 	fi; \
-	MAPPER_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes/$$SCOPE_ID/protocol-mappers/models" \
+	MAPPER_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X POST "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/client-scopes/$$SCOPE_ID/protocol-mappers/models" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Content-Type: application/json" \
 		-d '{"name":"groups","protocol":"openid-connect","protocolMapper":"oidc-group-membership-mapper","config":{"claim.name":"groups","full.path":"false","id.token.claim":"true","access.token.claim":"true","userinfo.token.claim":"true"}}'); \
@@ -243,7 +243,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Adding groups client scope to realm's optional client scopes..."; \
-	ADD_OPTIONAL_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/default-optional-client-scopes/$$SCOPE_ID" \
+	ADD_OPTIONAL_RESPONSE=$$(curl -s -w "HTTPCODE:%{http_code}" -X PUT "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/default-optional-client-scopes/$$SCOPE_ID" \
 		-H "Authorization: Bearer $$TOKEN"); \
 	ADD_OPTIONAL_CODE=$$(echo "$$ADD_OPTIONAL_RESPONSE" | grep -o "HTTPCODE:[0-9]*" | cut -d: -f2); \
 	ADD_OPTIONAL_BODY=$$(echo "$$ADD_OPTIONAL_RESPONSE" | sed 's/HTTPCODE:[0-9]*$$//'); \
@@ -257,7 +257,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 	fi; \
 	echo ""; \
 	echo "Removing trusted hosts policy for anonymous client registration..."; \
-	COMPONENTS=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components?name=Trusted%20Hosts" \
+	COMPONENTS=$$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/components?name=Trusted%20Hosts" \
 		-H "Authorization: Bearer $$TOKEN" \
 		-H "Accept: application/json"); \
 	COMPONENT_ID=$$(echo "$$COMPONENTS" | jq -r '.[0].id // empty' 2>/dev/null); \
@@ -265,7 +265,7 @@ keycloak-setup-mcp-realm: ## Create MCP realm with user and configure client reg
 		echo "✅ Trusted hosts policy was not present"; \
 	else \
 		echo "Found trusted hosts component: $$COMPONENT_ID"; \
-		DELETE_RESPONSE=$$(curl -s -w "%{http_code}" -X DELETE "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components/$$COMPONENT_ID" \
+		DELETE_RESPONSE=$$(curl -s -w "%{http_code}" -X DELETE "http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTPS)/admin/realms/mcp/components/$$COMPONENT_ID" \
 			-H "Authorization: Bearer $$TOKEN"); \
 		DELETE_CODE=$$(echo "$$DELETE_RESPONSE" | tail -c 4); \
 		if [ "$$DELETE_CODE" = "204" ]; then \
