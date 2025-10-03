@@ -17,7 +17,7 @@ spec:
     metadata:
       token-exchange:
         http:
-          url: http://keycloak.keycloak.svc.cluster.local/realms/mcp/protocol/openid-connect/token # FIXME: this will make the token exchange request fail with 'Invalid Token' due to mismatching Keycloak hostname compared to what's in the `iss` claim of the subject token
+          url: http://keycloak.keycloak.svc.cluster.local/realms/mcp/protocol/openid-connect/token
           method: POST
           headers:
             Authorization:
