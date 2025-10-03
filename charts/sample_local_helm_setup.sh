@@ -1,19 +1,39 @@
 #!/bin/bash
 
 # Sample local Helm setup script for MCP Gateway
-# This script can be run from any directory - it automatically resolves paths
-# relative to the repository root.
+# This script sets up a complete MCP Gateway environment using remote resources
 
 set -e
 
-# Get the directory of this script and the repository root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Allow specifying a different GitHub org/user and branch via environment variables
+GITHUB_ORG=${MCP_GATEWAY_ORG:-kagenti}
+BRANCH=${MCP_GATEWAY_BRANCH:-main}
+echo "Using GitHub org: $GITHUB_ORG"
+echo "Using branch: $BRANCH"
 
 echo "Setting up MCP Gateway using Helm chart..."
-echo "Repository root: $REPO_ROOT"
 
-kind create cluster --config "$REPO_ROOT/config/kind/cluster.yaml"
+# Create Kind cluster with inline configuration
+echo "Creating Kind cluster..."
+cat <<EOF | kind create cluster --config=-
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 8080
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 8443
+    protocol: TCP
+EOF
 
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
 
@@ -22,11 +42,20 @@ helm repo update
 helm install istio-base istio/base -n istio-system --create-namespace --wait
 helm install istiod istio/istiod -n istio-system --wait
 
-kubectl apply -k "$REPO_ROOT/config/istio/gateway"
-kubectl apply -k "$REPO_ROOT/config/test-servers"
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/istio/gateway/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/istio/gateway/gateway.yaml -n gateway-system
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-deployment.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-service.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-httproute.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-httproute-ext.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-deployment.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-service.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-httproute.yaml -n mcp-test
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-httproute-ext.yaml -n mcp-test
 
-helm install mcp-gateway "$REPO_ROOT/charts/mcp-gateway"
-kubectl apply -f "$REPO_ROOT/config/samples/mcpserver-test-servers.yaml"
+helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/samples/mcpserver-test-servers.yaml
 
 cat <<EOF | kubectl apply -f -
 apiVersion: gateway.networking.k8s.io/v1

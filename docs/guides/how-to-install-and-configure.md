@@ -2,353 +2,80 @@
 
 This guide demonstrates how to install and configure MCP Gateway to aggregate multiple Model Context Protocol (MCP) servers behind a single endpoint.
 
-## About MCP Gateway
-
-MCP Gateway acts as a unified entry point for multiple MCP servers, providing:
-- Tool aggregation from multiple backend MCP servers
-- Automatic service discovery via Kubernetes resources
-- Dynamic routing based on tool prefixes
-- Support for both standalone and Kubernetes deployments
-
 ## Prerequisites
 
-Before proceeding, ensure you have the required tools installed:
+### Kubernetes Cluster Options
 
-**For standalone deployment:**
-- Go 1.21 or later
+MCP Gateway runs on Kubernetes and integrates with Gateway API and Istio. You should be familiar with:
+- **Kubernetes** - Basic kubectl and YAML knowledge
+- **Gateway API** - Kubernetes standard for traffic routing
+- **Istio** - Service mesh and Gateway API provider
 
-**For Kubernetes deployment:**
-- kubectl configured for your cluster
-- Docker (for building images)
+**Choose your setup approach:**
 
-**For local development:**
-- kind (Kubernetes in Docker)
-- Docker and Docker Compose
+**Option A: Quick Start (5 minutes)**
+- Want to try MCP Gateway immediately with minimal setup
+- Automated script handles everything for you
+- Perfect for evaluation and testing
+- **[Quick Start Guide](./quick-start.md)**
 
+**Option B: Existing Cluster**
+- You have a Kubernetes cluster with Gateway API CRDs and Istio installed
+- Ready to deploy MCP Gateway immediately
 
-## Installation Method 1: Local Development Environment
+**Option C: Local Development Cluster**  
+- Set up a local Kind cluster with all prerequisites
+- See: [Kind Cluster Setup Guide](./kind-cluster-setup.md)
 
-This method creates a complete local testing environment with all dependencies. **Recommended for getting started.**
+### MCP Servers
 
-### Step 1: Clone the Repository
+You'll need at least one MCP server to route through the gateway. This can be:
+- Internal services running in your cluster
+- External MCP servers (like GitHub's MCP API)
+- Test servers for evaluation
 
-```bash
-git clone https://github.com/kagenti/mcp-gateway.git
-cd mcp-gateway
-```
+## Installation Methods
 
-### Step 2: Create Local Cluster
+### Method 1: Helm (Recommended)
 
-Run the automated setup:
-
-```bash
-make local-env-setup
-```
-
-This command automatically:
-- Creates a Kind cluster
-- Installs Istio service mesh
-- Installs Gateway API CRDs
-- Deploys MCP Gateway components (controller, broker, router)
-- Deploys test MCP servers
-- Configures routing and gateway resources
-
-### Step 3: Verify Installation
-
-Check that all components are running:
+Install from GitHub Container Registry:
 
 ```bash
-# Check MCP Gateway components
-kubectl get pods -n mcp-system
-
-# Check test MCP servers
-kubectl get pods -n mcp-test
-
-# Check gateway resources
-kubectl get gateway -n gateway-system
-
-# View overall status
-make status
+helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
 ```
 
-**Expected output:**
-- Pods in `mcp-system` namespace: `mcp-broker-router` and `mcp-controller` (Running)
-- Pods in `mcp-test` namespace: Test server pods (Running)
-- Gateway in `gateway-system` namespace: `mcp-gateway` (Programmed)
+This automatically installs:
+- MCP Gateway components (broker, router, controller)
+- Required CRDs and RBAC
+- EnvoyFilter for Istio integration
 
-### Step 4: Test the Gateway
+### Method 2: Kustomize
 
-Open the MCP Inspector to interact with your gateway:
+Install using Kubernetes manifests:
 
 ```bash
-make inspect-gateway
+kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'
 ```
 
-This opens a web interface at `http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp`
+This provides the same components as Helm but with less configuration flexibility.
 
-**Verify:**
-1. Navigate to **Tools** → **List Tools**
-2. You should see tools from all test servers with prefixes (`test_`, `test2_`, etc.)
-3. Try calling a tool like `test_hi` to verify routing works
+### Method 3: Binary Installation (Advanced)
 
-## Installation Method 2: Kubernetes Deployment
+For non-Kubernetes deployments or advanced use cases, see [Binary Installation Guide](./binary-install.md).
 
-Use this method to deploy MCP Gateway to an existing Kubernetes cluster.
+**Note:** This method is not fully supported and requires manual configuration of routing and service discovery. Also note that most guides lean into the kuberentes
+based setup, leveraging various CRDs and kubectl commands.
 
-### Prerequisites
+## Post-Installation Configuration
 
-Ensure your cluster has:
-- Istio service mesh installed
-- Gateway API CRDs installed
+After installation, you'll need to configure the gateway and connect your MCP servers:
 
-```bash
-# Install Istio (if not already installed)
-Follow instructions at https://istio.io/latest/docs/setup/getting-started/
+1. **[Configure Gateway Listener and Route](./configure-mcp-gateway-listener-and-router.md)** - Set up traffic routing
+2. **[Configure MCP Servers](./configure-mcp-servers.md)** - Connect internal MCP servers  
+3. **[Connect External MCP Servers](./external-mcp-server.md)** - Connect to external APIs
 
-# Install Gateway API CRDs (if not already installed)
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
-```
+## Optional Configuration
 
-### Step 1: Install MCP Gateway CRDs
-
-```bash
-make install-crd
-```
-
-This installs the `MCPServer` custom resource definition.
-
-### Step 2: Deploy MCP Gateway Components
-
-```bash
-make deploy
-```
-
-This creates:
-- `mcp-system` namespace
-- MCP broker and router deployment
-- MCP controller deployment
-- Required RBAC permissions (ServiceAccounts, Roles, RoleBindings)
-
-### Step 3: Create a Gateway Resource
-
-Create a Gateway that routes to MCP Gateway:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: mcp-gateway
-  namespace: gateway-system
-spec:
-  gatewayClassName: istio
-  listeners:
-  - name: http
-    hostname: "mcp.example.com"
-    port: 8080
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All
-EOF
-```
-
-### Step 4: Create HTTPRoute to MCP Gateway Service
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: mcp-gateway-route
-  namespace: mcp-system
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: mcp-gateway
-    namespace: gateway-system
-  hostnames:
-  - "mcp.example.com"
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /mcp
-    backendRefs:
-    - name: mcp-broker-router
-      port: 8080
-EOF
-```
-
-### Step 5: Configure MCP Servers
-
-Create an `MCPServer` resource for each backend MCP server:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: mcp.kagenti.com/v1alpha1
-kind: MCPServer
-metadata:
-  name: my-mcp-server
-  namespace: mcp-system
-spec:
-  toolPrefix: myapp_
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: my-service-route
-    namespace: mcp-system
-EOF
-```
-
-The controller will:
-- Discover the HTTPRoute referenced in `targetRef`
-- Extract the backend service URL
-- Update the broker/router configuration
-- Enable routing for tools with the `myapp_` prefix
-
-### Step 6: Verify Deployment
-
-```bash
-# Check MCPServer status
-kubectl get mcpserver -A
-
-# Check controller discovered the server
-kubectl logs -n mcp-system deployment/mcp-controller
-
-# Check broker connected to the server
-kubectl logs -n mcp-system deployment/mcp-broker-router -c broker | grep "Discovered tools"
-```
-
-## Installation Method 3: Standalone Binary
-
-Use this method to run MCP Gateway as a single binary with file-based configuration (no Kubernetes required).
-
-### Step 1: Clone and Build
-
-```bash
-git clone https://github.com/kagenti/mcp-gateway.git
-cd mcp-gateway
-make build
-```
-
-### Step 2: Create Configuration File
-
-Create `config/samples/config.yaml`:
-
-```yaml
-servers:
-  - name: weather-service
-    url: http://weather.example.com:8080
-    hostname: weather.example.com
-    enabled: true
-    toolPrefix: "weather_"
-  - name: calendar-service
-    url: http://calendar.example.com:8080
-    hostname: calendar.example.com
-    enabled: true
-    toolPrefix: "cal_"
-```
-
-**Configuration fields:**
-- `name`: Identifier for the server
-- `url`: Full URL to the MCP server endpoint
-- `hostname`: Used for routing decisions
-- `enabled`: Whether to include this server
-- `toolPrefix`: Prefix added to all tools from this server
-
-### Step 3: Start the Gateway
-
-```bash
-make run
-```
-
-**Or run the binary directly:**
-
-```bash
-./bin/mcp-broker-router --config=config/samples/config.yaml
-```
-
-The gateway starts with:
-- HTTP broker listening on `0.0.0.0:8080`
-- gRPC router listening on `0.0.0.0:50051`
-
-### Step 4: Verify Standalone Installation
-
-```bash
-# Check health endpoint
-curl http://localhost:8080/health
-
-# List available tools
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
-```
-
-## Troubleshooting
-
-### Gateway Not Starting
-
-**Check port availability:**
-
-```bash
-# Linux/Mac
-lsof -i :8080
-lsof -i :50051
-```
-
-**Verify configuration syntax:**
-
-```bash
-# Kubernetes
-kubectl get mcpserver -A
-kubectl describe mcpserver <name> -n <namespace>
-
-# Standalone
-cat config/samples/config.yaml
-```
-
-### Backend Servers Not Discovered
-
-**Check controller logs:**
-
-```bash
-kubectl logs -n mcp-system deployment/mcp-controller
-```
-
-**Verify HTTPRoute exists:**
-
-```bash
-kubectl get httproute -A
-kubectl describe httproute <route-name> -n <namespace>
-```
-
-**Check RBAC permissions:**
-
-```bash
-kubectl get clusterrole mcp-controller-role
-kubectl get clusterrolebinding mcp-controller-rolebinding
-```
-
-### Tools Not Appearing
-
-**Check broker logs:**
-
-```bash
-kubectl logs -n mcp-system deployment/mcp-broker-router -c broker | grep "Discovered tools"
-```
-
-**Verify backend server is reachable:**
-
-```bash
-# From within the cluster
-kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- \
-  curl http://<backend-service>.<namespace>.svc.cluster.local:<port>/health
-```
-
-## Next Steps
-
-- [Connect to external MCP servers](./external-mcp-server.md)
-- [Understand the architecture](./understanding-mcp-gateway-architecture.md)
-- Configure rate limiting with Kuadrant
+- **[Authentication](./authentication.md)** - Configure OAuth-based authentication
+- **[Authorization](./authorization.md)** - Set up fine-grained access control
+- **[Virtual MCP Servers](./virtual-mcp-servers.md)** - Create focused tool collections

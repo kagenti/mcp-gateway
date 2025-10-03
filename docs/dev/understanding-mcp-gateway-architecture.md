@@ -4,29 +4,13 @@ This guide demonstrates how to explore and understand MCP Gateway's architecture
 
 ## About MCP Gateway Components
 
-MCP Gateway consists of three main components that work together to aggregate and route MCP tool calls:
-
-1. **MCP Broker** - Aggregates tools from multiple MCP servers and handles client initialization
-2. **MCP Router** - Routes tool calls to appropriate backend servers via Envoy's external processing filter (ext_proc)
-3. **MCP Controller** - Discovers MCP servers from Kubernetes resources (MCPServer CRDs) and updates configuration
-
-The architecture leverages Istio's Envoy proxy for routing while adding MCP protocol awareness through the router component.
+You should read the [architecture overview](../design/overview.md) first to understand the high-level components and design.
 
 ## Prerequisites
 
-**Required Setup:** This guide assumes you have a running MCP Gateway cluster:
+**Required Setup:** This guide assumes you have a running MCP Gateway cluster.
 
-```bash
-make local-env-setup
-```
-
-This creates a Kind cluster with:
-- Istio service mesh
-- Gateway API resources
-- MCP Gateway components deployed
-- Test MCP servers running
-
-If you haven't set this up yet, see the [installation guide](./how-to-install-and-configure.md).
+See the [installation guide](../guides/how-to-install-and-configure.md) for setup instructions.
 
 ## Step 1: Understanding Configuration and State
 
@@ -312,7 +296,7 @@ The `tools/list` method returns all available tools from all servers.
 
 The broker returns the cached aggregated tool list.
 
-**Expected logs with debug logging enabled:**
+**Expected logs:**
 ```
 DEBUG [EXT-PROC] HandleRequestBody None tool call setting method header onlytools/list
 INFO Sending MCP routing instructions to Envoy: request_body:{response:{header_mutation:{set_headers:{header:{key:"x-mcp-method" raw_value:"tools/list"}}}}}

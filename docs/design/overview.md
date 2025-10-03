@@ -1,7 +1,4 @@
-## MCP Gateway Arch Overview
-
-> Note this is swiftly evolving project. It is likely this doc will fall behind reality to some extent.
-
+## MCP Gateway Architecture Overview
 
 ### Overview
 
