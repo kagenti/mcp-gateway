@@ -783,6 +783,7 @@ func (r *MCPReconciler) updateStatus(
 		condition.Reason = "Ready"
 	}
 
+	statusChanged := false
 	found := false
 	for i, cond := range mcpServer.Status.Conditions {
 		if cond.Type == condition.Type {
@@ -792,6 +793,10 @@ func (r *MCPReconciler) updateStatus(
 				// status hasn't changed, preserve existing LastTransitionTime
 				condition.LastTransitionTime = cond.LastTransitionTime
 			}
+			// check if anything actually changed
+			if cond.Status != condition.Status || cond.Reason != condition.Reason || cond.Message != condition.Message {
+				statusChanged = true
+			}
 			mcpServer.Status.Conditions[i] = condition
 			found = true
 			break
@@ -799,10 +804,19 @@ func (r *MCPReconciler) updateStatus(
 	}
 	if !found {
 		mcpServer.Status.Conditions = append(mcpServer.Status.Conditions, condition)
+		statusChanged = true
 	}
 
-	// update discovered tools count
+	// check if tool count changed
+	if mcpServer.Status.DiscoveredTools != discoveredTools {
+		statusChanged = true
+	}
 	mcpServer.Status.DiscoveredTools = discoveredTools
+
+	// only update if something actually changed
+	if !statusChanged {
+		return nil
+	}
 
 	return r.Status().Update(ctx, mcpServer)
 }
@@ -840,7 +854,7 @@ func (r *MCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	controller := ctrl.NewControllerManagedBy(mgr).
-		For(&mcpv1alpha1.MCPServer{}).
+		For(&mcpv1alpha1.MCPServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&mcpv1alpha1.MCPVirtualServer{},
 			&handler.EnqueueRequestForObject{},
@@ -848,6 +862,7 @@ func (r *MCPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(r.findMCPServersForHTTPRoute),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
 		).
 		Watches(
 			&corev1.Secret{},
