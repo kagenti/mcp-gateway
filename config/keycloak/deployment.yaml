@@ -22,7 +22,6 @@ spec:
         - start-dev
         - --import-realm
         - --proxy=edge
-        - --hostname=keycloak.127-0-0-1.sslip.io
         - --verbose
         env:
         - name: KEYCLOAK_ADMIN
