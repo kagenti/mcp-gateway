@@ -87,8 +87,9 @@ jobs:
 
     - name: Verify chart installation
       run: |
-        # Install the chart we just pushed to verify it works (client-only, no cluster needed)
-        helm install test-install oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/mcp-gateway --version ${{ inputs.chart_version }} --dry-run --client-only --debug
+        # Verify the chart we just pushed works (client-only, no cluster needed)
+        echo "Testing chart template rendering from OCI registry..."
+        helm template test-install oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/mcp-gateway --version ${{ inputs.chart_version }} --debug
 
     - name: Generate release summary
       run: |
