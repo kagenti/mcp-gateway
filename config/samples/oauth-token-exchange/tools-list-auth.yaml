@@ -32,7 +32,7 @@ spec:
         headers:
           x-authorized-tools:
             plain:
-              expression: auth.authorization['authorized-tools'].tools
+              selector: auth.authorization.authorized-tools.tools.@tostr
       unauthorized:
         code: 401
         headers:

@@ -24,7 +24,7 @@ func TestSetupSessionCache(_ *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(logger),
+		Broker: broker.NewBroker(logger, broker.BrokerOpts{}),
 	}
 
 	// We can't test the internals of this, because it returns nothing on error...

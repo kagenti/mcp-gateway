@@ -98,7 +98,7 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 		slog.Error("[EXT-PROC] HandleRequestBody no tool name set in tools/call")
 		return append(calculatedResponse, s.createErrorResponse("no tool name set", 400))
 	}
-	headers.WithMCPToolName(toolName)
+
 	// TODO prefix here really is the the server id. It is confusing to think of it as both
 	slog.Debug("[EXT-PROC] HandleRequestBody", "Tool name:", toolName)
 	serverInfo := config.GetServerInfo(toolName)
@@ -107,8 +107,9 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 		// todo should this be a 404??
 		return append(calculatedResponse, s.createErrorResponse("not found", 404))
 	}
-
-	mcpReq.ReWriteToolName(config.StripServerPrefix(toolName))
+	upstreamToolName := config.StripServerPrefix(toolName)
+	headers.WithMCPToolName(upstreamToolName)
+	mcpReq.ReWriteToolName(upstreamToolName)
 	slog.Info("Stripped tool name", "tool", mcpReq.ToolName())
 	headers.WithMCPServerName(serverInfo.Name)
 	// Get Helper session ID

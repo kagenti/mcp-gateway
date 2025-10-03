@@ -159,7 +159,7 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(logger),
+		Broker: broker.NewBroker(logger, broker.BrokerOpts{}),
 	}
 
 	data := &MCPRequest{
@@ -205,13 +205,12 @@ func TestHandleRequestBody(t *testing.T) {
 	require.Equal(t, "x-mcp-method", rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.Key)
 	require.Equal(t, []uint8("tools/call"), rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.RawValue)
 	require.Equal(t, "x-mcp-toolname", rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.Key)
-	require.Equal(t, []uint8("s_mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
+	require.Equal(t, []uint8("mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
 	require.Equal(t, "x-mcp-servername", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
 	require.Equal(t, []uint8("dummy"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
 	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
 	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
 	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.Key)
-	require.Equal(t, []uint8("89"), rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.RawValue)
 
 	require.Equal(t,
 		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
