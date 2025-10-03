@@ -30,7 +30,7 @@ spec:
           body:
             value: |
               {
-                "error": "Forbidden", 
+                "error": "Forbidden",
                 "message": "MCP Tool Access denied. Insufficient permissions for this tool."
               }
         unauthenticated:

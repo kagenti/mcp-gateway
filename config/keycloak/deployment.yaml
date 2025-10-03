@@ -1,9 +1,3 @@
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: keycloak
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,8 +17,12 @@ spec:
     spec:
       containers:
       - name: keycloak
-        image: quay.io/keycloak/keycloak:26.0
-        args: ["start-dev"]
+        image: quay.io/keycloak/keycloak:26.3
+        args:
+        - start-dev
+        - --import-realm
+        - --proxy=edge
+        - --verbose
         env:
         - name: KEYCLOAK_ADMIN
           value: "admin"
@@ -41,6 +39,9 @@ spec:
         ports:
         - name: http
           containerPort: 8080
+        volumeMounts:
+        - name: realm-import
+          mountPath: /opt/keycloak/data/import
         readinessProbe:
           httpGet:
             path: /health/ready
@@ -53,6 +54,10 @@ spec:
             port: 9000
           initialDelaySeconds: 60
           periodSeconds: 30
+      volumes:
+      - name: realm-import
+        configMap:
+          name: realm-import
 ---
 apiVersion: v1
 kind: Service
