@@ -47,7 +47,8 @@ generate-crds: ## Generate CRD manifests from Go types
 
 # Install CRD
 install-crd: ## Install MCPServer and MCPVirtualServer CRDs
-	kubectl apply -f config/crd/
+	kubectl apply -f config/crd/mcp.kagenti.com_mcpservers.yaml
+	kubectl apply -f config/crd/mcp.kagenti.com_mcpvirtualservers.yaml
 
 # Deploy mcp-gateway components
 deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
