@@ -64,6 +64,12 @@ data:
             }
         ]
     }
+    
+    # NOTE: This is an example ACL configuration. Replace with your own:
+    # - "id" should match your MCP server hostnames
+    # - "access" groups should match your Keycloak groups
+    # - Tool names should match your actual MCP server tools
+    # Use 'curl http://mcp.127-0-0-1.sslip.io:8888/mcp' with tools/list to discover available tools
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -182,24 +188,9 @@ EOF
   - `request.headers['x-mcp-toolname']`: Tool name from MCP request header
   - `auth.metadata.rbac.access[g]`: List of allowed tools for group `g` from ACL
 
-## Step 3: Configure User Groups in Keycloak
+## Step 3: Test Authorization
 
-Add groups to your Keycloak test user:
-
-1. **Access Keycloak Admin Console**: Log into your Keycloak admin console as an administrator.
-
-2. **Navigate to MCP Realm** → **Users** → **mcp**
-
-3. **Add Groups**:
-   - Go to **Groups** tab
-   - Click **Join Group**
-   - Add groups: `accounting`, `developers`
-
-4. **Configure Group Claims**:
-   - Go to **Realm Settings** → **Client Scopes** → **groups**
-   - Add mapper for group membership in JWT tokens
-
-## Step 4: Test Authorization
+**Note**: The authentication guide already created the `accounting` group, added the `mcp` user to it, and configured group claims in JWT tokens. No additional Keycloak configuration is needed.
 
 Test that authorization now controls tool access by setting up the MCP Inspector with port forwarding:
 
