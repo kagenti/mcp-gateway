@@ -141,19 +141,20 @@ EOF
 Test that the MCP endpoint is accessible through your Gateway:
 
 ```bash
-# Replace mcp.example.com with your actual hostname
-curl http://mcp.example.com:8080/mcp
-```
-
-The response should be an MCP protocol error since no valid MCP request was sent, but this confirms routing is working.
-
-For a proper MCP test:
-
-```bash
 curl -X POST http://mcp.example.com:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Host: mcp.example.com" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize"}'
 ```
 
-This should return a list of available MCP tools.
+You should get a response like this:
+
+```json
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{"tools":{"listChanged":true}},"serverInfo":{"name":"Kagenti MCP Broker","version":"0.0.1"}}}
+```
+
+## Next Steps
+
+Now that you have MCP Gateway routing configured, you can connect your MCP servers:
+
+- **[Configure MCP Servers](./configure-mcp-servers.md)** - Connect internal MCP servers to the gateway
+
