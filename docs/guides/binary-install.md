@@ -2,13 +2,23 @@
 
 Use this method to run MCP Gateway as a single binary with file-based configuration (no Kubernetes required).
 
-### Step 1: Clone and Build
+### Prerequisites
+
+- [Go](https://golang.org/doc/install) installed (for building from source)
+- [Git](https://git-scm.com/downloads) installed
+
+### Step 1: Download and Build
 
 ```bash
+# Clone the repository
 git clone https://github.com/kagenti/mcp-gateway.git
 cd mcp-gateway
-make build
+
+# Build the binary
+go build -o bin/mcp-broker-router ./cmd/mcp-broker-router
 ```
+
+**Why build from source**: The binary installation method requires building from source as pre-built binaries are not currently distributed.
 
 ### Step 2: Create Configuration File
 
@@ -38,14 +48,13 @@ servers:
 ### Step 3: Start the Gateway
 
 ```bash
-make run
+# Run the binary with your configuration
+./bin/mcp-broker-router --config=config/samples/config.yaml --log-level=-4
 ```
 
-**Or run the binary directly:**
-
-```bash
-./bin/mcp-broker-router --config=config/samples/config.yaml
-```
+**Configuration options:**
+- `--config`: Path to your YAML configuration file
+- `--log-level`: Logging verbosity (-4 for debug, 0 for info, 4 for errors only)
 
 The gateway starts with:
 - HTTP broker listening on `0.0.0.0:8080`
@@ -61,65 +70,4 @@ curl http://localhost:8080/health
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
-```
-
-## Troubleshooting
-
-### Gateway Not Starting
-
-**Check port availability:**
-
-```bash
-# Linux/Mac
-lsof -i :8080
-lsof -i :50051
-```
-
-**Verify configuration syntax:**
-
-```bash
-# Kubernetes
-kubectl get mcpserver -A
-kubectl describe mcpserver <name> -n <namespace>
-
-# Standalone
-cat config/samples/config.yaml
-```
-
-### Backend Servers Not Discovered
-
-**Check controller logs:**
-
-```bash
-kubectl logs -n mcp-system deployment/mcp-controller
-```
-
-**Verify HTTPRoute exists:**
-
-```bash
-kubectl get httproute -A
-kubectl describe httproute <route-name> -n <namespace>
-```
-
-**Check RBAC permissions:**
-
-```bash
-kubectl get clusterrole mcp-controller-role
-kubectl get clusterrolebinding mcp-controller-rolebinding
-```
-
-### Tools Not Appearing
-
-**Check broker logs:**
-
-```bash
-kubectl logs -n mcp-system deployment/mcp-broker-router -c broker | grep "Discovered tools"
-```
-
-**Verify backend server is reachable:**
-
-```bash
-# From within the cluster
-kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- \
-  curl http://<backend-service>.<namespace>.svc.cluster.local:<port>/health
 ```

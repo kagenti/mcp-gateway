@@ -1,25 +1,39 @@
 # MCP Gateway Documentation
 
-This documentation is organized by user needs:
+## Get Started
 
-## Understanding "Why" and "What"
+**Want to try MCP Gateway?** Start here: **[Installation Guide](./guides/how-to-install-and-configure.md)**
 
-**Audience**: Anyone wanting to learn about the MCP Gateway architecture
+This guide walks you through setting up MCP Gateway on Kubernetes and connecting your first MCP servers.
 
-**See**: [`./design/`](./design/) folder for architecture overview, design principles, and component responsibilities.
+## Guides and Tutorials
 
-## Understanding "How It Works" 
+The [`./guides/`](./guides/) folder contains step-by-step instructions for installing, configuring, and using MCP Gateway:
 
-**Audience**: Developers and contributors who need to understand internals
+**Essential Setup:**
+- [Installation and Configuration](./guides/how-to-install-and-configure.md) - Get MCP Gateway running
+- [Configure Gateway Routing](./guides/configure-mcp-gateway-listener-and-router.md) - Set up traffic routing
+- [Configure MCP Servers](./guides/configure-mcp-servers.md) - Connect internal servers
+- [External MCP Servers](./guides/external-mcp-server.md) - Connect to external APIs
 
-**See**: [`./dev/`](./dev/) for code architecture and development workflows.
+**Advanced Features:**
+- [Authentication](./guides/authentication.md) - OAuth-based security
+- [Authorization](./guides/authorization.md) - Fine-grained access control  
+- [Virtual MCP Servers](./guides/virtual-mcp-servers.md) - Focused tool collections
+- [Binary Installation](./guides/binary-install.md) - Non-Kubernetes deployment
+- [Troubleshooting](./guides/troubleshooting.md) - Common issues and solutions
 
-## Understanding "How to Get It Working"
+## Architecture and Design
 
-**Audience**: Anyone deploying and using MCP Gateway
+The [`./design/`](./design/) folder explains the architecture, design principles, and component responsibilities:
 
-**See**: [`./guides/`](./guides/) folder for installation guides, tutorials, and troubleshooting.
+- [Architecture Overview](./design/overview.md) - High-level system design
+- [Authentication Design](./design/auth-phase-1.md) - Security architecture
+- [Routing Design](./design/routing.md) - Traffic routing concepts
+- [Request Flows](./design/flows.md) - How requests are processed
 
----
+## Development and Internals
 
-**Quick Start**: Start with [Design Overview](./design/overview.md), then [Installation Guide](./guides/how-to-install-and-configure.md).
+The [`./dev/`](./dev/) folder covers code architecture and development workflows:
+
+- [Understanding Architecture](./dev/understanding-mcp-gateway-architecture.md) - Explore running system components

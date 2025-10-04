@@ -1,11 +1,247 @@
 # Authentication Configuration
 
-This guide covers configuring authentication for MCP Gateway.
+This guide covers configuring authentication for MCP Gateway using the Model Context Protocol (MCP) authorization specification.
 
 ## Overview
 
-TODO: Document authentication mechanisms and configuration options.
+MCP Gateway implements the [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) which is based on OAuth 2.1. When authentication is enabled, the MCP Gateway broker acts as an OAuth 2.1 resource server, requiring valid access tokens for protected requests.
 
-## Coming Soon
+Key concepts:
+- **OAuth 2.1 Resource Server**: MCP Gateway validates access tokens issued by your identity provider
+- **WWW-Authenticate Response**: Returns 401 with authorization server discovery information
+- **Protected Resource Metadata**: Exposes OAuth configuration at `/.well-known/oauth-protected-resource`
+- **Dynamic Client Registration**: Supports automatic client registration for MCP clients
 
-This guide is under development. For now, see the external MCP server guide for credential configuration examples.
+## Prerequisites
+
+- MCP Gateway installed and configured
+- Identity provider supporting OAuth 2.1 (this guide uses Keycloak)
+- [Kuadrant operator](https://docs.kuadrant.io/1.2.x/install-helm/) installed
+- [Node.js and npm](https://nodejs.org/en/download/) installed (for MCP Inspector testing)
+
+**Note**: This guide demonstrates authentication using Kuadrant's AuthPolicy, but MCP Gateway supports any Istio/Gateway API compatible authentication mechanism.
+
+## Step 1: Deploy Identity Provider
+
+Deploy Keycloak as your OAuth 2.1 authorization server:
+
+```bash
+# Install Keycloak
+kubectl apply -f https://raw.githubusercontent.com/kagenti/mcp-gateway/main/config/keycloak/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/kagenti/mcp-gateway/main/config/keycloak/httproute.yaml
+
+# Wait for Keycloak to be ready
+kubectl wait --for=condition=ready pod -l app=keycloak -n keycloak --timeout=120s
+```
+
+Create the MCP realm and test user. This sets up a dedicated OAuth realm for MCP Gateway with proper OIDC configuration and dynamic client registration support:
+
+```bash
+# Get admin access token from Keycloak
+TOKEN=$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8889/realms/master/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin" \
+  -d "password=admin" \
+  -d "grant_type=password" \
+  -d "client_id=admin-cli" | jq -r '.access_token')
+
+# Create MCP realm
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "realm": "mcp",
+    "enabled": true,
+    "displayName": "MCP Gateway Realm",
+    "registrationAllowed": true,
+    "registrationEmailAsUsername": false,
+    "rememberMe": true,
+    "verifyEmail": false,
+    "loginWithEmailAllowed": true,
+    "duplicateEmailsAllowed": false,
+    "resetPasswordAllowed": true,
+    "editUsernameAllowed": false,
+    "bruteForceProtected": true
+  }'
+
+# Create test user 'mcp' with password 'mcp'
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "mcp",
+    "enabled": true,
+    "firstName": "MCP",
+    "lastName": "User",
+    "email": "mcp@example.com",
+    "emailVerified": true,
+    "credentials": [{
+      "type": "password",
+      "value": "mcp",
+      "temporary": false
+    }]
+  }'
+
+# Enable dynamic client registration for the MCP realm
+curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "realm": "mcp",
+    "enabled": true,
+    "registrationAllowed": true,
+    "clientRegistrationFlow": "registration",
+    "clientAuthenticationFlow": "clients"
+  }'
+```
+
+**Why this setup is needed:**
+- **Dedicated Realm**: Isolates MCP authentication from other applications
+- **Dynamic Client Registration**: Allows MCP clients to automatically register without manual setup
+- **Test User**: Provides credentials for testing the OAuth flow
+- **OIDC Configuration**: Enables proper JWT token issuance with required claims
+
+## Step 2: Configure MCP Gateway OAuth Environment
+
+Configure the MCP Gateway broker to respond with OAuth discovery information:
+
+```bash
+kubectl set env deployment/mcp-gateway-broker-router \
+  OAUTH_RESOURCE_NAME="MCP Server" \
+  OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
+  OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
+  OAUTH_BEARER_METHODS_SUPPORTED="header" \
+  OAUTH_SCOPES_SUPPORTED="basic,groups" \
+  -n mcp-system
+```
+
+**Environment Variables Explained:**
+
+- `OAUTH_RESOURCE_NAME`: Human-readable name for this resource server
+- `OAUTH_RESOURCE`: Canonical URI of the MCP server (used for token audience validation)  
+- `OAUTH_AUTHORIZATION_SERVERS`: Authorization server URL for client discovery
+- `OAUTH_BEARER_METHODS_SUPPORTED`: Supported bearer token methods (header, body, query)
+- `OAUTH_SCOPES_SUPPORTED`: OAuth scopes this resource server understands
+
+## Step 3: Configure AuthPolicy for Authentication
+
+Apply the authentication policy that validates JWT tokens:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: mcp-auth-policy
+  namespace: gateway-system
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mcp-gateway
+    sectionName: mcp
+  defaults:
+    when:
+      - predicate: "!request.path.contains('/.well-known')"
+    rules:
+      authentication:
+        'keycloak':
+          jwt:
+            issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+      response:
+        unauthenticated:
+          code: 401
+          headers:
+            'WWW-Authenticate':
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+          body:
+            value: |
+              {
+                "error": "Unauthorized",
+                "message": "Authentication required."
+              }
+EOF
+```
+
+**Key Configuration Points:**
+
+- **JWT Validation**: Validates tokens against Keycloak's OIDC issuer
+- **Discovery Exclusion**: Allows unauthenticated access to `/.well-known` endpoints
+- **WWW-Authenticate Header**: Points clients to OAuth discovery metadata
+- **Standard Response**: Returns 401 with proper OAuth error format
+
+## Step 4: Verify OAuth Discovery
+
+Test that the broker now serves OAuth discovery information:
+
+```bash
+# Check the protected resource metadata endpoint
+curl http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+
+# Should return OAuth 2.0 Protected Resource Metadata like:
+# {
+#   "resource": "http://mcp.127-0-0-1.sslip.io:8888/mcp",
+#   "authorization_servers": ["http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"],
+#   "bearer_methods_supported": ["header"],
+#   "scopes_supported": ["basic", "groups"]
+# }
+```
+
+Test that protected endpoints now require authentication:
+
+```bash
+# This should return 401 with WWW-Authenticate header
+curl -v http://mcp.127-0-0-1.sslip.io:8888/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+```
+
+## Step 5: Test Authentication Flow
+
+Use the MCP Inspector to test the complete OAuth flow. You'll need to set up port forwarding to access the gateway through your local browser:
+
+```bash
+# Start port forwarding to the Istio gateway
+kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 &
+PORT_FORWARD_PID=$!
+
+# Start MCP Inspector (requires Node.js/npm)
+npx @modelcontextprotocol/inspector@latest &
+INSPECTOR_PID=$!
+
+# Wait a moment for services to start
+sleep 3
+
+# Open MCP Inspector with the gateway URL
+open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"
+```
+
+**What this does:**
+- **Port Forwarding**: Makes the Istio gateway accessible on localhost:8888
+- **MCP Inspector**: Launches the official MCP debugging tool
+- **Auto-Configuration**: Pre-configures the inspector to connect to your gateway
+
+**To stop the services later:**
+```bash
+kill $PORT_FORWARD_PID $INSPECTOR_PID
+```
+
+The MCP Inspector will:
+1. Detect the 401 response and WWW-Authenticate header
+2. Retrieve authorization server metadata from `/.well-known/oauth-protected-resource`
+3. Perform dynamic client registration (if supported)
+4. Redirect to Keycloak for user authentication
+5. Exchange authorization code for access token
+6. Use the access token for subsequent MCP requests
+
+**Test Credentials**: `mcp` / `mcp`
+
+## Alternative Authentication Methods
+
+While this guide uses Kuadrant AuthPolicy with Keycloak, MCP Gateway supports any Istio/Gateway API compatible authentication mechanism including other identity providers and authentication methods.
+
+## Next Steps
+
+With authentication configured, you can proceed to:
+- **[Authorization Configuration](./authorization.md)** - Control which users can access specific tools
+- **[External MCP Servers](./external-mcp-server.md)** - Connect authenticated external services
