@@ -49,7 +49,7 @@ generate-crds: ## Generate CRD manifests from Go types
 update-helm-crds: generate-crds ## Update Helm chart CRDs (run after generate-crds)
 	@echo "Copying CRDs to Helm chart..."
 	@mkdir -p charts/mcp-gateway/crds
-	cp config/crd/*.yaml charts/mcp-gateway/crds/
+	cp config/crd/mcp.kagenti.com_*.yaml charts/mcp-gateway/crds/
 	@echo "✅ Helm chart CRDs updated"
 
 # Generate CRDs and update Helm chart in one step
