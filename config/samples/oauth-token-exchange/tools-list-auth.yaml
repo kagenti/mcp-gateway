@@ -15,7 +15,7 @@ spec:
     authentication:
       'keycloak':
         jwt:
-          issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+          issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
     authorization:
       'allow-tool-list':
         patternMatching:

@@ -83,7 +83,7 @@ inspect-mock-impl: inspect-server1
 inspect-gateway: ## Open MCP Inspector for the gateway
 	@echo "Setting up port-forward to gateway..."
 	@-pkill -f "kubectl.*port-forward.*mcp-gateway-istio" || true
-	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8081 > /dev/null 2>&1 & \
+	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8889 > /dev/null 2>&1 & \
 		PF_PID=$$!; \
 		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
 		sleep 2; \
