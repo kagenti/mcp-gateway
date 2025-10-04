@@ -60,7 +60,7 @@ spec:
   targetRef:
     group: "gateway.networking.k8s.io"
     kind: "HTTPRoute"
-    name: "mcp-api-key-server-route"
+    name: "mcp-api-key-server-route"  # The name and namespace of your MCP Server HTTPRoute
     namespace: "mcp-test"
 EOF
 ```
@@ -74,10 +74,10 @@ Check that the MCPServer was created and discovered:
 kubectl get mcpserver -A
 
 # Check controller logs
-kubectl logs -n mcp-system deployment/mcp-controller | grep "my-mcp-server"
+kubectl logs -n mcp-system deployment/mcp-gateway-controller
 
 # Check broker logs for tool discovery
-kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered tools"
+kubectl logs -n mcp-system deployment/mcp-gateway-broker-router | grep "Discovered tools"
 ```
 
 ## Step 4: Test Tool Discovery
@@ -85,17 +85,33 @@ kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered tools
 Verify that your MCP server tools are now available through the gateway:
 
 ```bash
-# Test tools/list through the gateway
-curl -X POST http://mcp.example.com:8080/mcp \
+# Step 1: Initialize MCP session and capture session ID
+# Use -D to dump headers to a file, then read the session ID
+curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
   -H "Content-Type: application/json" \
-  -H "Host: mcp.example.com" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}'
+
+# Extract the MCP session ID from response headers
+SESSION_ID=$(grep -i "mcp-session-id:" /tmp/mcp_headers | cut -d' ' -f2 | tr -d '\r')
+
+echo "MCP Session ID: $SESSION_ID"
+
+# Step 2: List tools using the session ID
+curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'
+
+# Clean up
+rm -f /tmp/mcp_headers
 ```
 
 You should now see your MCP server tools in the response, prefixed with your configured `toolPrefix` (e.g., `myserver_`).
 
-The controller will:
-- Discover the HTTPRoute referenced in `targetRef`
-- Extract the backend service URL
-- Update the broker configuration with the new server
-- Enable routing for tools with the specified prefix
+## Next Steps
+
+Once you have MCP servers configured, you can explore advanced features:
+
+- **[Virtual MCP Servers](./virtual-mcp-servers.md)** - Create focused tool collections
+- **[Authentication](./authentication.md)** - Configure OAuth-based security
+- **[Authorization](./authorization.md)** - Set up fine-grained access control

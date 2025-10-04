@@ -245,9 +245,8 @@ Test the external MCP server through the gateway:
 
 ```bash
 # Test tools/list through the gateway
-curl -X POST http://mcp.example.com:8080/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Host: mcp.example.com" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 

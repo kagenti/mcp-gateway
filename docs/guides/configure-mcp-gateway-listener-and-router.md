@@ -24,7 +24,7 @@ spec:
   listeners:
   # ... your existing listeners ...
   - name: mcp
-    hostname: 'mcp.example.com'  # Change to your hostname
+    hostname: 'mcp.127-0-0-1.sslip.io'  # Change to your hostname
     port: 8080
     protocol: HTTP
     allowedRoutes:
@@ -48,7 +48,7 @@ spec:
     - name: your-gateway-name        # Change to your Gateway name
       namespace: your-gateway-namespace  # Change to your Gateway namespace
   hostnames:
-    - 'mcp.example.com'              # Match the Gateway listener hostname
+    - 'mcp.127-0-0-1.sslip.io'              # Match the Gateway listener hostname
   rules:
     - matches:
         - path:
@@ -141,7 +141,7 @@ EOF
 Test that the MCP endpoint is accessible through your Gateway:
 
 ```bash
-curl -X POST http://mcp.example.com:8080/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize"}'
 ```
