@@ -5,7 +5,7 @@ urls-impl:
 	@echo "=== MCP Gateway URLs ==="
 	@echo ""
 	@echo "Gateway (via port-forward):"
-	@echo "  http://mcp.127-0-0-1.sslip.io:8888"
+	@echo "  http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)"
 	@echo ""
 	@echo "Local Services:"
 	@echo "  Broker: http://localhost:8080"
@@ -15,7 +15,7 @@ urls-impl:
 	@echo "  http://localhost:8081/mcp"
 	@echo ""
 	@echo "Test commands:"
-	@echo "  curl http://mcp.127-0-0-1.sslip.io:8888/"
+	@echo "  curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)/"
 	@echo "  curl http://localhost:8080/"
 
 # Deprecated - use inspect-gateway instead
@@ -83,16 +83,16 @@ inspect-mock-impl: inspect-server1
 inspect-gateway: ## Open MCP Inspector for the gateway
 	@echo "Setting up port-forward to gateway..."
 	@-pkill -f "kubectl.*port-forward.*mcp-gateway-istio" || true
-	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 8889:8081 > /dev/null 2>&1 & \
+	@kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP):8080 > /dev/null 2>&1 & \
 		PF_PID=$$!; \
 		trap "echo '\nCleaning up...'; kill $$PF_PID 2>/dev/null || true; exit" INT TERM; \
 		sleep 2; \
 		echo "Opening MCP Inspector for gateway"; \
-		echo "URL: http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
+		echo "URL: http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)/mcp"; \
 		echo ""; \
 		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
 		sleep 2; \
-		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"; \
+		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
 		wait; \
 		kill $$PF_PID 2>/dev/null || true
