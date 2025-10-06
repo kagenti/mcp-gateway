@@ -260,6 +260,7 @@ func TestRegisterServer(t *testing.T) {
 		require.Equal(t, expectedTool.Tool.InputSchema.Properties, tool.Tool.InputSchema.Properties, "InputSchema properties for tool %q", name)
 		require.Equal(t, expectedTool.Tool.InputSchema, tool.Tool.InputSchema, "InputSchema for tool %q", name)
 		require.Equal(t, expectedTool.Tool.Meta, tool.Tool.Meta, "Meta for tool %q", name)
+		require.Equal(t, expectedTool.Tool.OutputSchema, tool.Tool.OutputSchema, "OutputSchema for tool %q", name)
 	}
 
 	_ = broker.Shutdown(context.Background())
