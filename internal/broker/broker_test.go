@@ -15,6 +15,7 @@ import (
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/tests/server2"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,6 +31,11 @@ const (
 )
 
 var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+// See https://stackoverflow.com/questions/28817992/how-to-set-bool-pointer-to-true-in-struct-literal
+func pointer[T any](d T) *T {
+	return &d
+}
 
 // TestMain starts an MCP server that we will run actual tests against
 func TestMain(m *testing.M) {
@@ -101,6 +107,160 @@ func TestRegisterServer(t *testing.T) {
 		"mcp_add_service_cluster",
 	)
 	require.NoError(t, err)
+
+	brokerImpl, ok := broker.(*mcpBrokerImpl)
+	require.True(t, ok)
+	require.NotNil(t, brokerImpl.listeningMCPServer)
+
+	expectedTools := map[string]*server.ServerTool{
+		"testprefix-regheaders": {
+			Tool: mcp.Tool{
+				Description: "get HTTP headers",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "header inspector",
+					ReadOnlyHint:    pointer(true),
+					DestructiveHint: pointer(false),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type:       "object",
+					Properties: map[string]interface{}(nil),
+				},
+			},
+		},
+		"testprefix-regtime": {
+			Tool: mcp.Tool{
+				Description: "Get the current time",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "Clock",
+					ReadOnlyHint:    pointer(true),
+					DestructiveHint: pointer(false),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type:       "object",
+					Properties: map[string]interface{}(nil),
+				},
+			},
+		},
+		"testprefix-reghello_world": {
+			Tool: mcp.Tool{
+				Description: "Say hello to someone",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "greeter tool",
+					ReadOnlyHint:    pointer(true),
+					DestructiveHint: pointer(false),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Name of the person to greet",
+						},
+					},
+					Required: []string{"name"},
+				},
+			},
+		},
+		"testprefix-regpour_chocolate_into_mold": {
+			Tool: mcp.Tool{
+				Description: "Pour chocolate into mold",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "chocolate fill tool",
+					ReadOnlyHint:    pointer(false),
+					DestructiveHint: pointer(true),
+					IdempotentHint:  pointer(false),
+					OpenWorldHint:   pointer(true),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"quantity": map[string]interface{}{
+							"type":        "string",
+							"description": "milliliters",
+						},
+					},
+					Required: []string{"quantity"},
+				},
+			},
+		},
+		"testprefix-regset_time": {
+			Tool: mcp.Tool{
+				Description: "Set the clock",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "set time tool",
+					ReadOnlyHint:    pointer(false),
+					DestructiveHint: pointer(true),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"time": map[string]interface{}{
+							"type":        "string",
+							"description": "new time",
+						},
+					},
+					Required: []string{"time"},
+				},
+			},
+		},
+		"testprefix-regslow": {
+			Tool: mcp.Tool{
+				Description: "Delay for N seconds",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "delay tool",
+					ReadOnlyHint:    pointer(true),
+					DestructiveHint: pointer(false),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"seconds": map[string]interface{}{
+							"type":        "string",
+							"description": "number of seconds to wait",
+						},
+					},
+					Required: []string{"seconds"},
+				},
+			},
+		},
+		"testprefix-regauth1234": {
+			Tool: mcp.Tool{
+				Description: "check authorization header",
+				Annotations: mcp.ToolAnnotation{
+					Title:           "auth header verifier",
+					ReadOnlyHint:    pointer(true),
+					DestructiveHint: pointer(false),
+					IdempotentHint:  pointer(true),
+					OpenWorldHint:   pointer(false),
+				},
+				InputSchema: mcp.ToolInputSchema{
+					Type:       "object",
+					Properties: map[string]interface{}(nil),
+				},
+			},
+		},
+	}
+
+	require.Len(t, brokerImpl.listeningMCPServer.ListTools(), len(expectedTools))
+	for name, tool := range brokerImpl.listeningMCPServer.ListTools() {
+		expectedTool, ok := expectedTools[name]
+		require.True(t, ok, "Found unexpected tool named %q", name)
+		require.Equal(t, expectedTool.Tool.Description, tool.Tool.Description, "Description for tool %q", name)
+		require.Equal(t, expectedTool.Tool.Annotations, tool.Tool.Annotations, "Annotations for tool %q", name)
+		require.Equal(t, expectedTool.Tool.InputSchema.Properties, tool.Tool.InputSchema.Properties, "InputSchema properties for tool %q", name)
+		require.Equal(t, expectedTool.Tool.InputSchema, tool.Tool.InputSchema, "InputSchema for tool %q", name)
+		require.Equal(t, expectedTool.Tool.Meta, tool.Tool.Meta, "Meta for tool %q", name)
+	}
 
 	_ = broker.Shutdown(context.Background())
 }
