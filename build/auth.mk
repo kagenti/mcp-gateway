@@ -27,9 +27,9 @@ oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions man
 	@kubectl -n mcp-system apply -k ./config/example-access-control/
 	@echo "✅ CORS configured"
 	@echo ""
-	@echo "Step 4/4: Hacking cluster DNS to resolve *.sslip.io domain names..."
-	@./utils/hack-kube-dns.sh
-	@echo "✅ Cluster DNS patched"
+	@echo "Step 4/4: Patch Authorino deployment to resolve external Keycloak host name..."
+	@./utils/patch-authorino-keycloak-hostname.sh
+	@echo "✅ Authorino deployment patched"
 	@echo ""
 	@echo "🎉 OAuth example setup complete!"
 	@echo ""
@@ -66,9 +66,9 @@ oauth-token-exchange-example-setup: ## Setup auth example based on OAuth2 with T
 	@kubectl -n mcp-system apply -k ./config/example-access-control/
 	@echo "✅ CORS configured"
 	@echo ""
-	@echo "Step 4/4: Hacking cluster DNS to resolve *.sslip.io domain names..."
-	@./utils/hack-kube-dns.sh
-	@echo "✅ Cluster DNS patched"
+	@echo "Step 4/4: Patch Authorino deployment to resolve external Keycloak host name..."
+	@./utils/patch-authorino-keycloak-hostname.sh
+	@echo "✅ Authorino deployment patched"
 	@echo ""
 	@echo "🎉 OAuth example setup complete!"
 	@echo ""
