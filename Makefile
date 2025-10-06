@@ -63,10 +63,19 @@ check-crd-sync: ## Check if CRDs are synchronized between config/crd and charts/
 		echo "❌ Helm CRDs directory doesn't exist. Run 'make update-helm-crds'"; \
 		exit 1; \
 	fi
-	@if ! diff -r config/crd/ charts/mcp-gateway/crds/ >/dev/null 2>&1; then \
-		echo "❌ CRDs are out of sync!"; \
-		echo "Differences:"; \
-		diff -r config/crd/ charts/mcp-gateway/crds/ || true; \
+	@# Only compare actual CRD files, not kustomization.yaml
+	@SYNC_ERROR=0; \
+	for crd in config/crd/mcp.kagenti.com_*.yaml; do \
+		crd_name=$$(basename "$$crd"); \
+		if [ ! -f "charts/mcp-gateway/crds/$$crd_name" ]; then \
+			echo "❌ Missing CRD in Helm chart: $$crd_name"; \
+			SYNC_ERROR=1; \
+		elif ! diff "$$crd" "charts/mcp-gateway/crds/$$crd_name" >/dev/null 2>&1; then \
+			echo "❌ CRD differs: $$crd_name"; \
+			SYNC_ERROR=1; \
+		fi; \
+	done; \
+	if [ $$SYNC_ERROR -eq 1 ]; then \
 		echo ""; \
 		echo "Run 'make update-helm-crds' to sync, or 'make generate-crds-all' to regenerate and sync"; \
 		exit 1; \
