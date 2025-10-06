@@ -218,7 +218,7 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 		}
 
 		if !configChanged && !credentialValueChanged {
-			m.logger.Info("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
+			m.logger.Debug("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
 			return nil
 		}
 

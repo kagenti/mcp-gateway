@@ -81,7 +81,7 @@ func (p *ConfigPusher) PushConfig(ctx context.Context, servers []*config.MCPServ
 	}
 
 	if len(addresses) == 0 {
-		logger.Info("No broker endpoints found, skipping config push")
+		logger.V(1).Info("No broker endpoints found, skipping config push")
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func (p *ConfigPusher) PushConfig(ctx context.Context, servers []*config.MCPServ
 			"total", len(addresses))
 	}
 
-	logger.Info("Config push completed",
+	logger.V(1).Info("Config push completed",
 		"successful", len(addresses)-len(errors),
 		"failed", len(errors),
 		"total", len(addresses),
