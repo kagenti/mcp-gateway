@@ -50,37 +50,7 @@ jobs:
         fi
 
     - name: Verify CRDs are in sync
-      run: |
-        echo "Checking if CRDs are synchronized between config/crd/ and charts/mcp-gateway/crds/..."
-        
-        # Check if files exist in both locations
-        for crd_file in config/crd/*.yaml; do
-          filename=$(basename "$crd_file")
-          helm_crd="charts/mcp-gateway/crds/$filename"
-          
-          if [ ! -f "$helm_crd" ]; then
-            echo "❌ Missing CRD in Helm chart: $filename"
-            echo "Run 'make update-helm-crds' to sync CRDs"
-            exit 1
-          fi
-        done
-        
-        # Compare content of CRD files
-        if ! diff -r config/crd/ charts/mcp-gateway/crds/ >/dev/null 2>&1; then
-          echo "❌ CRDs are out of sync!"
-          echo ""
-          echo "Differences found:"
-          diff -r config/crd/ charts/mcp-gateway/crds/ || true
-          echo ""
-          echo "To fix this, run:"
-          echo "  make update-helm-crds"
-          echo ""
-          echo "Or if you want to regenerate from Go types:"
-          echo "  make generate-crds-all"
-          exit 1
-        fi
-        
-        echo "✅ All CRDs are synchronized!"
+      run: make check-crd-sync
 
     - name: Verify Helm chart can be templated
       run: |
