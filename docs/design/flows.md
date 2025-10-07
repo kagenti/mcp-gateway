@@ -1,7 +1,7 @@
 # MCP Gateway Request Flows
 
 
-Below are some theorised flows. They are likely to adapt and change as we get deeper into the weeds. The idea is to illustrate how it "might" work rather than dictate how it "should" work. 
+Below are some theorized flows. They are likely to adapt and change as we get deeper into the weeds. The idea is to illustrate how it "might" work rather than dictate how it "should" work. 
 
 > note: Some show "no auth" this is to reduce noise and focus on the main flow.
 
