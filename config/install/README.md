@@ -1,10 +1,10 @@
-# minimal MCP Gateway installation
+# Minimal MCP Gateway installation
 
 This directory provides a minimal installation of MCP Gateway with just the core components.
 
-## prerequisites
+## Prerequisites
 
-- kubernetes cluster (1.28+)
+- Kubernetes cluster (1.28+)
 - **gateway API CRDs installed** (required!)
   ```bash
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
@@ -12,9 +12,9 @@ This directory provides a minimal installation of MCP Gateway with just the core
 - gateway controller (istio, envoy gateway, etc.)
 - kubectl configured
 
-**note:** the controller will crash-loop until gateway API CRDs are present
+**Note:** the controller will crash-loop until gateway API CRDs are present
 
-## what gets installed
+## What gets installed
 
 - MCP Gateway CRDs (`MCPServer`)
 - MCP broker/router deployment
@@ -23,16 +23,16 @@ This directory provides a minimal installation of MCP Gateway with just the core
 - services (mcp-broker-router, mcp-config)
 - basic HTTPRoute for the broker
 
-## what you need to provide
+## What you need to provide
 
 - gateway resource (your own gateway instance)
 - authentication/authorization (optional - kuadrant, keycloak, etc.)
 - TLS certificates (optional)
 - MCP server deployments
 
-## installation
+## Installation
 
-### from GitHub (recommended)
+### From GitHub (recommended)
 
 ```bash
 kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'
@@ -44,9 +44,9 @@ or a specific version tag:
 kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=v0.1.0'
 ```
 
-**note:** quotes are required in zsh to prevent globbing on the `?` character
+**Note:** quotes are required in zsh to prevent globbing on the `?` character
 
-### local development
+### Local Development
 
 ```bash
 git clone https://github.com/kagenti/mcp-gateway
@@ -54,7 +54,7 @@ cd mcp-gateway
 kubectl apply -k config/install
 ```
 
-## verify installation
+## Verify Installation
 
 ```bash
 # check namespace created
@@ -67,14 +67,14 @@ kubectl get deployments -n mcp-system
 kubectl get crd mcpservers.mcp.kagenti.com
 ```
 
-## next steps
+## Next Steps
 
 1. create a gateway resource that the HTTPRoute can attach to
 2. deploy your MCP servers
 3. create MCPServer resources to register them
 4. (optional) configure authentication via AuthPolicy
 
-## example gateway
+## Example Gateway
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -93,7 +93,7 @@ spec:
         from: All
 ```
 
-## example MCPServer
+## Example MCPServer
 
 ```yaml
 apiVersion: mcp.kagenti.com/v1alpha1
@@ -109,7 +109,7 @@ spec:
     name: my-mcp-route
 ```
 
-## uninstall
+## Uninstall
 
 ```bash
 kubectl delete -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'
