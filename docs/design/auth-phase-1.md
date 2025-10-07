@@ -78,7 +78,7 @@ example response:
 
 ```
 
-- ```resource:``` this property will be calcuated based on the host and path of the MCP gateway.
+- ```resource:``` this property will be calculated based on the host and path of the MCP gateway.
 
 - ```authorization_servers:``` this property is expected to an IDP that is support OAuth and is used by each of the MCP servers using OAuth.
 
@@ -87,7 +87,7 @@ example response:
 
 - ```scopes_supported:``` This is an aggregated list of scopes for the MCP servers.
 
-> As we are using an aggregated set of scopes, the client and token will be highly privelleged. This is something we will look to address in phase 2 via token exchange.
+> As we are using an aggregated set of scopes, the client and token will be highly privileged. This is something we will look to address in phase 2 via token exchange.
 
 > As we will pass on this token in phase 1 it is expected that the audiences of the token include audiences required by all MCPs or they have a shared audience.
 
@@ -95,20 +95,20 @@ example response:
 
 ### Authenticated MCP Gateway Calls
 
-Once a client has obtained a token, it can then make requests to the MCP Gateway. When a request comes to the gateway, the Kuadrant WASM plugin intercepts this request and based on configuration, will decide whether or not to call to the Authorino component. With the [Example AuthPolicy](./../../config/mcp-system/authpolicy.yaml), Authorino will recieve the request and then validate the token with the configured auth server before allowing the request to continue. 
+Once a client has obtained a token, it can then make requests to the MCP Gateway. When a request comes to the gateway, the Kuadrant WASM plugin intercepts this request and based on configuration, will decide whether or not to call to the Authorino component. With the [Example AuthPolicy](./../../config/mcp-system/authpolicy.yaml), Authorino will receive the request and then validate the token with the configured auth server before allowing the request to continue.
 
 ### Token Exchange for Legacy API Keys
 
-Some MCP Servers may use legacy API Keys. As part of defining the AuthPolicy that protects access to the MCP servers, just as we fetched an ACL from a HTTP endpoint, you can also have it fetch an API Key from a provider that exposes a HTTP interface such as Vault. An example of doing this and setting the value into the request header for the targetted MCP Server will also be provided as an example AuthPolicy. It is possible to define an indiviudal AuthPolicy per MCP Server backend as each MCP Server registered has a corrosponding HTTPRoute attached to the Gateway. See the [routing doc](../design/routing.md).
+Some MCP Servers may use legacy API Keys. As part of defining the AuthPolicy that protects access to the MCP servers, just as we fetched an ACL from a HTTP endpoint, you can also have it fetch an API Key from a provider that exposes a HTTP interface such as Vault. An example of doing this and setting the value into the request header for the targeted MCP Server will also be provided as an example AuthPolicy. It is possible to define an individual AuthPolicy per MCP Server backend as each MCP Server registered has a corresponding HTTPRoute attached to the Gateway. See the [routing doc](../design/routing.md).
 
-### Authorization of specfic MCP tools/calls
+### Authorization of specific MCP tools/calls
 
-When the router recieves a tools/call. It sets some headers for use by other component.
+When the router receives a tools/call, it sets some headers for use by other components.
 
 `x-mcp-toolname:` used to indicate what tool (including prefix) is being accessed
 `x-mcp-method:` used to indicate the json RPC method being called
 
-There is an [example second AuthPolicy](../../config/mcp-system/tool-call-auth.yaml) that targets a second listener in the Gatway that is dedicated to routing MCP server requests. This AuthPolicy, via Authorino, fetches metadata that defines an ACL. This is a simplistic example to illustrate how data can be fetched dynamically to make these decisions. It then uses this data in the authorization phase to allow or deny access.
+There is an [example second AuthPolicy](../../config/mcp-system/tool-call-auth.yaml) that targets a second listener in the Gateway that is dedicated to routing MCP server requests. This AuthPolicy, via Authorino, fetches metadata that defines an ACL. This is a simplistic example to illustrate how data can be fetched dynamically to make these decisions. It then uses this data in the authorization phase to allow or deny access.
 In addition to this simplistic ACL, we will also provide an example that uses the Keycloak resource roles feature to define access to tools.
 
 AuthPolicy here uses 3 key phases
