@@ -10,7 +10,7 @@ info-impl:
 	@echo "      Requires: Go 1.20+ for some tool installations."
 	@echo ""
 	@echo "Service URLs:"
-	@echo "  Gateway:     http://localhost:$(GATEWAY_LOCAL_PORT_HTTP) (run: make dev-gateway-forward)"
+	@echo "  Gateway:     http://localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP) (run: make dev-gateway-forward)"
 	@echo "  Broker:      http://localhost:8080 (run: make run-broker)"
 	@echo "  Router:      grpc://localhost:9002 (run: make run-router)"
 	@echo "  Mock MCP:    http://localhost:8081/mcp (run: kubectl port-forward -n mcp-server svc/mcp-test 8081:8081)"

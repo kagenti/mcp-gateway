@@ -37,11 +37,12 @@ dev-reset: # Reset to in-cluster service configuration
 
 # Port forward to access the gateway locally
 .PHONY: dev-gateway-forward
-dev-gateway-forward: ## Port forward the gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP)
-	@echo "Forwarding gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP)..."
-	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)"
-	@echo "Try: curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP):8080
+dev-gateway-forward: ## Port forward the gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)
+	@echo "Forwarding gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)..."
+	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
+	@echo "You can also access keycloak via the gateway at http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK)"
+	@echo "Try: curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
+	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8081
 
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway
@@ -55,7 +56,7 @@ dev-test: # Test MCP request through the gateway
 	curl -X POST \
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' \
-		http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP)/mcp
+		http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/mcp
 
 # Clean up port forwards
 .PHONY: dev-stop-forward
