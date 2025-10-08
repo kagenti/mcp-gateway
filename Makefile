@@ -112,10 +112,10 @@ deploy-controller: install-crd ## Deploy only the controller
 	kubectl apply -f config/mcp-system/deployment-controller.yaml
 
 # Build & load router/broker/controller image into the Kind cluster
-build-and-load-image:
+build-and-load-image: kind
 	@echo "Building and loading image into Kind cluster..."
 	docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway:latest .
-	kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
 	kubectl rollout restart deployment/mcp-broker-router -n mcp-system 2>/dev/null || true
 
 # Deploy example MCPServer
@@ -145,14 +145,14 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/custom-path-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 
 # Load test server images into Kind cluster
-kind-load-test-servers: build-test-servers ## Load test server images into Kind cluster
+kind-load-test-servers: kind build-test-servers ## Load test server images into Kind cluster
 	@echo "Loading test server images into Kind cluster..."
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest --name mcp-gateway
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-broken-server:latest --name mcp-gateway
-	kind load docker-image ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-broken-server:latest --name mcp-gateway
+	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest --name mcp-gateway
 
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing
@@ -166,7 +166,7 @@ docker-build: ## Build container image locally
 # Common reload steps
 define reload-image
 	@docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
-	@kind load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	@$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
 endef
 
 .PHONY: reload-controller
