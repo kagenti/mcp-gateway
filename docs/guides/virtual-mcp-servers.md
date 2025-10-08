@@ -71,19 +71,7 @@ spec:
 EOF
 ```
 
-**Important**: Replace the example tool names above with actual tools from your configured MCP servers. To see available tools, run:
-
-```bash
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'
-```
-
-**Configuration Explained:**
-- `name`: Identifier for the virtual server (used in header)
-- `namespace`: Kubernetes namespace (typically `mcp-system`)
-- `description`: Human-readable purpose description
-- `tools`: Array of tool names to include (must match exactly the tool names from your configured MCP servers)
+**Important**: Replace the example tool names above with actual tools from your configured MCP servers.
 
 ## Step 2: Verify Virtual Server Creation
 
@@ -101,11 +89,21 @@ Test your virtual servers using curl with the appropriate header:
 ### Test Development Tools Virtual Server
 
 ```bash
+curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}'
+
+# Extract the MCP session ID from response headers
+SESSION_ID=$(grep -i "mcp-session-id:" /tmp/mcp_headers | cut -d' ' -f2 | tr -d '\r')
+
+echo "MCP Session ID: $SESSION_ID"
+
 # Request tools from the dev-tools virtual server
 curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
   -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
   -H "X-Mcp-Virtualserver: mcp-system/dev-tools" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'
 ```
 
 **Expected Response**: Only tools specified in the `dev-tools` virtual server (the example tools you configured)
@@ -116,8 +114,9 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
 # Request tools from the data-tools virtual server
 curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
   -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
   -H "X-Mcp-Virtualserver: mcp-system/data-tools" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'
 ```
 
 **Expected Response**: Only tools specified in the `data-tools` virtual server (the example tools you configured)
@@ -127,8 +126,9 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
 ```bash
 # Request all available tools (no filtering)
 curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+  -H "mcp-session-id: $SESSION_ID" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'
 ```
 
 **Expected Response**: All tools from all configured MCP servers
@@ -137,72 +137,16 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
 
 You can also test virtual servers using the MCP Inspector by setting the virtual server header. The MCP Inspector allows you to configure custom headers for testing different virtual server configurations.
 
-## Combining with Authorization
-
-Virtual servers work excellently with [authorization policies](./authorization.md). You can:
-
-1. **Use virtual servers** to create focused tool collections
-2. **Use authorization policies** to control who can access which virtual servers
-3. **Layer both approaches** for fine-grained access control
-
-Example authorization flow:
-- **Virtual Server**: `dev-tools` contains development-related tools
-- **Authorization Policy**: Only users in `developers` group can access `dev-tools` virtual server
-- **Result**: Developers see only development tools they're authorized to use
-
-## Management and Updates
-
-### Update Virtual Server Tool Lists
-
-```bash
-# Update an existing virtual server (replace with your actual tool names)
-kubectl patch mcpvirtualserver dev-tools -n mcp-system --type='merge' -p='
-{
-  "spec": {
-    "tools": [
-      "your_actual_tool_1",
-      "your_actual_tool_2", 
-      "your_actual_tool_3",
-      "your_new_tool"
-    ]
-  }
-}'
-```
-
-### Remove Virtual Servers
+## Remove Virtual Servers
 
 ```bash
 # Delete a virtual server
 kubectl delete mcpvirtualserver dev-tools -n mcp-system
 ```
 
-## Verification and Monitoring
-
-### Check Virtual Server Status
-
-```bash
-# View all virtual servers and their configurations
-kubectl get mcpvirtualserver -A -o yaml
-
-# Check controller logs for virtual server processing
-kubectl logs -n mcp-system deployment/mcp-gateway-controller | grep -i virtual
-```
-
-### Validate Tool Availability
-
-```bash
-# Verify that tools specified in virtual servers actually exist
-# First get all available tools
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'
-
-# Then compare with your virtual server configurations
-kubectl get mcpvirtualserver -A -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.tools}{"\n"}{end}'
-```
-
 ## Next Steps
 
 With virtual MCP servers configured, you can:
+- **[Configure Authentication](./authentication.md)** - Add user identity validation to virtual servers
 - **[Configure Authorization](./authorization.md)** - Add access control to virtual servers
 - **[External MCP Servers](./external-mcp-server.md)** - Include external tools in virtual servers
