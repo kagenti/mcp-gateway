@@ -59,9 +59,9 @@ kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main
 
 This provides the same components as Helm but with less configuration flexibility.
 
-### Method 3: Binary Installation (Advanced)
+### Method 3: Standalone Installation (Advanced)
 
-For non-Kubernetes deployments or advanced use cases, see [Binary Installation Guide](./binary-install.md).
+For non-Kubernetes deployments or advanced use cases, see [Standalone Installation Guide](./binary-install.md).
 
 **Note:** This method is not fully supported and requires manual configuration of routing and service discovery. Also note that most guides lean into the kuberentes
 based setup, leveraging various CRDs and kubectl commands.

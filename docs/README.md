@@ -18,9 +18,9 @@ The [`./guides/`](./guides/) folder contains step-by-step instructions for insta
 
 **Advanced Features:**
 - [Authentication](./guides/authentication.md) - OAuth-based security
-- [Authorization](./guides/authorization.md) - Fine-grained access control  
+- [Authorization](./guides/authorization.md) - Fine-grained access control
 - [Virtual MCP Servers](./guides/virtual-mcp-servers.md) - Focused tool collections
-- [Binary Installation](./guides/binary-install.md) - Non-Kubernetes deployment
+- [Standalone Installation](./guides/binary-install.md) - Non-Kubernetes deployment
 - [Troubleshooting](./guides/troubleshooting.md) - Common issues and solutions
 
 ## Architecture and Design
