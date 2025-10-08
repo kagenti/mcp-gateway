@@ -48,6 +48,15 @@ type authMiddleware struct {
 }
 
 func (a *authMiddleware) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if os.Getenv("LOG_LEVEL") == "debug" {
+		log.Printf("Received request: %s %s", req.Method, req.URL.Path)
+		for h, values := range req.Header {
+			for _, v := range values {
+				log.Printf("\tHeader: %s: %s", h, v)
+			}
+		}
+	}
+
 	auth := strings.Split(req.Header.Get("Authorization"), " ")
 	if len(auth) != 2 {
 		http.Error(w, `{"error": "Unauthorized: missing or invalid Authorization header"}`, http.StatusUnauthorized)

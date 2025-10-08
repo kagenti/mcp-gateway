@@ -32,3 +32,5 @@ spec:
           value: oidc-server.mcp.local
         - name: EXPECTED_ADMIN_TOKEN
           value: test-api-key-secret-token-for-oidc-server
+        - name: LOG_LEVEL
+          value: debug
