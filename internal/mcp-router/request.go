@@ -135,9 +135,6 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	}
 
 	headers.WithAuthority(serverInfo.Hostname)
-	if serverInfo.Credential() != "" {
-		headers.WithAuth(serverInfo.Credential())
-	}
 
 	calculatedResponse, err := s.HeaderAndBodyResponse(headers, mcpReq)
 	if err != nil {
