@@ -43,6 +43,12 @@ data:
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
+        },
+        {
+          "clientId": "oidc-server.mcp.local",
+          "publicClient": true,
+          "standardFlowEnabled": false,
+          "fullScopeAllowed": false
         }
       ],
       "roles": {
@@ -96,6 +102,11 @@ data:
             {
               "name": "pi"
             }
+          ],
+          "oidc-server.mcp.local": [
+            {
+              "name": "hello_world"
+            }
           ]
         }
       },
@@ -116,6 +127,9 @@ data:
             ],
             "server3.mcp.local": [
               "add"
+            ],
+            "oidc-server.mcp.local": [
+              "hello_world"
             ]
           }
         }

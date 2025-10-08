@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-oidc-server
+  namespace: mcp-test
+  labels:
+    app: mcp-oidc-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-oidc-server
+  template:
+    metadata:
+      labels:
+        app: mcp-oidc-server
+    spec:
+      containers:
+      - name: server
+        image: ghcr.io/kagenti/mcp-gateway/test-oidc-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9090
+        env:
+        - name: MCP_TRANSPORT
+          value: "http"
+        - name: PORT
+          value: "9090"
+        - name: ISSUER_URL
+          value: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+        - name: EXPECTED_AUD
+          value: oidc-server.mcp.local
+        - name: EXPECTED_ADMIN_TOKEN
+          value: test-api-key-secret-token-for-oidc-server
