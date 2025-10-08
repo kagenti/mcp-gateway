@@ -215,7 +215,7 @@ Wait for the configuration to sync to the broker (this typically takes 10-15 sec
 ```bash
 # Wait for GitHub tools to be discovered
 echo "Waiting for GitHub tools to be discovered..."
-until kubectl logs -n mcp-system deploy/mcp-broker-router --tail=100 | grep -q "Discovered.*github.*94"; do
+until kubectl logs -n mcp-system deploy/mcp-broker-router | grep "Discovered.*tools.*github"; do
   echo "Still waiting..."
   sleep 5
 done
@@ -239,7 +239,7 @@ kubectl logs -n mcp-system deployment/mcp-controller | grep github
 kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered.*tools.*github"
 ```
 
-## Step 8: Test Integration
+## Test Integration
 
 Test the external MCP server through the gateway:
 
