@@ -25,23 +25,6 @@ kubectl cluster-info
 - Check that Gateway API CRDs are installed: `kubectl get crd gateways.gateway.networking.k8s.io`
 - Ensure Istio is installed: `kubectl get pods -n istio-system`
 
-### Kustomize Installation Fails
-
-**Symptom**: `kubectl apply -k` fails with validation errors
-
-```bash
-# Verify Gateway API CRDs exist
-kubectl get crd gateways.gateway.networking.k8s.io httproutes.gateway.networking.k8s.io
-
-# Check for resource conflicts
-kubectl get mcpserver -A
-kubectl get deployment -n mcp-system
-```
-
-**Solutions**:
-- Install Gateway API CRDs first: `kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml`
-- Delete existing resources if upgrading: `kubectl delete -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'`
-
 ### Pods Not Starting
 
 **Symptom**: MCP Gateway pods stuck in `Pending`, `CrashLoopBackOff`, or `ImagePullBackOff`
