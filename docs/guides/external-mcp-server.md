@@ -1,79 +1,34 @@
 # Connecting to External MCP Servers
 
-This guide demonstrates how to connect MCP Gateway to external MCP servers using Gateway API and Istio. We'll use the public GitHub MCP server in this example.
-
-## About the GitHub MCP Server
-
-The GitHub MCP server (https://api.githubcopilot.com/mcp/) provides programmatic access to GitHub functionality through the Model Context Protocol. It exposes 90+ tools for:
-- Repository management and queries
-- Issue and pull request operations
-- Code search and file operations
-- GitHub Actions workflow management
-
-More details: https://github.com/github/github-mcp-server
+This guide demonstrates how to connect MCP Gateway to external MCP servers using Gateway API and Istio. We'll use the public GitHub MCP server as an example.
 
 ## Prerequisites
 
-**Required Setup:** This guide assumes you've already created a local Kind cluster with MCP Gateway installed:
+- MCP Gateway installed and configured
+- Gateway and HTTPRoute configured for MCP Gateway  
+- Gateway API Provider (Istio) with ServiceEntry and DestinationRule support
+- Network egress access to external MCP server
+- Authentication credentials for the external server (if required)
 
-```bash
-make local-env-setup
-```
+## About the GitHub MCP Server
 
-This command creates a Kind cluster and installs:
-- Istio service mesh
-- Gateway API CRDs
-- MCP Gateway controller and broker
-- Test MCP servers
+The GitHub MCP server (https://api.githubcopilot.com/mcp/) provides programmatic access to GitHub functionality through the Model Context Protocol. It exposes 90+ tools for repository management, issues, pull requests, and code operations.
 
-If you haven't run this yet, do so before proceeding with this guide.
+For this example, you'll need a GitHub Personal Access Token with `read:user` permissions. Get one at https://github.com/settings/tokens/new
 
-### GitHub Personal Access Token (PAT)
-For this tutorial, you'll need a GitHub Personal Access Token (PAT) with minimal permissions
-
-**For GitHub.com:**
-1. Go to https://github.com/settings/tokens/new
-2. Select only: `read:user` - Read user profile data
-3. Generate the token
-
-**Production Note:** This static PAT approach is for demonstration only. In production, you would use OAuth flows for per-user authentication.
-
-**Set your token as an environment variable:**
 ```bash
 export GITHUB_PAT="ghp_YOUR_GITHUB_TOKEN_HERE"
 ```
 
-### Network Requirements
-- Egress access from your cluster to `api.githubcopilot.com` (port 443)
-
-## Verify Prerequisites
-
-Before proceeding, verify all dependencies are met:
-
-```bash
-# Verify MCP Gateway components are deployed
-kubectl get pods -n mcp-system
-kubectl get gateway -n gateway-system mcp-gateway
-
-# verify egress to GitHub's MCP server from a test pod
-kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- \
-  curl -I https://api.githubcopilot.com/mcp/
-
-# Test your GitHub token (outside cluster)
-curl -H "Authorization: Bearer $GITHUB_PAT" \
-  https://api.github.com/user
-```
-
 ## Overview
 
-To connect to an external MCP server using Istio and Gateway API, we need:
-1. A `Gateway` listener for the external hostname (`api.githubcopilot.com`)
-2. An `HTTPRoute` that matches the external hostname
-3. An `ExternalName` Service pointing to the external service
-4. A `ServiceEntry` to define the external service in Istio's service registry
-5. A `DestinationRule` for connection policies
-6. An `MCPServer` CR to register this MCP server with the gateway
-7. A `Secret` containing authentication credentials that the broker/router will use to authenticate with the external MCP server
+To connect to an external MCP server, you need:
+1. Gateway listener for the external hostname
+2. HTTPRoute that routes to an ExternalName Service  
+3. ServiceEntry to define the external service in Istio
+4. DestinationRule for connection policies
+5. MCPServer resource to register with MCP Gateway
+6. Secret with authentication credentials
 
 ## Step 1: Add External Hostname to Gateway
 
@@ -260,7 +215,7 @@ Wait for the configuration to sync to the broker (this typically takes 10-15 sec
 ```bash
 # Wait for GitHub tools to be discovered
 echo "Waiting for GitHub tools to be discovered..."
-until kubectl logs -n mcp-system deploy/mcp-broker-router --tail=100 | grep -q "Discovered.*github.*94"; do
+until kubectl logs -n mcp-system deploy/mcp-broker-router | grep "Discovered.*tools.*github"; do
   echo "Still waiting..."
   sleep 5
 done
@@ -271,43 +226,31 @@ echo "GitHub tools discovered!"
 
 ## Verification
 
-Check that the `MCPServer` is registered:
+Check that the MCPServer is registered:
 
 ```bash
+# Check MCPServer status
 kubectl get mcpservers -n mcp-test
-```
 
-Check the controller logs to see if it discovered the external server:
-
-```bash
+# Check controller logs
 kubectl logs -n mcp-system deployment/mcp-controller | grep github
-```
 
-Verify the broker discovered the tools:
-
-```bash
+# Check broker tool discovery
 kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered.*tools.*github"
-# should show: "Discovered tools mcpURL=https://api.githubcopilot.com:443/mcp #tools=94"
 ```
 
-Test the integration through the gateway:
+## Test Integration
+
+Test the external MCP server through the gateway:
 
 ```bash
-# Open MCP Inspector
-make inspect-gateway
+# Test tools/list through the gateway
+curl -X POST http://mcp.127-0-0-1.sslip.io:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 
-This will open the inspector at `http://mcp.127-0-0-1.sslip.io:8888/mcp`
-
-**Verify:**
-
-1. Navigate to **Tools** → **List Tools**
-   - You should see both test server tools and ~90 GitHub tools prefixed with `github_`
-
-2. Test a GitHub tool:
-   - Find and select `github_get_me`
-   - Click **Run Tool**
-   - Should return your GitHub user information
+You should see GitHub tools prefixed with `github_` in the response, along with any other configured MCP servers.
 
 ## Cleanup
 
