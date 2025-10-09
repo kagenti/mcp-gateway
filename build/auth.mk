@@ -61,7 +61,7 @@ oauth-token-exchange-example-setup: ## Setup auth example based on OAuth2 with T
 	@kubectl patch deployment/mcp-broker-router \
   	-n mcp-system \
   	--type='json' \
-  	-p='[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "TRUSTED_HEADER_PUBLIC_KEY", "valueFrom": {"secretKeyRef": {"name": "mcp-config-update-token","key": "token"}}}}]'
+  	-p='[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "TRUSTED_HEADER_PUBLIC_KEY", "valueFrom": {"secretKeyRef": {"name": "trusted-headers-public-key","key": "key"}}}}]'
 	@echo "✅ AuthPolicy configurations applied"
 	@echo ""
 	@echo "Step 3/4: Configuring CORS rules for the OpenID Connect Client Registration endpoint..."

@@ -38,7 +38,7 @@ spec:
                   selector: auth.authorization.authorized-tools.tools.@tostr
               tokenDuration: 300
               signingKeyRefs:
-                - name: wristband-signing-key
+                - name: trusted-headers-private-key
                   algorithm: ES256
       unauthorized:
         code: 401
