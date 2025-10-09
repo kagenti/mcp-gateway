@@ -63,7 +63,6 @@ oauth-token-exchange-example-setup: ## Setup auth example based on OAuth2 with T
 	@echo ""
 	@echo "Step 3/4: Configuring CORS rules for the OpenID Connect Client Registration endpoint..."
 	@kubectl apply -f ./config/keycloak/preflight_envoyfilter.yaml
-	@kubectl -n mcp-system apply -k ./config/example-access-control/
 	@echo "✅ CORS configured"
 	@echo ""
 	@echo "Step 4/4: Patch Authorino deployment to resolve external Keycloak host name..."
