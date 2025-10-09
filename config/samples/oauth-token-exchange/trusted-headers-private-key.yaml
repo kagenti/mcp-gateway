@@ -1,0 +1,14 @@
+# This is an example key for testing and demo purposes only
+apiVersion: v1
+kind: Secret
+metadata:
+  name: trusted-headers-private-key
+  namespace: kuadrant-system
+stringData:
+  key.pem: |
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
+    AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
+    95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+    -----END EC PRIVATE KEY-----
+type: Opaque
