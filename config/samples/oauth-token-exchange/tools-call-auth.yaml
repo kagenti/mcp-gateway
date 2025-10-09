@@ -16,6 +16,9 @@ spec:
           issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
     metadata:
       token-exchange:
+        when:
+        - predicate: |
+            request.headers['x-mcp-toolname'] in (has(auth.identity.resource_access) && auth.identity.resource_access.exists(p, p == request.host) ? auth.identity.resource_access[request.host].roles : [])
         http:
           url: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp/protocol/openid-connect/token
           method: POST
@@ -34,22 +37,24 @@ spec:
             scope:
               value: openid
     authorization:
-      'allow-tool-access':
-        patternMatching:
-          patterns:
-            - predicate: |
-                request.headers['x-mcp-toolname'] in (has(auth.identity.resource_access) && auth.identity.resource_access.exists(p, p == request.host) ? auth.identity.resource_access[request.host].roles : [])
       'token-exchange-success':
         patternMatching:
           patterns:
             - predicate: auth.metadata.exists(m, m == "token-exchange") && auth.metadata["token-exchange"].exists(k, k == "access_token")
+        priority: 0
+      'allow-tool-access':
+        patternMatching:
+          patterns:
+            - predicate: |
+                request.headers['x-mcp-toolname'] in (has(auth.metadata["token-exchange"].access_token.resource_access) && auth.metadata["token-exchange"].access_token.resource_access.exists(p, p == request.host) ? auth.metadata["token-exchange"].access_token.resource_access[request.host].roles : [])
+        priority: 1
     response:
       success:
         headers:
           authorization:
             plain:
               expression: |
-                "Bearer " + auth.metadata["token-exchange"]["access_token"]
+                "Bearer " + auth.metadata["token-exchange"].access_token
       unauthenticated:
         code: 401
         headers:
