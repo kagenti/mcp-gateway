@@ -25,7 +25,8 @@ const (
 // FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools header
 // The header is expected to be signed as a JWT if we cannot verify the JWT then nothing will be returned
 func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
-	originalTools := mcpRes.Tools
+	originalTools := make([]mcp.Tool, len(mcpRes.Tools))
+	copy(originalTools, mcpRes.Tools)
 	// set to empty by default
 	mcpRes.Tools = []mcp.Tool{}
 	broker.logger.Debug("FilteredTools: called", "result", originalTools)

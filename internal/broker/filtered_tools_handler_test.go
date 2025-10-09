@@ -5,10 +5,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"testing"
 
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -44,7 +42,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 		FullToolList         *mcp.ListToolsResult
 		AllowedToolsList     map[string][]string
 		RegisteredMCPServers mcpServers
-		allowfullToolList    bool
+		enforceFilterList    bool
 		ExpectedTools        []mcp.Tool
 	}{
 		{
@@ -79,7 +77,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			AllowedToolsList: map[string][]string{
 				"mcp1.server.local": {"tool"},
 			},
-			allowfullToolList: false,
+			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
 				{
 					Name: "test_tool",
@@ -90,10 +88,10 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			Name: "test filters tools with same tool name as expected",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
 				{
-					Name: "test_tool",
+					Name: "test1_tool",
 				},
 				{
-					Name: "test_tool",
+					Name: "test2_tool",
 				},
 			}},
 
@@ -135,10 +133,10 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				"mcp1.server.local": {"tool"},
 				"mcp2.server.local": {"tool"},
 			},
-			allowfullToolList: false,
+			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
 				{
-					Name: "test2_tool",
+					Name: "test1_tool",
 				},
 				{
 					Name: "test2_tool",
@@ -149,10 +147,10 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			Name: "test filters tools returns no tools if none allowed",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
 				{
-					Name: "test_tool",
+					Name: "test1_tool",
 				},
 				{
-					Name: "test_tool",
+					Name: "test2_tool",
 				},
 			}},
 
@@ -191,8 +189,48 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				},
 			},
 			AllowedToolsList:  map[string][]string{},
-			allowfullToolList: false,
+			enforceFilterList: true,
 			ExpectedTools:     []mcp.Tool{},
+		},
+		{
+			Name: "test filters tools returns all tools enforce tool filter set to false",
+			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
+				{
+					Name: "test1_tool",
+				},
+				{
+					Name: "test1_tool2",
+				},
+			}},
+
+			RegisteredMCPServers: mcpServers{
+				"http://upstream.mcp1.cluster.local": &upstreamMCP{
+					MCPServer: config.MCPServer{
+						Hostname:   "mcp1.server.local",
+						ToolPrefix: "test1_",
+					},
+					toolsResult: &mcp.ListToolsResult{
+						Tools: []mcp.Tool{
+							{
+								Name: "tool",
+							},
+							{
+								Name: "tool2",
+							},
+						},
+					},
+				},
+			},
+			AllowedToolsList:  nil,
+			enforceFilterList: false,
+			ExpectedTools: []mcp.Tool{
+				{
+					Name: "test1_tool",
+				},
+				{
+					Name: "test1_tool2",
+				},
+			},
 		},
 	}
 
@@ -200,30 +238,34 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 		t.Run(tc.Name, func(t *testing.T) {
 
 			mcpBroker := &mcpBrokerImpl{
-				enforceToolFilter: tc.allowfullToolList,
+				enforceToolFilter: tc.enforceFilterList,
 				trustedHeadersPublicKey: `-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVO
 VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 -----END PUBLIC KEY-----`,
 				logger: slog.Default(),
 			}
-			headerValue := createJWTHeader(tc.AllowedToolsList)
-			fmt.Println("header ", headerValue)
-			request := &mcp.ListToolsRequest{
-				Header: http.Header{
+
+			request := &mcp.ListToolsRequest{}
+			if tc.AllowedToolsList != nil {
+				headerValue := createJWTHeader(tc.AllowedToolsList)
+				request.Header = http.Header{
 					authorizedToolsHeader: {string(headerValue)},
-				},
+				}
 			}
 			mcpBroker.mcpServers = tc.RegisteredMCPServers
 			mcpBroker.FilteredTools(context.TODO(), 1, request, tc.FullToolList)
-			for _, et := range tc.ExpectedTools {
-				if !slices.ContainsFunc(tc.FullToolList.Tools, func(m mcp.Tool) bool {
-					if m.Name == et.Name {
-						return true
+
+			for _, exp := range tc.ExpectedTools {
+				found := false
+				for _, actual := range tc.FullToolList.Tools {
+					if exp.Name == actual.Name {
+						found = true
+						break
 					}
-					return false
-				}) {
-					t.Fatalf("returned tool list should not contain %s", et.Name)
+				}
+				if !found {
+					t.Fatalf("expeted to find tool %s but it was not in returned tools %v", exp.Name, tc.FullToolList.Tools)
 				}
 			}
 		})
