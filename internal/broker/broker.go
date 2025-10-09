@@ -138,15 +138,20 @@ type mcpBrokerImpl struct {
 
 	logger *slog.Logger
 
-	//allowUnfilteredList
+	//enforceToolFilter if set will ensure only a filtered list of tools is returned this list is based on the x-authorized-tools trusted header
 	enforceToolFilter bool
+
+	//trustedHeadersPublicKey this is the key to verify that a trusted header came from the trusted source (the owner of the private key)
+	trustedHeadersPublicKey string
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
+// BrokerOpts is a set of optional key values to configure the broker, if not present the broker will have a sensible default
 type BrokerOpts struct {
-	EnforceToolFilter bool
+	EnforceToolFilter       bool
+	TrustedHeadersPublicKey string
 }
 
 // NewBroker creates a new MCPBroker
@@ -154,11 +159,12 @@ func NewBroker(logger *slog.Logger, opts BrokerOpts) MCPBroker {
 
 	mcpBkr := &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
-		serverSessions:    map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
-		mcpServers:        map[upstreamMCPURL]*upstreamMCP{},
-		toolMapping:       map[toolName]*upstreamToolInfo{},
-		logger:            logger,
-		enforceToolFilter: opts.EnforceToolFilter,
+		serverSessions:          map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
+		mcpServers:              map[upstreamMCPURL]*upstreamMCP{},
+		toolMapping:             map[toolName]*upstreamToolInfo{},
+		logger:                  logger,
+		enforceToolFilter:       opts.EnforceToolFilter,
+		trustedHeadersPublicKey: opts.TrustedHeadersPublicKey,
 	}
 
 	hooks := &server.Hooks{}

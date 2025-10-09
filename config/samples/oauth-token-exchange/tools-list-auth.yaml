@@ -31,8 +31,15 @@ spec:
       success:
         headers:
           x-authorized-tools:
-            plain:
-              selector: auth.authorization.authorized-tools.tools.@tostr
+            wristband:
+              issuer: 'authorino'
+              customClaims:
+                'allowed-tools':
+                  selector: auth.authorization.authorized-tools.tools.@tostr
+              tokenDuration: 300
+              signingKeyRefs:
+                - name: wristband-signing-key
+                  algorithm: ES256
       unauthorized:
         code: 401
         headers:

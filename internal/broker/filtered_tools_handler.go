@@ -2,11 +2,16 @@ package broker
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
 
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -14,28 +19,57 @@ import (
 // (TODO)it must be encoded as a JWT token
 var authorizedToolsHeader = http.CanonicalHeaderKey("x-authorized-tools")
 
-// FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools head
+// FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools header
+// The header is expected to be signed as a JWT if we cannot verify the JWT then nothing will be returned
 func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
-	slog.Debug("FilteredTools called", "result", mcpRes.Tools)
-	filteredTools := []mcp.Tool{}
+	originalTools := mcpRes.Tools
+	// set to empty by default
+	mcpRes.Tools = []mcp.Tool{}
+	broker.logger.Debug("FilteredTools: called", "result", originalTools)
+
 	var allowedToolsValue string
+	if _, ok := mcpReq.Header[authorizedToolsHeader]; !ok {
+		broker.logger.Debug("FilteredTools: no tool filtering header sent ", "key", authorizedToolsHeader, "enforced filtering", broker.enforceToolFilter)
+		if broker.enforceToolFilter {
+			return
+		}
+		mcpRes.Tools = originalTools
+		return
+	}
 	if len(mcpReq.Header[authorizedToolsHeader]) > 0 {
 		allowedToolsValue = mcpReq.Header[authorizedToolsHeader][0]
 	}
 	if allowedToolsValue == "" {
-		slog.Debug("filter tools no x-authorized-tools header present", "enforceToolFilter ", broker.enforceToolFilter)
-		if broker.enforceToolFilter {
-			slog.Debug("full list not allowed")
-			mcpRes.Tools = filteredTools
-			return
-		}
+		broker.logger.Debug("FilteredTools: returning no tools", "Header present", authorizedToolsHeader, "no value specified", allowedToolsValue)
 		return
 	}
-	slog.Debug("filtering tools based on header", "value", allowedToolsValue)
+	if broker.trustedHeadersPublicKey == "" {
+		broker.logger.Error("no public key provided to validate", "header", authorizedToolsHeader, "header is set and has value", allowedToolsValue)
+		return
+	}
+
+	// validate the JWT that contains the tools claim
+	parsedToken, err := validateJWTHeader(allowedToolsValue, broker.trustedHeadersPublicKey)
+	if err != nil {
+		broker.logger.Error("did not validate trusted header value ", "header", authorizedToolsHeader, "value", allowedToolsValue, "err", err)
+		return
+	}
+	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
+		if toolsValue, ok := claims["allowed-tools"]; ok {
+			allowedToolsValue = toolsValue.(string)
+		} else {
+			broker.logger.Error("failed to retrieve allowed-tools claims from jwt")
+			return
+		}
+	} else {
+		broker.logger.Error("failed to retrieve claims from jwt")
+		return
+	}
+
+	broker.logger.Debug("filtering tools based on header", "value", allowedToolsValue)
 	authorizedTools := map[string][]string{}
 	if err := json.Unmarshal([]byte(allowedToolsValue), &authorizedTools); err != nil {
-		slog.Error("failed to unmarshall authorized tools header returning empty tool set", "error", err)
-		mcpRes.Tools = filteredTools
+		broker.logger.Error("failed to unmarshall authorized tools header returning empty tool set", "error", err)
 		return
 	}
 
@@ -44,7 +78,7 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 		// we key off the host so have to iterate for now
 		upstreamServer := broker.mcpServers.findByHost(server)
 		if upstreamServer == nil {
-			slog.Debug("failed to find registered upstream ", "server", server)
+			broker.logger.Debug("failed to find registered upstream ", "server", server)
 			continue
 		}
 		if upstreamServer.Hostname != server {
@@ -52,18 +86,34 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 		}
 
 		if upstreamServer.toolsResult == nil {
-			slog.Debug("no tools registered for upstream server", "server", upstreamServer.Hostname)
+			broker.logger.Debug("no tools registered for upstream server", "server", upstreamServer.Hostname)
 			continue
 		}
-		slog.Debug("upstream server found ", "upstream ", upstreamServer, "tools", upstreamServer.toolsResult.Tools)
+		broker.logger.Debug("upstream server found ", "upstream ", upstreamServer, "tools", upstreamServer.toolsResult.Tools)
 		for _, upstreamTool := range upstreamServer.toolsResult.Tools {
-			slog.Debug("checking access ", "tool", upstreamTool.Name, "against", allowedToolNames)
+			broker.logger.Debug("checking access ", "tool", upstreamTool.Name, "against", allowedToolNames)
 			if slices.Contains(allowedToolNames, upstreamTool.Name) {
-				slog.Debug("access granted to", "tool", upstreamTool)
+				broker.logger.Debug("access granted to", "tool", upstreamTool)
 				upstreamTool.Name = string(upstreamServer.prefixedName(upstreamTool.Name))
-				filteredTools = append(filteredTools, upstreamTool)
+				mcpRes.Tools = append(mcpRes.Tools, upstreamTool)
 			}
 		}
 	}
-	mcpRes.Tools = filteredTools
+}
+
+// currently limited to only ES256 we may want expand this to allow for other signing methods
+func validateJWTHeader(token string, publicKey string) (*jwt.Token, error) {
+	return jwt.Parse(token, func(t *jwt.Token) (any, error) {
+		block, _ := pem.Decode([]byte(publicKey))
+		pubkey, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		key, ok := pubkey.(*ecdsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("expected a *ecdsa.PublicKey %v", key)
+		}
+		return key, nil
+
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodES256.Alg()}))
 }

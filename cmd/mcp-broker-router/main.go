@@ -94,12 +94,24 @@ func main() {
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
 
-	slog.SetLogLoggerLevel(slog.Level(loglevel))
+	loggerOpts := &slog.HandlerOptions{}
 
-	if logFormat == "json" {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	switch loglevel {
+	case 0:
+		loggerOpts.Level = slog.LevelInfo
+	case 8:
+		loggerOpts.Level = slog.LevelError
+	case -4:
+		loggerOpts.Level = slog.LevelDebug
+	default:
+		loggerOpts.Level = slog.LevelDebug
 	}
 
+	logger = slog.New(slog.NewTextHandler(os.Stdout, loggerOpts))
+
+	if logFormat == "json" {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, loggerOpts))
+	}
 	if controllerMode {
 		fmt.Println("Starting in controller mode...")
 		go func() {
@@ -200,7 +212,8 @@ func setUpBroker(address string, toolFiltering bool) (*http.Server, broker.MCPBr
 	}
 
 	mcpBroker := broker.NewBroker(logger, broker.BrokerOpts{
-		EnforceToolFilter: toolFiltering,
+		EnforceToolFilter:       toolFiltering,
+		TrustedHeadersPublicKey: os.Getenv("TRUSTED_HEADER_PUBLIC_KEY"),
 	})
 
 	streamableHTTPServer := server.NewStreamableHTTPServer(
