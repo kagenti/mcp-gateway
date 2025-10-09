@@ -57,8 +57,11 @@ oauth-token-exchange-example-setup: ## Setup auth example based on OAuth2 with T
 	@echo "✅ OAuth environment variables configured"
 	@echo ""
 	@echo "Step 2/4: Applying AuthPolicy configurations..."
-	@kubectl apply -f ./config/samples/oauth-token-exchange/tools-list-auth.yaml
-	@kubectl apply -f ./config/samples/oauth-token-exchange/tools-call-auth.yaml
+	@kubectl apply -k ./config/samples/oauth-token-exchange/
+	@kubectl patch deployment/mcp-broker-router \
+  	-n mcp-system \
+  	--type='json' \
+  	-p='[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "TRUSTED_HEADER_PUBLIC_KEY", "valueFrom": {"secretKeyRef": {"name": "mcp-config-update-token","key": "token"}}}}]'
 	@echo "✅ AuthPolicy configurations applied"
 	@echo ""
 	@echo "Step 3/4: Configuring CORS rules for the OpenID Connect Client Registration endpoint..."

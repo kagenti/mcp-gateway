@@ -45,11 +45,6 @@ spec:
                 secretKeyRef:
                   name: mcp-config-update-token
                   key: token
-            - name: TRUSTED_HEADER_PUBLIC_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: trusted-headers-public-key
-                  key: key
           envFrom:
             - secretRef:
                 name: mcp-aggregated-credentials
