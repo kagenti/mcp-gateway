@@ -16,8 +16,11 @@ import (
 )
 
 // authorizedToolsHeader is a header expected to be set by a trused external source.
-// (TODO)it must be encoded as a JWT token
 var authorizedToolsHeader = http.CanonicalHeaderKey("x-authorized-tools")
+
+const (
+	allowedToolsClaimKey = "allowed-tools"
+)
 
 // FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools header
 // The header is expected to be signed as a JWT if we cannot verify the JWT then nothing will be returned
@@ -36,11 +39,15 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 		mcpRes.Tools = originalTools
 		return
 	}
-	if len(mcpReq.Header[authorizedToolsHeader]) > 0 {
-		allowedToolsValue = mcpReq.Header[authorizedToolsHeader][0]
+	if len(mcpReq.Header[authorizedToolsHeader]) != 1 {
+		broker.logger.Debug("FilteredTools: expected exactly 1 value", "header ", authorizedToolsHeader)
+		return
 	}
+
+	allowedToolsValue = mcpReq.Header[authorizedToolsHeader][0]
+
 	if allowedToolsValue == "" {
-		broker.logger.Debug("FilteredTools: returning no tools", "Header present", authorizedToolsHeader, "no value specified", allowedToolsValue)
+		broker.logger.Debug("FilteredTools: returning no tools", "Header present", authorizedToolsHeader, "empty value specified", allowedToolsValue)
 		return
 	}
 	if broker.trustedHeadersPublicKey == "" {
@@ -55,8 +62,12 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 		return
 	}
 	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
-		if toolsValue, ok := claims["allowed-tools"]; ok {
-			allowedToolsValue = toolsValue.(string)
+		if toolsValue, ok := claims[allowedToolsClaimKey]; ok {
+			allowedToolsValue, ok = toolsValue.(string)
+			if !ok {
+				broker.logger.Error("failed to retrieve allowed-tools claims from jwt it is not a string")
+				return
+			}
 		} else {
 			broker.logger.Error("failed to retrieve allowed-tools claims from jwt")
 			return
@@ -69,10 +80,14 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 	broker.logger.Debug("filtering tools based on header", "value", allowedToolsValue)
 	authorizedTools := map[string][]string{}
 	if err := json.Unmarshal([]byte(allowedToolsValue), &authorizedTools); err != nil {
-		broker.logger.Error("failed to unmarshall authorized tools header returning empty tool set", "error", err)
+		broker.logger.Error("failed to unmarshall authorized tools json header returning empty tool set", "error", err)
 		return
 	}
+	mcpRes.Tools = broker.filterTools(authorizedTools)
+}
 
+func (broker *mcpBrokerImpl) filterTools(authorizedTools map[string][]string) []mcp.Tool {
+	var filteredTools []mcp.Tool
 	for server, allowedToolNames := range authorizedTools {
 		slog.Debug("checking tools for server ", "server", server, "allowed tools for server", allowedToolNames, "mcpServers", broker.mcpServers)
 		// we key off the host so have to iterate for now
@@ -95,13 +110,14 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mc
 			if slices.Contains(allowedToolNames, upstreamTool.Name) {
 				broker.logger.Debug("access granted to", "tool", upstreamTool)
 				upstreamTool.Name = string(upstreamServer.prefixedName(upstreamTool.Name))
-				mcpRes.Tools = append(mcpRes.Tools, upstreamTool)
+				filteredTools = append(filteredTools, upstreamTool)
 			}
 		}
 	}
+	return filteredTools
 }
 
-// currently limited to only ES256 we may want expand this to allow for other signing methods
+// validateJWTHeader validates the JWT header expects ES256 alg.
 func validateJWTHeader(token string, publicKey string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		block, _ := pem.Decode([]byte(publicKey))

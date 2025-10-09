@@ -2,16 +2,42 @@ package broker
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"testing"
 
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func TestFilteredTools(t *testing.T) {
+
+	var createJWTHeader = func(allowedTools map[string][]string) string {
+		keyBytes := []byte(`-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
+AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
+95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+-----END EC PRIVATE KEY-----
+`)
+		claimPayload, _ := json.Marshal(allowedTools)
+		block, _ := pem.Decode(keyBytes)
+		token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{"allowed-tools": string(claimPayload)})
+		parsedKey, err := x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			t.Fatalf("error parsing key for jwt %s", err)
+		}
+		jwtToken, err := token.SignedString(parsedKey)
+		if err != nil {
+			t.Fatalf("error signing jwt %s", err)
+		}
+		return jwtToken
+	}
 
 	testCases := []struct {
 		Name                 string
@@ -175,8 +201,14 @@ func TestFilteredTools(t *testing.T) {
 
 			mcpBroker := &mcpBrokerImpl{
 				enforceToolFilter: tc.allowfullToolList,
+				trustedHeadersPublicKey: `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVO
+VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+-----END PUBLIC KEY-----`,
+				logger: slog.Default(),
 			}
-			headerValue, _ := json.Marshal(tc.AllowedToolsList)
+			headerValue := createJWTHeader(tc.AllowedToolsList)
+			fmt.Println("header ", headerValue)
 			request := &mcp.ListToolsRequest{
 				Header: http.Header{
 					authorizedToolsHeader: {string(headerValue)},
