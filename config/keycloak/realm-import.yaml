@@ -13,27 +13,6 @@ data:
       "clients": [
         {
           "clientId": "mcp-gateway",
-          "rootUrl": "http://localhost:8888",
-          "adminUrl": "http://localhost:8888",
-          "publicClient": true,
-          "redirectUris": [
-            "*"
-          ],
-          "webOrigins": [
-            "+"
-          ],
-          "defaultClientScopes": [
-            "profile",
-            "roles",
-            "basic",
-            "email"
-          ],
-          "optionalClientScopes": [
-            "groups"
-          ]
-        },
-        {
-          "clientId": "authorino",
           "publicClient": false,
           "secret": "secret",
           "standardFlowEnabled": false,
@@ -68,7 +47,7 @@ data:
       ],
       "roles": {
         "client": {
-          "authorino": [
+          "mcp-gateway": [
             {
               "name": "impersonator"
             }
@@ -124,7 +103,7 @@ data:
         {
           "name": "mcp-users",
           "clientRoles": {
-            "authorino": [
+            "mcp-gateway": [
               "impersonator"
             ]
           }

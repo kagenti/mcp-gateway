@@ -21,7 +21,7 @@ spec:
           method: POST
           headers:
             Authorization:
-              value: 'Basic YXV0aG9yaW5vOnNlY3JldA==' # authorino:secret
+              value: 'Basic bWNwLWdhdGV3YXk6c2VjcmV0' # mcp-gateway:secret
           bodyParameters:
             grant_type:
               value: urn:ietf:params:oauth:grant-type:token-exchange
