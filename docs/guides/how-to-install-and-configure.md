@@ -49,7 +49,17 @@ This automatically installs:
 - Required CRDs and RBAC
 - EnvoyFilter for Istio integration
 
-### Method 2: Standalone Installation (Advanced)
+### Method 2: Kustomize
+
+Install using Kubernetes manifests:
+
+```bash
+kubectl apply -k 'https://github.com/kagenti/mcp-gateway/config/install?ref=main'
+```
+
+This provides the same components as Helm but with less configuration flexibility.
+
+### Method 3: Standalone Installation (Advanced)
 
 For non-Kubernetes deployments or advanced use cases, see [Standalone Installation Guide](./binary-install.md).
 
