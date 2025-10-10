@@ -41,7 +41,7 @@ type authMiddleware struct {
 	Handler     http.Handler
 	IssuerUrl   string
 	ExpectedAud string
-	AdminToken	string
+	AdminToken  string
 
 	mu       sync.RWMutex
 	provider *oidc.Provider
