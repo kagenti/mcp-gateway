@@ -148,23 +148,33 @@ type mcpBrokerImpl struct {
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
-// Opts is a set of optional key values to configure the broker, if not present the broker will have a sensible default
-type Opts struct {
-	EnforceToolFilter       bool
-	TrustedHeadersPublicKey string
+// WithEnforceToolFilter defines enforceToolFilter setting and is intended for use with the NewBroker function
+func WithEnforceToolFilter(enforce bool) func(mb *mcpBrokerImpl) {
+	return func(mb *mcpBrokerImpl) {
+		mb.enforceToolFilter = enforce
+	}
 }
 
-// NewBroker creates a new MCPBroker
-func NewBroker(logger *slog.Logger, opts Opts) MCPBroker {
+// WithTrustedHeadersPublicKey defines the public key used to verify signed headers and is intended for use with the NewBroker function
+func WithTrustedHeadersPublicKey(key string) func(mb *mcpBrokerImpl) {
+	return func(mb *mcpBrokerImpl) {
+		mb.trustedHeadersPublicKey = key
+	}
+}
+
+// NewBroker creates a new MCPBroker accepts optional config functions such as WithEnforceToolFilter
+func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 
 	mcpBkr := &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
-		serverSessions:          map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
-		mcpServers:              map[upstreamMCPURL]*upstreamMCP{},
-		toolMapping:             map[toolName]*upstreamToolInfo{},
-		logger:                  logger,
-		enforceToolFilter:       opts.EnforceToolFilter,
-		trustedHeadersPublicKey: opts.TrustedHeadersPublicKey,
+		serverSessions: map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
+		mcpServers:     map[upstreamMCPURL]*upstreamMCP{},
+		toolMapping:    map[toolName]*upstreamToolInfo{},
+		logger:         logger,
+	}
+
+	for _, option := range opts {
+		option(mcpBkr)
 	}
 
 	hooks := &server.Hooks{}

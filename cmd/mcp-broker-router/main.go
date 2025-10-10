@@ -211,10 +211,10 @@ func setUpBroker(address string, toolFiltering bool) (*http.Server, broker.MCPBr
 		WriteTimeout: 10 * time.Second,
 	}
 
-	mcpBroker := broker.NewBroker(logger, broker.Opts{
-		EnforceToolFilter:       toolFiltering,
-		TrustedHeadersPublicKey: os.Getenv("TRUSTED_HEADER_PUBLIC_KEY"),
-	})
+	mcpBroker := broker.NewBroker(logger,
+		broker.WithEnforceToolFilter(toolFiltering),
+		broker.WithTrustedHeadersPublicKey(os.Getenv("TRUSTED_HEADER_PUBLIC_KEY")),
+	)
 
 	streamableHTTPServer := server.NewStreamableHTTPServer(
 		mcpBroker.MCPServer(),

@@ -30,9 +30,6 @@ const (
 )
 
 var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-var brokerOpts = Opts{
-	EnforceToolFilter: false,
-}
 
 // TestMain starts an MCP server that we will run actual tests against
 func TestMain(m *testing.M) {
@@ -65,7 +62,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestOnConfigChange(t *testing.T) {
-	b := NewBroker(logger, brokerOpts)
+	b := NewBroker(logger)
 	conf := &config.MCPServersConfig{}
 	server1 := &config.MCPServer{
 		Name:       "test1",
@@ -95,7 +92,7 @@ func TestOnConfigChange(t *testing.T) {
 func TestRegisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestRegisterServer\n")
 
-	broker := NewBroker(logger, brokerOpts)
+	broker := NewBroker(logger)
 
 	err := broker.RegisterServer(
 		context.Background(),
@@ -111,7 +108,7 @@ func TestRegisterServer(t *testing.T) {
 func TestUnregisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestUnregisterServer\n")
 
-	broker := NewBroker(logger, brokerOpts)
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
@@ -139,7 +136,7 @@ func TestUnregisterServer(t *testing.T) {
 func TestToolCall(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestToolCall\n")
 
-	broker := NewBroker(logger, brokerOpts)
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
@@ -174,7 +171,7 @@ func TestToolCall(t *testing.T) {
 func TestToolCallAfterMCPDisconnect(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestToolCall\n")
 
-	broker := NewBroker(logger, brokerOpts)
+	broker := NewBroker(logger)
 	err := broker.RegisterServer(
 		context.Background(),
 		MCPAddr,
