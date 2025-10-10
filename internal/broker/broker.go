@@ -148,14 +148,14 @@ type mcpBrokerImpl struct {
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
 var _ MCPBroker = &mcpBrokerImpl{}
 
-// BrokerOpts is a set of optional key values to configure the broker, if not present the broker will have a sensible default
-type BrokerOpts struct {
+// Opts is a set of optional key values to configure the broker, if not present the broker will have a sensible default
+type Opts struct {
 	EnforceToolFilter       bool
 	TrustedHeadersPublicKey string
 }
 
 // NewBroker creates a new MCPBroker
-func NewBroker(logger *slog.Logger, opts BrokerOpts) MCPBroker {
+func NewBroker(logger *slog.Logger, opts Opts) MCPBroker {
 
 	mcpBkr := &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},

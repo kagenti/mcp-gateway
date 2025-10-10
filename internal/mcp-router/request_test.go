@@ -159,7 +159,7 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(logger, broker.BrokerOpts{}),
+		Broker: broker.NewBroker(logger, broker.Opts{}),
 	}
 
 	data := &MCPRequest{

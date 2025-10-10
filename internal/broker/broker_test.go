@@ -30,7 +30,7 @@ const (
 )
 
 var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-var brokerOpts = BrokerOpts{
+var brokerOpts = Opts{
 	EnforceToolFilter: false,
 }
 

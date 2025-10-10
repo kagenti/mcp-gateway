@@ -24,7 +24,7 @@ const (
 
 // FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools header
 // The header is expected to be signed as a JWT if we cannot verify the JWT then nothing will be returned
-func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, id any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
+func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, _ any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
 	originalTools := make([]mcp.Tool, len(mcpRes.Tools))
 	copy(originalTools, mcpRes.Tools)
 	// set to empty by default
@@ -120,7 +120,7 @@ func (broker *mcpBrokerImpl) filterTools(authorizedTools map[string][]string) []
 
 // validateJWTHeader validates the JWT header expects ES256 alg.
 func validateJWTHeader(token string, publicKey string) (*jwt.Token, error) {
-	return jwt.Parse(token, func(t *jwt.Token) (any, error) {
+	return jwt.Parse(token, func(_ *jwt.Token) (any, error) {
 		block, _ := pem.Decode([]byte(publicKey))
 		pubkey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {

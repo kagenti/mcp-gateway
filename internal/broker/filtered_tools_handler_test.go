@@ -250,7 +250,7 @@ VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 			if tc.AllowedToolsList != nil {
 				headerValue := createJWTHeader(tc.AllowedToolsList)
 				request.Header = http.Header{
-					authorizedToolsHeader: {string(headerValue)},
+					authorizedToolsHeader: {headerValue},
 				}
 			}
 			mcpBroker.mcpServers = tc.RegisteredMCPServers
