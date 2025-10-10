@@ -8,10 +8,13 @@ ifeq ($(ARCH),aarch64)
     ARCH = arm64
 endif
 
-# Use `export BUILD_FLAGS=--load` for Podman
-BUILDFLAGS = $(BUILD_FLAGS)
-
 LOG_LEVEL ?= -4
+
+# Container engine
+CONTAINER_ENGINE ?= docker
+ifeq (podman,$(CONTAINER_ENGINE))
+	CONTAINER_ENGINE_EXTRA_FLAGS ?= --load
+endif
 
 .PHONY: help
 help: ## Display this help
@@ -19,7 +22,7 @@ help: ## Display this help
 
 .PHONY: build clean mcp-broker-router
 
-# Build the combined broker and router 
+# Build the combined broker and router
 mcp-broker-router:
 	go build -o bin/mcp-broker-router ./cmd/mcp-broker-router
 
@@ -111,11 +114,21 @@ deploy-controller: install-crd ## Deploy only the controller
 	kubectl apply -f config/mcp-system/rbac.yaml
 	kubectl apply -f config/mcp-system/deployment-controller.yaml
 
-# Build & load router/broker/controller image into the Kind cluster
-build-and-load-image: kind
+define load-image
+	echo "Loading image $(1) into Kind cluster..."
+	$(eval TMP_DIR := $(shell mktemp -d))
+	$(CONTAINER_ENGINE) save -o $(TMP_DIR)/image.tar $(1) \
+	   && KIND_EXPERIMENTAL_PROVIDER=$(CONTAINER_ENGINE) $(KIND) load image-archive $(TMP_DIR)/image.tar --name mcp-gateway ; \
+	   EXITVAL=$$? ; \
+	   rm -rf $(TMP_DIR) ;\
+	   exit $${EXITVAL}
+endef
+
+.PHONY: build-and-load-image
+build-and-load-image: kind ## Build & load router/broker/controller image into the Kind cluster
 	@echo "Building and loading image into Kind cluster..."
-	docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway:latest .
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway:latest .
+	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	kubectl rollout restart deployment/mcp-broker-router -n mcp-system 2>/dev/null || true
 
 # Deploy example MCPServer
@@ -137,22 +150,22 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 # Build test server Docker images
 build-test-servers: ## Build test server Docker images locally
 	@echo "Building test server images..."
-	cd tests/servers/server1 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
-	cd tests/servers/server2 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
-	cd tests/servers/server3 && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
-	cd tests/servers/api-key-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest .
-	cd tests/servers/broken-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-broken-server:latest .
-	cd tests/servers/custom-path-server && docker build ${BUILDFLAGS} -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
+	cd tests/servers/server1 && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-server1:latest .
+	cd tests/servers/server2 && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-server2:latest .
+	cd tests/servers/server3 && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-server3:latest .
+	cd tests/servers/api-key-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest .
+	cd tests/servers/broken-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-broken-server:latest .
+	cd tests/servers/custom-path-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 
 # Load test server images into Kind cluster
 kind-load-test-servers: kind build-test-servers ## Load test server images into Kind cluster
 	@echo "Loading test server images into Kind cluster..."
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server1:latest --name mcp-gateway
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server2:latest --name mcp-gateway
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-server3:latest --name mcp-gateway
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest --name mcp-gateway
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-broken-server:latest --name mcp-gateway
-	$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest --name mcp-gateway
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-server1:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-server2:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-server3:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-api-key-server:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-broken-server:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest)
 
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing
@@ -161,28 +174,28 @@ deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local
 
 # Build and push container image
 docker-build: ## Build container image locally
-	docker build ${BUILDFLAGS} -t mcp-gateway:local .
+	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t mcp-gateway:local .
 
 # Common reload steps
 define reload-image
 	@docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
-	@$(KIND) load docker-image ghcr.io/kagenti/mcp-gateway:latest --name mcp-gateway
+	@$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 endef
 
 .PHONY: reload-controller
-reload-controller: build docker-build ## Build, load to Kind, and restart controller
+reload-controller: build docker-build kind ## Build, load to Kind, and restart controller
 	$(call reload-image)
 	@kubectl rollout restart -n mcp-system deployment/mcp-controller
 	@kubectl rollout status -n mcp-system deployment/mcp-controller --timeout=60s
 
 .PHONY: reload-broker
-reload-broker: build docker-build ## Build, load to Kind, and restart broker
+reload-broker: build docker-build kind ## Build, load to Kind, and restart broker
 	$(call reload-image)
 	@kubectl rollout restart -n mcp-system deployment/mcp-broker-router
 	@kubectl rollout status -n mcp-system deployment/mcp-broker-router --timeout=60s
 
 .PHONY: reload
-reload: build docker-build ## Build, load to Kind, and restart both controller and broker
+reload: build docker-build kind ## Build, load to Kind, and restart both controller and broker
 	$(call reload-image)
 	@kubectl rollout restart -n mcp-system deployment/mcp-controller deployment/mcp-broker-router
 	@kubectl rollout status -n mcp-system deployment/mcp-controller --timeout=60s
@@ -194,7 +207,7 @@ reload: build docker-build ## Build, load to Kind, and restart both controller a
 
 # Build multi-platform image
 docker-buildx: ## Build multi-platform container image
-	docker buildx build --platform linux/amd64,linux/arm64 -t mcp-gateway:local .
+	$(CONTAINER_ENGINE) buildx build --platform linux/amd64,linux/arm64 $(CONTAINER_ENGINE_EXTRA_FLAGS) -t mcp-gateway:local .
 
 # Download dependencies
 deps:
@@ -365,7 +378,7 @@ istioctl: ## Download and install istioctl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development
-	@echo "Installing Keycloak - using official image with H2 database"
+	@echo "Installing Keycloak - using official image with dev-file database"
 	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
 
 .PHONY: keycloak-forward
@@ -375,44 +388,6 @@ keycloak-forward: ## Port forward Keycloak to localhost:8090
 .PHONY: keycloak-status
 keycloak-status: ## Show Keycloak URLs, credentials, and OIDC endpoints
 	@$(MAKE) -s -f build/keycloak.mk keycloak-status-impl
-
-.PHONY: oauth-example-setup
-oauth-example-setup: ## Complete OAuth example setup (requires: make local-env-setup)
-	@echo "========================================="
-	@echo "Setting up OAuth Example"
-	@echo "========================================="
-	@echo "Prerequisites: make local-env-setup should be completed"
-	@echo ""
-	@echo "Step 1: Setting up Keycloak realm..."
-	@$(MAKE) -s -f build/keycloak.mk keycloak-setup-mcp-realm
-	@echo ""
-	@echo "Step 2: Configuring mcp-broker with OAuth environment variables..."
-	@kubectl set env deployment/mcp-broker-router \
-		OAUTH_RESOURCE_NAME="MCP Server" \
-		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
-		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
-		OAUTH_BEARER_METHODS_SUPPORTED="header" \
-		OAUTH_SCOPES_SUPPORTED="basic,groups" \
-		-n mcp-system
-	@echo "✅ OAuth environment variables configured"
-	@echo ""
-	@echo "Step 3: Applying AuthPolicy configurations..."
-	@kubectl apply -f ./config/mcp-system/authpolicy.yaml
-	@kubectl apply -f ./config/mcp-system/tool-call-auth.yaml
-	@echo "✅ AuthPolicy configurations applied"
-	@echo ""
-	@echo "Step 4: Applying additional OAuth configurations..."
-	@kubectl apply -f ./config/keycloak/preflight_envoyfilter.yaml
-	@kubectl -n mcp-system apply -k ./config/example-access-control/
-	@echo "✅ Additional configurations applied"
-	@echo ""
-	@echo "🎉 OAuth example setup complete!"
-	@echo ""
-	@echo "The mcp-broker now serves OAuth discovery information at:"
-	@echo "  /.well-known/oauth-protected-resource"
-	@echo ""
-	@echo "Next step: Open MCP Inspector with 'make inspect-gateway'"
-	@echo "and go through the OAuth flow with credentials: mcp/mcp"
 
 .PHONY: kuadrant-install
 kuadrant-install: ## Install Kuadrant operator for API gateway policies

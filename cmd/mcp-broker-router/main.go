@@ -50,13 +50,14 @@ func init() {
 func main() {
 
 	var (
-		mcpRouterAddrFlag string
-		mcpBrokerAddrFlag string
-		mcpConfigAddrFlag string
-		mcpConfigFile     string
-		loglevel          int
-		logFormat         string
-		controllerMode    bool
+		mcpRouterAddrFlag        string
+		mcpBrokerAddrFlag        string
+		mcpConfigAddrFlag        string
+		mcpConfigFile            string
+		loglevel                 int
+		logFormat                string
+		controllerMode           bool
+		enforceToolFilteringFlag bool
 	)
 	flag.StringVar(
 		&mcpRouterAddrFlag,
@@ -90,14 +91,27 @@ func main() {
 	)
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
+	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
 
-	slog.SetLogLoggerLevel(slog.Level(loglevel))
+	loggerOpts := &slog.HandlerOptions{}
 
-	if logFormat == "json" {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	switch loglevel {
+	case 0:
+		loggerOpts.Level = slog.LevelInfo
+	case 8:
+		loggerOpts.Level = slog.LevelError
+	case -4:
+		loggerOpts.Level = slog.LevelDebug
+	default:
+		loggerOpts.Level = slog.LevelDebug
 	}
 
+	logger = slog.New(slog.NewTextHandler(os.Stdout, loggerOpts))
+
+	if logFormat == "json" {
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, loggerOpts))
+	}
 	if controllerMode {
 		fmt.Println("Starting in controller mode...")
 		go func() {
@@ -113,7 +127,7 @@ func main() {
 		return
 	}
 	ctx := context.Background()
-	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag)
+	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag)
 	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	routerGRPCServer, router := setUpRouter(mcpBroker)
 	mcpConfig.RegisterObserver(router)
@@ -178,7 +192,7 @@ func main() {
 	routerGRPCServer.GracefulStop()
 }
 
-func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
+func setUpBroker(address string, toolFiltering bool) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
 
 	mux := http.NewServeMux()
 
@@ -197,7 +211,10 @@ func setUpBroker(address string) (*http.Server, broker.MCPBroker, *server.Stream
 		WriteTimeout: 10 * time.Second,
 	}
 
-	mcpBroker := broker.NewBroker(logger)
+	mcpBroker := broker.NewBroker(logger, broker.Opts{
+		EnforceToolFilter:       toolFiltering,
+		TrustedHeadersPublicKey: os.Getenv("TRUSTED_HEADER_PUBLIC_KEY"),
+	})
 
 	streamableHTTPServer := server.NewStreamableHTTPServer(
 		mcpBroker.MCPServer(),

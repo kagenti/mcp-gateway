@@ -23,11 +23,11 @@ spec:
         - name: config-volume
           configMap:
             name: mcp-gateway-config
-        - name: mcp-credentials
+        - name: mcp-credentials # credentials for the broker to user to access MCP backends
           secret:
             secretName: mcp-aggregated-credentials
             defaultMode: 0400
-            optional: true  # broker can still work without credentials
+            optional: true # broker can still work without credentials
       containers:
         - name: mcp-broker-router
           image: ghcr.io/kagenti/mcp-gateway:latest
@@ -38,7 +38,7 @@ spec:
             - --mcp-broker-public-address=0.0.0.0:8080
             - --mcp-broker-config-address=0.0.0.0:8181
             - --mcp-router-address=0.0.0.0:50051
-            - --log-level=-4  # info level
+            - --log-level=-4 # info level
           env:
             - name: CONFIG_UPDATE_TOKEN
               valueFrom:
@@ -48,7 +48,7 @@ spec:
           envFrom:
             - secretRef:
                 name: mcp-aggregated-credentials
-                optional: true  # broker can still work without credentials
+                optional: true # broker can still work without credentials
           volumeMounts:
             - name: config-volume
               mountPath: /config
@@ -67,11 +67,11 @@ spec:
               protocol: TCP
           resources:
             requests:
-              memory: "128Mi"
-              cpu: "100m"
+              memory: '128Mi'
+              cpu: '100m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           livenessProbe:
             httpGet:
               path: /healthz

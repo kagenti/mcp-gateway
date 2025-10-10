@@ -1,0 +1,71 @@
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: mcps-auth-policy
+  namespace: gateway-system
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mcp-gateway
+    sectionName: mcps
+  rules:
+    authentication: #validates the token
+      'keycloak':
+        jwt:
+          issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
+    metadata:
+      token-exchange:
+        http:
+          url: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp/protocol/openid-connect/token
+          method: POST
+          headers:
+            Authorization:
+              value: 'Basic bWNwLWdhdGV3YXk6c2VjcmV0' # mcp-gateway:secret
+          bodyParameters:
+            grant_type:
+              value: urn:ietf:params:oauth:grant-type:token-exchange
+            subject_token:
+              expression: request.headers['authorization'].split('Bearer ')[1] # remove "Bearer "
+            subject_token_type:
+              value: urn:ietf:params:oauth:token-type:access_token
+            audience:
+              expression: request.host
+            scope:
+              value: openid
+    authorization:
+      'allow-tool-access':
+        patternMatching:
+          patterns:
+            - predicate: |
+                request.headers['x-mcp-toolname'] in (has(auth.identity.resource_access) && auth.identity.resource_access.exists(p, p == request.host) ? auth.identity.resource_access[request.host].roles : [])
+      'token-exchange-success':
+        patternMatching:
+          patterns:
+            - predicate: auth.metadata.exists(m, m == "token-exchange") && auth.metadata["token-exchange"].exists(k, k == "access_token")
+    response:
+      success:
+        headers:
+          authorization:
+            plain:
+              expression: |
+                "Bearer " + auth.metadata["token-exchange"]["access_token"]
+      unauthenticated:
+        code: 401
+        headers:
+          'WWW-Authenticate':
+            value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+        body:
+          value: |
+            {
+              "error": "Forbidden",
+              "message": "MCP Tool Access denied. Unauthenticated."
+            }
+      unauthorized:
+        code: 403
+        body:
+          value: |
+            {
+              "error": "Forbidden",
+              "message": "MCP Tool Access denied. Insufficient permissions for this tool."
+            }

@@ -42,7 +42,7 @@ dev-gateway-forward: ## Port forward the gateway to localhost:$(GATEWAY_LOCAL_PO
 	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
 	@echo "You can also access keycloak via the gateway at http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK)"
 	@echo "Try: curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8081
+	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8889
 
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway
