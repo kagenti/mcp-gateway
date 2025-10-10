@@ -16,7 +16,7 @@ import (
 
 func TestStatusHandlerNotGet(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	mcpBroker := NewBroker(logger, brokerOpts)
+	mcpBroker := NewBroker(logger)
 	sh := NewStatusHandler(mcpBroker, *logger)
 
 	w := httptest.NewRecorder()
@@ -27,7 +27,7 @@ func TestStatusHandlerNotGet(t *testing.T) {
 
 func TestStatusHandlerGetSingleServer(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	mcpBroker := NewBroker(logger, brokerOpts)
+	mcpBroker := NewBroker(logger)
 	sh := NewStatusHandler(mcpBroker, *logger)
 
 	// At first, no server known for this name
@@ -71,7 +71,7 @@ func TestStatusHandlerGetSingleServer(t *testing.T) {
 
 func TestStatusHandlerGetAll(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	mcpBroker := NewBroker(logger, brokerOpts)
+	mcpBroker := NewBroker(logger)
 	sh := NewStatusHandler(mcpBroker, *logger)
 
 	// Add a server

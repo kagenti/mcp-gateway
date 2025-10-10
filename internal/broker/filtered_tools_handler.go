@@ -81,7 +81,7 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, _ any, mcpReq *mcp
 	broker.logger.Debug("filtering tools based on header", "value", allowedToolsValue)
 	authorizedTools := map[string][]string{}
 	if err := json.Unmarshal([]byte(allowedToolsValue), &authorizedTools); err != nil {
-		broker.logger.Error("failed to unmarshall authorized tools json header returning empty tool set", "error", err)
+		broker.logger.Error("failed to unmarshal authorized tools json header returning empty tool set", "error", err)
 		return
 	}
 	mcpRes.Tools = broker.filterTools(authorizedTools)

@@ -265,7 +265,7 @@ VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 					}
 				}
 				if !found {
-					t.Fatalf("expeted to find tool %s but it was not in returned tools %v", exp.Name, tc.FullToolList.Tools)
+					t.Fatalf("expected to find tool %s but it was not in returned tools %v", exp.Name, tc.FullToolList.Tools)
 				}
 			}
 		})
