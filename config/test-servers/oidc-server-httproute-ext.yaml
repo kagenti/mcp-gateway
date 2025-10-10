@@ -1,0 +1,20 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-oidc-server-route-ext
+  labels:
+    mcp-server: 'true'
+spec:
+  parentRefs:
+    - name: mcp-gateway
+      namespace: gateway-system
+  hostnames:
+    - 'oidc-server.127-0-0-1.sslip.io'
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-oidc-server
+          port: 9090

@@ -75,6 +75,10 @@ inspect-custom-path: ## Open MCP Inspector for custom path server
 		wait; \
 		kill $$PF_PID 2>/dev/null || true
 
+.PHONY: inspect-oidc-server
+inspect-oidc-server: ## Open MCP Inspector for OpenID Connect test server (requires auth)
+	$(call inspect-server-template,OIDC test server,mcp-oidc-server,9094,hello_world tool with authentication,NOTE: This server requires Bearer token authentication)
+
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1
 

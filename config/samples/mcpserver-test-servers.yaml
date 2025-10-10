@@ -79,3 +79,21 @@ spec:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp-custom-path-server
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: oidc-server
+  namespace: mcp-test
+  labels:
+    "kagenti/mcp": "true"
+spec:
+  # Validates OpenID Connect (OIDC) Bearer tokens issued by a configured OIDC provider
+  toolPrefix: oidc_
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-oidc-server-route
+  credentialRef:
+    name: oidc-server-credentials
+    key: admin_token
