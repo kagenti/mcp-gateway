@@ -35,32 +35,88 @@ var (
 					mcp.Required(),
 					mcp.Description("Name of the person to greet"),
 				),
+				mcp.WithTitleAnnotation("greeter tool"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
 			),
 			Handler: helloHandler,
 		},
 		"time": {
 			Tool: mcp.NewTool("time",
-				mcp.WithDescription("Get the current time")),
+				mcp.WithDescription("Get the current time"),
+				mcp.WithTitleAnnotation("Clock"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+			),
 			Handler: timeHandler,
 		},
 		"headers": {
 			Tool: mcp.NewTool("headers",
-				mcp.WithDescription("get HTTP headers")),
+				mcp.WithDescription("get HTTP headers"),
+				mcp.WithTitleAnnotation("header inspector"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+			),
 			Handler: headersToolHandler,
 		},
 		"auth1234": {
 			Tool: mcp.NewTool("auth1234",
-				mcp.WithDescription("check authorization header")),
+				mcp.WithDescription("check authorization header"),
+				mcp.WithTitleAnnotation("auth header verifier"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+			),
 			Handler: auth1234ToolHandler,
 		},
 		"slow": {
 			Tool: mcp.NewTool("slow",
 				mcp.WithDescription("Delay for N seconds"),
+				mcp.WithTitleAnnotation("delay tool"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
 				mcp.WithString("seconds",
 					mcp.Required(),
 					mcp.Description("number of seconds to wait"),
 				)),
 			Handler: slowHandler,
+		},
+		"set_time": {
+			Tool: mcp.NewTool("set_time",
+				mcp.WithDescription("Set the clock"),
+				mcp.WithTitleAnnotation("set time tool"),
+				mcp.WithReadOnlyHintAnnotation(false),
+				mcp.WithDestructiveHintAnnotation(true),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("time",
+					mcp.Required(),
+					mcp.Description("new time"),
+				)),
+			Handler: setTimeHandler,
+		},
+		"pour_chocolate_into_mold": {
+			Tool: mcp.NewTool("pour_chocolate_into_mold",
+				mcp.WithDescription("Pour chocolate into mold"),
+				mcp.WithTitleAnnotation("chocolate fill tool"),
+				mcp.WithReadOnlyHintAnnotation(false),
+				mcp.WithDestructiveHintAnnotation(true),
+				mcp.WithIdempotentHintAnnotation(false),
+				mcp.WithOpenWorldHintAnnotation(true),
+				mcp.WithString("quantity",
+					mcp.Required(),
+					mcp.Description("milliliters"),
+				)),
+			Handler: pourChocolateHandler,
 		},
 	}
 )
@@ -237,6 +293,33 @@ func slowHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	return mcp.NewToolResultText("done"), nil
+}
+
+// setTimeHandler demonstrates a tool that is "destructive"
+func setTimeHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: "Error: setting of time unimplemented",
+			},
+		},
+		IsError: true,
+	}, nil
+}
+
+// pourChocolateHandler demonstrates a tool that is NOT idempotent
+// (pouring chocolate twice will overflow the mold)
+func pourChocolateHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: "Error: out of chocolate",
+			},
+		},
+		IsError: true,
+	}, nil
 }
 
 func forgetFuncFactory(mcpServer *server.MCPServer) func(http.ResponseWriter, *http.Request) {
