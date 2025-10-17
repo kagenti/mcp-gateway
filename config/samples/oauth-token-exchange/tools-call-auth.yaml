@@ -16,6 +16,8 @@ spec:
           issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
     metadata:
       token-exchange:
+        when:
+          - predicate: type(auth.identity.aud) != string || auth.identity.aud != request.host
         http:
           url: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp/protocol/openid-connect/token
           method: POST
@@ -34,22 +36,34 @@ spec:
             scope:
               value: openid
     authorization:
-      'allow-tool-access':
+      'token':
+        opa:
+          rego: |
+            scoped_jwt := object.get(object.get(object.get(input.auth, "metadata", {}), "token-exchange", {}), "access_token", "")
+            jwt := j { scoped_jwt != ""; j := scoped_jwt }
+            jwt := j { scoped_jwt == ""; j := split(input.request.headers["authorization"], "Bearer ")[1] }
+            claims := c { [_, c, _] := io.jwt.decode(jwt) }
+            allow = true
+          allValues: true
+        priority: 0
+      'scoped-audience-check':
+        patternMatching:
+          patterns:
+            - predicate: has(auth.authorization.token.claims.aud) && type(auth.authorization.token.claims.aud) == string && auth.authorization.token.claims.aud == request.host
+        priority: 1
+      'tool-access-check':
         patternMatching:
           patterns:
             - predicate: |
-                request.headers['x-mcp-toolname'] in (has(auth.identity.resource_access) && auth.identity.resource_access.exists(p, p == request.host) ? auth.identity.resource_access[request.host].roles : [])
-      'token-exchange-success':
-        patternMatching:
-          patterns:
-            - predicate: auth.metadata.exists(m, m == "token-exchange") && auth.metadata["token-exchange"].exists(k, k == "access_token")
+                request.headers['x-mcp-toolname'] in (has(auth.authorization.token.claims.resource_access) && auth.authorization.token.claims.resource_access.exists(p, p == request.host) ? auth.authorization.token.claims.resource_access[request.host].roles : [])
+        priority: 1
     response:
       success:
         headers:
           authorization:
             plain:
               expression: |
-                "Bearer " + auth.metadata["token-exchange"]["access_token"]
+                "Bearer " + auth.authorization.token.jwt
       unauthenticated:
         code: 401
         headers:
