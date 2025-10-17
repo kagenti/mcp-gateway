@@ -24,3 +24,8 @@ resources:
   - api-key-server-secret.yaml
   - custom-path-server-deployment.yaml
   - custom-path-server-httproute.yaml
+  - oidc-server-deployment.yaml
+  - oidc-server-service.yaml
+  - oidc-server-httproute.yaml
+  - oidc-server-httproute-ext.yaml
+  - oidc-server-secret.yaml
