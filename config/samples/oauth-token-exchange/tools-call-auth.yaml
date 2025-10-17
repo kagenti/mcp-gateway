@@ -15,15 +15,31 @@ spec:
         jwt:
           issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
     metadata:
-      token-exchange:
+      vault:
+        http:
+          urlExpression: |
+            "http://vault.vault.svc.cluster.local:8200/v1/secret/data/" + auth.identity.username + "/" + request.host
+          method: GET
+          credentials:
+            customHeader:
+              name: X-Vault-Token
+          sharedSecretRef:
+            name: token-exchange
+            key: vault-token
+        priority: 0
+      oauth-token-exchange:
         when:
+          - predicate: "!has(auth.metadata.vault.data)"
           - predicate: type(auth.identity.aud) != string || auth.identity.aud != request.host
         http:
           url: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp/protocol/openid-connect/token
           method: POST
-          headers:
-            Authorization:
-              value: 'Basic bWNwLWdhdGV3YXk6c2VjcmV0' # mcp-gateway:secret
+          credentials:
+            authorizationHeader:
+              prefix: Basic
+          sharedSecretRef:
+            name: token-exchange
+            key: oauth-client-basic-auth
           bodyParameters:
             grant_type:
               value: urn:ietf:params:oauth:grant-type:token-exchange
@@ -35,11 +51,12 @@ spec:
               expression: request.host
             scope:
               value: openid
+        priority: 1
     authorization:
       'token':
         opa:
           rego: |
-            scoped_jwt := object.get(object.get(object.get(input.auth, "metadata", {}), "token-exchange", {}), "access_token", "")
+            scoped_jwt := object.get(object.get(object.get(input.auth, "metadata", {}), "oauth-token-exchange", {}), "access_token", "")
             jwt := j { scoped_jwt != ""; j := scoped_jwt }
             jwt := j { scoped_jwt == ""; j := split(input.request.headers["authorization"], "Bearer ")[1] }
             claims := c { [_, c, _] := io.jwt.decode(jwt) }
@@ -47,6 +64,8 @@ spec:
           allValues: true
         priority: 0
       'scoped-audience-check':
+        when:
+          - predicate: "!has(auth.metadata.vault.data)"
         patternMatching:
           patterns:
             - predicate: has(auth.authorization.token.claims.aud) && type(auth.authorization.token.claims.aud) == string && auth.authorization.token.claims.aud == request.host
@@ -63,7 +82,7 @@ spec:
           authorization:
             plain:
               expression: |
-                "Bearer " + auth.authorization.token.jwt
+                "Bearer " + (has(auth.metadata.vault.data) ? auth.metadata.vault.data.data.token : auth.authorization.token.jwt)
       unauthenticated:
         code: 401
         headers:
@@ -83,3 +102,13 @@ spec:
               "error": "Forbidden",
               "message": "MCP Tool Access denied. Insufficient permissions for this tool."
             }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: token-exchange
+  namespace: kuadrant-system
+stringData:
+  oauth-client-basic-auth: bWNwLWdhdGV3YXk6c2VjcmV0
+  vault-token: root
+type: Opaque
