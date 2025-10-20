@@ -18,7 +18,7 @@ spec:
       vault:
         http:
           urlExpression: |
-            "http://vault.vault.svc.cluster.local:8200/v1/secret/data/" + auth.identity.username + "/" + request.host
+            "http://vault.vault.svc.cluster.local:8200/v1/secret/data/" + auth.identity.preferred_username + "/" + request.host
           method: GET
           credentials:
             customHeader:

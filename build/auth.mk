@@ -52,7 +52,7 @@ oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 aut
 		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
 		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
 		OAUTH_BEARER_METHODS_SUPPORTED="header" \
-		OAUTH_SCOPES_SUPPORTED="basic,groups,roles" \
+		OAUTH_SCOPES_SUPPORTED="basic,groups,roles,profile" \
 		-n mcp-system
 	@echo "✅ OAuth environment variables configured"
 	@echo ""
