@@ -40,6 +40,19 @@ The MCP Broker, when receiving a `tools/list` call, will validate the JWT token 
 
 We have provided an [example AuthPolicy](../../config/samples/oauth-token-exchange/tools-list-auth.yaml) resource showing how to do this using Keycloak to provide the authentication and store the permissions. We then use the [wristband](https://github.com/Kuadrant/authorino/blob/main/docs/features.md#festival-wristband-authentication) feature of the AuthPolicy API (powered by Authorino) to create a signed JWT to securely carry this information to the MCP Broker.
 
+#### Storing tool access control permissions in Keycloak
+
+There are multiple ways to configure a Keycloak realm for storing permissions to control access to the MCP tools. The method employed in the [example provided](../../config/keycloak/realm-import.yaml) consists of:
+- An OAuth "resource server" client for each MCP server, identified by the MCP server's internal host name for convenience
+- Each tool of an MCP server defined as a role of the resource server client
+- Groups representing aggregations of permissions, to which MCP tool client roles are assigned
+- Users added as members of the groups whose assigned tools the user can access
+- An OpenId Connect client for each MCP client (e.g. agent) that requests access to the MCP system, created by the [OAuth2 Dynamic Client Registration Protocol](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization#dynamic-client-registration), with **Full scopes allowed** and the `roles` client scope set by default
+
+This setup causes the access tokens issued to the MCP clients to include a `resource_access` claim, listing all tools a user has access to (grouped by MCP server). The [AuthPolicy](../../config/samples/oauth-token-exchange/tools-list-auth.yaml) declares how the permissions should be extracted from this claim and injected into the `tools/list` request for filtering.
+
+> **Note:** If the group aggregation to control access to the tools is not desired/needed, the setup above can be simplified by mapping users directly to the individual MCP tool client roles the user can access.
+
 ### Token Exchange
 
 There are two key uses cases here:
@@ -59,8 +72,20 @@ In order to provide OAuth2 token exchange ([RFC 8693](https://www.rfc-editor.org
 
 Then, an AuthPolicy is put in place to protect tool calls. See [example token exchange policy](../../config/samples/oauth-token-exchange/tools-call-auth.yaml). In this policy, we use the client ID and secret from the confidential client to call to Keycloak and do the token exchange once the incoming gateway JWT has been validated. The token exchange response is parsed and the new token set as the `Authorization:` header once all other authorization checks in the AuthPolicy have succeeded.
 
-** A note on scopes and audiences **
+##### A note on scopes and audiences
 
 In our example, the `aud` claim ("audience") of the new token is set to the internal host name of the target MCP server and a default scope of `openid`. This is the default for the entire gateway and all MCP servers. However, using the [defaults and overrides](https://docs.kuadrant.io/latest/kuadrant-operator/doc/overviews/auth/#defaults-and-overrides) feature of AuthPolicy, these values could be overridden at the HTTPRoute level.
 
-> **Note:** for the OAuth2 token exchange to succeed, the original token that is exchanged for a new, scoped one MUST include in the audiences: the same audience that represents the target MCP server (for which the new token is requested) _and_ the client ID of the client that performs the token exchange (`mcp-gateway` in our example.)
+For the OAuth2 token exchange to succeed, the original token that is exchanged for a new, scoped one MUST include in the audiences: the same audience that represents the target MCP server (for which the new token is requested) _and_ the client ID of the client that performs the token exchange (`mcp-gateway` in our example.)
+
+##### Configuring Keycloak to enable OAuth2 Token Exchange
+
+Enabling OAuth2 Token Exchange in a Keycloak realm for the MCP gateway example consists of:
+- An OpenId Connect confidential client `mcp-gateway` with the **Standard Token Exchange** grant enabled
+- A synthetic `impersonator` role defined for the token exchange client
+- A `mcp-users` group to which the `impersonator` role is assigned
+- All users of the MCP system added to the `mcp-users` group by default
+
+> **Note:** The setup above could be simplified by skipping the group aggregation and mapping users directly to the `impersonator` role.
+
+Having a synthetic role to which users are given access to, in combination with **Full scopes allowed** and `roles` scope defined for the OpenId Connect clients negotiating access tokens, causes the `mcp-gateway` client to be included in the audiences of the access tokens along with the resource server clients for the MCP servers.
