@@ -1,5 +1,7 @@
 # Inspection & URLs
 
+open := $(shell { which xdg-open || which open; } 2>/dev/null)
+
 # URLs for services
 urls-impl:
 	@echo "=== MCP Gateway URLs ==="
@@ -36,7 +38,7 @@ define inspect-server-template
 		echo ""; \
 		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
 		sleep 2; \
-		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:$(3)/mcp"; \
+		$(open) "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:$(3)/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
 		wait; \
 		kill $$$$PF_PID 2>/dev/null || true
@@ -70,7 +72,7 @@ inspect-custom-path: ## Open MCP Inspector for custom path server
 		echo ""; \
 		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
 		sleep 2; \
-		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:9094/v1/special/mcp"; \
+		$(open) "http://localhost:6274/?transport=streamable-http&serverUrl=http://localhost:9094/v1/special/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
 		wait; \
 		kill $$PF_PID 2>/dev/null || true
@@ -96,7 +98,7 @@ inspect-gateway: ## Open MCP Inspector for the gateway
 		echo ""; \
 		MCP_AUTO_OPEN_ENABLED=false DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector@latest & \
 		sleep 2; \
-		open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/mcp"; \
+		$(open) "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/mcp"; \
 		echo "Press Ctrl+C to stop and cleanup"; \
 		wait; \
 		kill $$PF_PID 2>/dev/null || true
