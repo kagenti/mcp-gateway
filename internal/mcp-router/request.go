@@ -35,11 +35,15 @@ func (mr *MCPRequest) Validate() (bool, error) {
 	if mr.Method == "" {
 		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no method set in json rpc payload"))
 	}
-	if mr.ID == nil {
-		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload"))
+	if mr.ID == nil && !mr.isNotificationRequest() {
+		return false, errors.Join(ErrInvalidRequest, fmt.Errorf("no id set in json rpc payload for none notification method: %s ", mr.Method))
 	}
 
 	return true, nil
+}
+
+func (mr *MCPRequest) isNotificationRequest() bool {
+	return strings.HasPrefix(mr.Method, "notifications")
 }
 
 // isToolCall will check if the request is a tool call request
@@ -69,7 +73,7 @@ func (mr *MCPRequest) ReWriteToolName(actualTool string) {
 	mr.Params["name"] = actualTool
 }
 
-// ToBytes mashels the data ready to send on
+// ToBytes marshals the data ready to send on
 func (mr *MCPRequest) ToBytes() ([]byte, error) {
 	return json.Marshal(mr)
 }

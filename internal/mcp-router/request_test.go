@@ -35,6 +35,15 @@ func TestMCPRequestValid(t *testing.T) {
 			ExpectErr: nil,
 		},
 		{
+			Name: "test with valid notification request",
+			Input: &MCPRequest{
+				JSONRPC: "2.0",
+				Method:  "notifications/initialize",
+				Params:  map[string]any{},
+			},
+			ExpectErr: nil,
+		},
+		{
 			Name: "test with invalid version",
 			Input: &MCPRequest{
 				JSONRPC: "1.0",
@@ -55,7 +64,7 @@ func TestMCPRequestValid(t *testing.T) {
 			ExpectErr: ErrInvalidRequest,
 		},
 		{
-			Name: "test with missing id ",
+			Name: "test with missing id  for none notification call",
 			Input: &MCPRequest{
 				JSONRPC: "2.0",
 				Method:  "tools/call",
