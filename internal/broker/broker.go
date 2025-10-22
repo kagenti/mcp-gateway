@@ -117,6 +117,13 @@ func (mcps mcpServers) findByHost(host string) *upstreamMCP {
 	return nil
 }
 
+type discoveryResult struct {
+	tools     []mcp.Tool
+	prompts   []mcp.Prompt
+	templates []mcp.ResourceTemplate
+	resources []mcp.Resource
+}
+
 // mcpBrokerImpl implements MCPBroker
 type mcpBrokerImpl struct {
 	// Static map of session IDs we offer to downstream clients
@@ -284,16 +291,24 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 	// Add to map BEFORE discovering tools so createMCPClient can find it
 	m.mcpServers[upstreamMCPURL(mcpServer.URL)] = upstream
 
-	newTools, err := m.discoverTools(ctx, upstream)
+	discovered, err := m.discoverTools(ctx, upstream)
 	if err != nil {
 		slog.Info("Failed to discover tools, will retry with backoff", "mcpURL", mcpServer.URL, "error", err)
 		// start background retry with exponential backoff
 		go m.retryDiscovery(context.Background(), upstream)
 		return nil // don't return error, allow partial registration
 	}
-	slog.Info("Discovered tools", "mcpURL", mcpServer.URL, "num tools", len(newTools))
+	slog.Info("Discovered tools", "mcpURL", mcpServer.URL,
+		"num tools", len(discovered.tools),
+		"#prompts", len(discovered.prompts),
+		"#resources", len(discovered.resources),
+		"#templates", len(discovered.templates),
+	)
 	slog.Info("Server registered", "url", mcpServer.URL, "totalServers", len(m.mcpServers))
-	m.listeningMCPServer.AddTools(toolsToServerTools(mcpServer.URL, newTools)...)
+	m.listeningMCPServer.AddTools(toolsToServerTools(mcpServer.URL, discovered.tools)...)
+	m.listeningMCPServer.AddPrompts(promptsToServerPrompts(upstream.URL, discovered.prompts)...)
+	m.listeningMCPServer.AddResources(resourcesToServerResources(upstream.URL, discovered.resources)...)
+	m.listeningMCPServer.AddResourceTemplates(templatesToServerTemplates(upstream.URL, discovered.templates)...)
 
 	return nil
 }
@@ -413,7 +428,7 @@ func (m *mcpBrokerImpl) CallTool(
 	return res, err
 }
 
-func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) ([]mcp.Tool, error) {
+func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) (*discoveryResult, error) {
 
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
@@ -447,10 +462,32 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
 	upstream.toolsResult = resTools
+	retval := &discoveryResult{}
 
-	newTools, _ := m.populateToolMapping(upstream, resTools.Tools, nil)
+	if err == nil {
+		newTools, _ := m.populateToolMapping(upstream, resTools.Tools, nil)
+		retval.tools = newTools
 
-	// TODO probe resources other than tools
+		var err error
+		newPromptsResult, err := upstream.mpcClient.ListPrompts(ctx, mcp.ListPromptsRequest{})
+		if err != nil {
+			m.logger.Info("Broker failed to list prompts for %q: %v", upstream.Name, err)
+		} else {
+			retval.prompts = newPromptsResult.Prompts
+		}
+		newResTemplatesResult, err := upstream.mpcClient.ListResourceTemplates(ctx, mcp.ListResourceTemplatesRequest{})
+		if err != nil {
+			m.logger.Info("Broker failed to list resource templates for %q: %v", upstream.Name, err)
+		} else {
+			retval.templates = newResTemplatesResult.ResourceTemplates
+		}
+		newResourcesResult, err := upstream.mpcClient.ListResources(ctx, mcp.ListResourcesRequest{})
+		if err != nil {
+			m.logger.Info("Broker failed to list resource templates for %q: %v", upstream.Name, err)
+		} else {
+			retval.resources = newResourcesResult.Resources
+		}
+	}
 
 	// Keep the tools probe client open and monitor for tool changes
 	upstream.mpcClient.OnConnectionLost(func(err error) {
@@ -494,11 +531,12 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 			// Track the current state of tools
 			upstream.toolsResult = resTools
 		}
+		// TODO support listChanged for prompts, resources, and resource templates
 	})
 
 	m.logger.Info("Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
 
-	return newTools, err
+	return retval, err
 }
 
 // retryDiscovery attempts to discover tools with exponential backoff
@@ -539,7 +577,7 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 			"url", upstream.URL,
 			"attempt", attempt)
 
-		newTools, err := m.discoverTools(ctx, upstream)
+		discovered, err := m.discoverTools(ctx, upstream)
 		if err != nil {
 			m.logger.Warn("retry discovery failed",
 				"url", upstream.URL,
@@ -551,9 +589,16 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 		m.logger.Info("retry discovery succeeded",
 			"url", upstream.URL,
 			"attempt", attempt,
-			"tools", len(newTools))
+			"#tools", len(discovered.tools),
+			"#prompts", len(discovered.prompts),
+			"#resources", len(discovered.resources),
+			"#templates", len(discovered.templates),
+		)
 
-		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newTools)...)
+		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, discovered.tools)...)
+		m.listeningMCPServer.AddPrompts(promptsToServerPrompts(upstream.URL, discovered.prompts)...)
+		m.listeningMCPServer.AddResources(resourcesToServerResources(upstream.URL, discovered.resources)...)
+		m.listeningMCPServer.AddResourceTemplates(templatesToServerTemplates(upstream.URL, discovered.templates)...)
 		return true, nil
 	})
 
@@ -835,6 +880,54 @@ func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool 
 	}
 
 	return tools
+}
+
+func promptsToServerPrompts(mcpURL string, newPrompts []mcp.Prompt) []server.ServerPrompt {
+
+	prompts := make([]server.ServerPrompt, 0)
+	for _, newPrompt := range newPrompts {
+		slog.Info("Federating prompt", "mcpURL", mcpURL, "federated name", newPrompt.Name)
+		prompts = append(prompts, server.ServerPrompt{
+			Prompt: newPrompt,
+			Handler: func(_ context.Context, _ mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+				return nil, fmt.Errorf("kagenti MCP Broker doesn't forward prompt requests")
+			},
+		})
+	}
+
+	return prompts
+}
+
+func resourcesToServerResources(mcpURL string, newResources []mcp.Resource) []server.ServerResource {
+
+	resources := make([]server.ServerResource, 0)
+	for _, newResource := range newResources {
+		slog.Info("Federating resource", "mcpURL", mcpURL, "federated name", newResource.Name)
+		resources = append(resources, server.ServerResource{
+			Resource: newResource,
+			Handler: func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+				return nil, fmt.Errorf("kagenti MCP Broker doesn't forward resource requests")
+			},
+		})
+	}
+
+	return resources
+}
+
+func templatesToServerTemplates(mcpURL string, newResourceTemplates []mcp.ResourceTemplate) []server.ServerResourceTemplate {
+
+	resourceTemplates := make([]server.ServerResourceTemplate, 0)
+	for _, newResourceTemplate := range newResourceTemplates {
+		slog.Info("Federating resource template", "mcpURL", mcpURL, "federated name", newResourceTemplate.Name)
+		resourceTemplates = append(resourceTemplates, server.ServerResourceTemplate{
+			Template: newResourceTemplate,
+			Handler: func(_ context.Context, _ mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+				return nil, fmt.Errorf("kagenti MCP Broker doesn't forward resource template requests")
+			},
+		})
+	}
+
+	return resourceTemplates
 }
 
 // validateMCPServer validates a single MCP server using existing session data
