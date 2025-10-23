@@ -4,8 +4,8 @@ metadata:
   name: mcp-config
   namespace: mcp-system
   labels:
-    app: mcp-broker-router
-    component: config-api
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/component: mcp-broker-config
 spec:
   selector:
     app: mcp-broker-router

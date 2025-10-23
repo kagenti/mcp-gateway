@@ -8,8 +8,10 @@ set -e
 # Allow specifying a different GitHub org/user and branch via environment variables
 GITHUB_ORG=${MCP_GATEWAY_ORG:-kagenti}
 BRANCH=${MCP_GATEWAY_BRANCH:-main}
+USE_LOCAL_CHART=${USE_LOCAL_CHART:-false}
 echo "Using GitHub org: $GITHUB_ORG"
 echo "Using branch: $BRANCH"
+echo "Using local chart: $USE_LOCAL_CHART"
 
 echo "Setting up MCP Gateway using Helm chart..."
 
@@ -54,7 +56,14 @@ kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRAN
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-httproute.yaml -n mcp-test
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server2-httproute-ext.yaml -n mcp-test
 
-helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
+# Install MCP Gateway using either local chart or remote OCI chart
+if [ "$USE_LOCAL_CHART" = "true" ]; then
+    echo "Installing from local chart: ./charts/mcp-gateway/"
+    helm install mcp-gateway ./charts/mcp-gateway/
+else
+    echo "Installing from remote OCI chart: oci://ghcr.io/kagenti/charts/mcp-gateway"
+    helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
+fi
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/samples/mcpserver-test-servers.yaml
 
 cat <<EOF | kubectl apply -f -
@@ -108,7 +117,7 @@ echo "Waiting for Istio gateway pod to be ready..."
 kubectl wait --for=condition=ready --timeout=300s pod -l istio=ingressgateway -n gateway-system
 
 echo "Starting port forwarding..."
-kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 8889:8081 &
+kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 8889:8889 &
 PORT_FORWARD_PID=$!
 
 echo "Starting MCP inspector..."

@@ -6,7 +6,7 @@ metadata:
   namespace: {{ include "mcp-gateway.namespace" . }}
   labels:
     {{- include "mcp-gateway.labels" . | nindent 4 }}
-    component: broker
+    app.kubernetes.io/component: mcp-broker
 spec:
   type: ClusterIP
   selector:
@@ -29,7 +29,7 @@ metadata:
   namespace: {{ include "mcp-gateway.namespace" . }}
   labels:
     {{- include "mcp-gateway.labels" . | nindent 4 }}
-    component: config-api
+    app.kubernetes.io/component: mcp-broker-config
 spec:
   type: ClusterIP
   selector:
