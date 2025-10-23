@@ -1,0 +1,24 @@
+---
+
+mcpGateway:
+  host: ""
+  brokerService:
+    name: mcp-gateway-broker
+    port: 8080
+  namespace: mcp-system
+
+gateway:
+  name: mcp-gateway
+  serviceType: ClusterIP
+  listener:
+    name: mcp
+    port: 8080
+  class: istio
+  labels:
+    istio: ingressgateway
+
+route:
+  create: true
+  termination: edge
+
+extraGatewayListeners: []
