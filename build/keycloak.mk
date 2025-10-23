@@ -7,7 +7,8 @@ KEYCLOAK_ADMIN_PASSWORD = admin
 keycloak-install-impl:
 	@echo "Installing Keycloak (dev mode using official image)..."
 	@echo "Note: Using kubectl deployment due to Helm chart issues"
-	@kubectl create namespace $(KEYCLOAK_NAMESPACE)
+	@# Create namespace if it doesn't exist
+	@kubectl create namespace $(KEYCLOAK_NAMESPACE) 2>/dev/null || echo "Namespace $(KEYCLOAK_NAMESPACE) already exists"
 	@kubectl apply -f config/keycloak/realm-import.yaml
 	@kubectl apply -f config/keycloak/deployment.yaml
 	@echo "Waiting for Keycloak to be ready..."
