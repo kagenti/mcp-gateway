@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
-	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
@@ -59,24 +59,27 @@ func (p *ConfigPusher) PushConfig(ctx context.Context, servers []*config.MCPServ
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// get endpoints for the config service
-	endpoints := &corev1.Endpoints{} //nolint:staticcheck
-	err = p.k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: p.namespace,
-		Name:      "mcp-config",
-	}, endpoints)
+	// get endpoint slices for the config service
+	endpointSliceList := &discoveryv1.EndpointSliceList{}
+	err = p.k8sClient.List(ctx, endpointSliceList, client.InNamespace(p.namespace), client.MatchingLabels{
+		"app.kubernetes.io/component": "mcp-broker-config",
+	})
 	if err != nil {
-		logger.Error(err, "Failed to get endpoints for mcp-config service")
-		return fmt.Errorf("failed to get endpoints: %w", err)
+		logger.Error(err, "Failed to get endpoint slices for mcp-config service")
+		return fmt.Errorf("failed to get endpoint slices: %w", err)
 	}
 
 	// collect all endpoint addresses
 	var addresses []string
-	for _, subset := range endpoints.Subsets {
-		for _, addr := range subset.Addresses {
-			// use the config port
-			url := fmt.Sprintf("http://%s/config", net.JoinHostPort(addr.IP, "8181"))
-			addresses = append(addresses, url)
+	for _, endpointSlice := range endpointSliceList.Items {
+		for _, endpoint := range endpointSlice.Endpoints {
+			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
+				for _, addr := range endpoint.Addresses {
+					// use the config port
+					url := fmt.Sprintf("http://%s/config", net.JoinHostPort(addr, "8181"))
+					addresses = append(addresses, url)
+				}
+			}
 		}
 	}
 

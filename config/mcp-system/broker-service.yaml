@@ -3,6 +3,9 @@ kind: Service
 metadata:
   name: mcp-broker
   namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/component: mcp-broker
 spec:
   selector:
     app: mcp-broker-router

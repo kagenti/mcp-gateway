@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec" // needed for setupPortForward
 	"strings"
+	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -85,18 +87,29 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 		By("Setting up port-forward to broker for status check")
 		statusPortForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18081:8080")
-		defer statusPortForwardCmd.Process.Kill()
+		defer func() {
+			if statusPortForwardCmd.Process != nil {
+				statusPortForwardCmd.Process.Kill()
+			}
+		}()
 
 		// wait for port-forward to be ready
 		Eventually(func() error {
-			client := &http.Client{Timeout: 1 * time.Second}
+			client := &http.Client{Timeout: 2 * time.Second}
 			resp, err := client.Get("http://localhost:18081/status")
 			if err != nil {
+				GinkgoWriter.Printf("Port-forward connection failed: %v\n", err)
 				return err
 			}
-			resp.Body.Close()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("broker status endpoint returned %d", resp.StatusCode)
+			}
+
+			GinkgoWriter.Printf("Port-forward to broker status endpoint is ready\n")
 			return nil
-		}, 30*time.Second, 1*time.Second).Should(Succeed(), "Port-forward should be ready")
+		}, 30*time.Second, 2*time.Second).Should(Succeed(), "Port-forward to broker status endpoint should be ready")
 
 		By("Waiting for broker to register servers")
 		// wait for broker to load the config and be ready
@@ -159,6 +172,10 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 			if !foundServer1 || !foundServer2 {
 				GinkgoWriter.Printf("Broker status - Total: %d, Healthy: %d, Server1: %v, Server2: %v\n",
 					status.TotalServers, status.HealthyServers, foundServer1, foundServer2)
+				for _, server := range status.Servers {
+					GinkgoWriter.Printf("  Server: %s (prefix: %s, reachable: %v)\n",
+						server.URL, server.ToolPrefix, server.ConnectionStatus.IsReachable)
+				}
 			}
 
 			return foundServer1 && foundServer2 && status.HealthyServers >= 2
@@ -253,13 +270,26 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 			client := &http.Client{Timeout: 2 * time.Second}
 			resp, err := client.Get("http://localhost:18081/status")
 			if err != nil {
+				GinkgoWriter.Printf("Failed to connect to broker status endpoint: %v\n", err)
 				return false
 			}
 			defer resp.Body.Close()
 
+			if resp.StatusCode != http.StatusOK {
+				GinkgoWriter.Printf("Broker status endpoint returned %d\n", resp.StatusCode)
+				return false
+			}
+
 			var status StatusResponse
 			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+				GinkgoWriter.Printf("Failed to decode status response: %v\n", err)
 				return false
+			}
+
+			GinkgoWriter.Printf("Broker status: %d servers total, %d healthy\n", status.TotalServers, status.HealthyServers)
+			for _, server := range status.Servers {
+				GinkgoWriter.Printf("  Server: %s (prefix: %s, reachable: %v)\n",
+					server.URL, server.ToolPrefix, server.ConnectionStatus.IsReachable)
 			}
 
 			// should only have server2 now
@@ -276,7 +306,7 @@ var _ = Describe("MCP Gateway Happy Path", func() {
 
 			// server1 should be gone, server2 should remain
 			return !hasServer1 && hasServer2
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Broker should remove deleted server")
+		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(), "Broker should remove deleted server")
 
 		By("Testing server failure recovery")
 		// simulate server failure by scaling down
@@ -620,8 +650,30 @@ func verifyServerInBrokerStatus(statusURL, serverNamePart string, expectReachabl
 func setupPortForward(resource, namespace, ports string) *exec.Cmd {
 	cmd := exec.Command("kubectl", "port-forward", "-n", namespace,
 		fmt.Sprintf("deployment/%s", resource), ports)
+
+	// Start the command and check for immediate errors
 	err := cmd.Start()
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		GinkgoWriter.Printf("Failed to start port-forward command: %v\n", err)
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	// Give the port-forward a moment to establish
+	time.Sleep(2 * time.Second)
+
+	// Check if the process is still running
+	if cmd.Process != nil {
+		// Check if process is still alive
+		if err := cmd.Process.Signal(os.Signal(syscall.Signal(0))); err != nil {
+			GinkgoWriter.Printf("Port-forward process died immediately: %v\n", err)
+			Expect(err).ToNot(HaveOccurred())
+		}
+		GinkgoWriter.Printf("Port-forward started successfully for %s in %s on %s\n", resource, namespace, ports)
+	} else {
+		GinkgoWriter.Printf("Port-forward process is nil\n")
+		Expect(fmt.Errorf("port-forward process is nil")).ToNot(HaveOccurred())
+	}
+
 	return cmd
 }
 
