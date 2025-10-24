@@ -21,7 +21,7 @@ The MCP Gateway Helm chart deploys:
 ### Install from Chart
 
 ```bash
-helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway --version 0.1.0
+helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway --version 0.1.0 --create-namespace --namespace mcp-system
 ```
 
 > **Note**: The chart defaults to the `mcp-system` namespace to match the controller's expectations.
@@ -30,7 +30,7 @@ helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway --version 0.1.
 
 ```bash
 # From the repository root
-helm install mcp-gateway ./charts/mcp-gateway
+helm install mcp-gateway ./charts/mcp-gateway --create-namespace --namespace mcp-system
 ```
 
 ## Post Install Setup
@@ -147,7 +147,7 @@ helm template test ./charts/mcp-gateway --debug
 
 # Install locally for testing
 helm install test-mcp-gateway ./charts/mcp-gateway \
-  --dry-run --debug
+  --create-namespace --namespace mcp-system --dry-run --debug
 ```
 
 ### Publishing New Versions

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "mcp-gateway.fullname" . }}-controller
-  namespace: {{ include "mcp-gateway.namespace" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mcp-gateway.labels" . | nindent 4 }}
     component: controller
@@ -34,7 +34,7 @@ spec:
                   name: {{ include "mcp-gateway.fullname" . }}-config-update-token
                   key: token
             - name: BROKER_CONFIG_URL
-              value: "http://{{ include "mcp-gateway.fullname" . }}-config.{{ include "mcp-gateway.namespace" . }}.svc.cluster.local:8181/config"
+              value: "http://{{ include "mcp-gateway.fullname" . }}-config.{{ .Release.Namespace }}.svc.cluster.local:8181/config"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
