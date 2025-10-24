@@ -48,8 +48,6 @@ Client → Gateway (Envoy) → Router (ext_proc) → Broker → Upstream MCP Ser
 ### Quick Start
 ```bash
 make local-env-setup     # Create Kind cluster with everything
-make dev                 # Configure for local development
-make run                 # Run broker/router locally
 make dev-gateway-forward # Access gateway at localhost:8888
 make reload              # Build, load to Kind, and restart controller and broker
 ```
