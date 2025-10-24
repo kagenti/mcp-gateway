@@ -57,15 +57,14 @@ oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 aut
 	@echo "✅ OAuth environment variables configured"
 	@echo ""
 	@echo "Step 2/5: Installing Vault..."
-	@bin/kustomize build config/vault | yq 'select(.kind == "Deployment").spec.template.spec.containers[0].args += ["-dev-root-token-id=root"] | .' | kubectl apply -f -
+	@bin/kustomize build config/vault | bin/yq 'select(.kind == "Deployment").spec.template.spec.containers[0].args += ["-dev-root-token-id=root"] | .' | kubectl apply -f -
 	@echo "✅ Vault installed"
 	@echo ""
 	@echo "Step 3/5: Applying AuthPolicy configurations..."
 	@kubectl apply -k ./config/samples/oauth-token-exchange/
-	@kubectl patch deployment/mcp-broker-router \
-  	-n mcp-system \
-  	--type='json' \
-  	-p='[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "TRUSTED_HEADER_PUBLIC_KEY", "valueFrom": {"secretKeyRef": {"name": "trusted-headers-public-key","key": "key"}}}}]'
+	@kubectl get deployment/mcp-broker-router -n mcp-system -o yaml | \
+		bin/yq '.spec.template.spec.containers[0].env += [{"name":"TRUSTED_HEADER_PUBLIC_KEY","valueFrom":{"secretKeyRef":{"name":"trusted-headers-public-key","key":"key"}}}] | .spec.template.spec.containers[0].env |= unique_by(.name)' | \
+		kubectl apply -f -
 	@echo "✅ AuthPolicy configurations applied"
 	@echo ""
 	@echo "Step 4/5: Configuring CORS rules for the OpenID Connect Client Registration endpoint..."

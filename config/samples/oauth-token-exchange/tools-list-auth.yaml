@@ -20,7 +20,7 @@ spec:
       'allow-tool-list':
         patternMatching:
           patterns:
-            - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # add method header
+            - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # check method header
       'authorized-tools':
         opa:
           rego: |
