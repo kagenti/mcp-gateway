@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "mcp-gateway.fullname" . }}-broker-router
-  namespace: {{ include "mcp-gateway.namespace" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mcp-gateway.labels" . | nindent 4 }}
     component: broker-router

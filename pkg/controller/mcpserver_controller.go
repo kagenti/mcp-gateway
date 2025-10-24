@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -26,8 +27,6 @@ import (
 )
 
 const (
-	// ConfigNamespace is the namespace for config
-	ConfigNamespace = "mcp-system"
 	// ConfigName is the name of the config
 	ConfigName = "mcp-gateway-config"
 
@@ -41,6 +40,15 @@ const (
 	// CredentialSecretValue is the required value for credential secrets
 	CredentialSecretValue = "true"
 )
+
+// getConfigNamespace returns the namespace for config, using NAMESPACE env var or defaulting to mcp-system
+func getConfigNamespace() string {
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = "mcp-system"
+	}
+	return namespace
+}
 
 // generates credential env var name: KAGENTAI_{MCP_NAME}_CRED
 func generateCredentialEnvVar(mcpServerName string) string {
@@ -360,7 +368,7 @@ func (r *MCPReconciler) writeAggregatedConfig(
 	brokerConfig *config.BrokerConfig,
 ) error {
 	writer := NewConfigMapWriter(r.Client, r.Scheme)
-	return writer.WriteAggregatedConfig(ctx, ConfigNamespace, ConfigName, brokerConfig)
+	return writer.WriteAggregatedConfig(ctx, getConfigNamespace(), ConfigName, brokerConfig)
 }
 
 func (r *MCPReconciler) discoverServersFromHTTPRoutes(
@@ -1073,7 +1081,7 @@ func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []m
 	aggregatedSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "mcp-aggregated-credentials",
-			Namespace: ConfigNamespace,
+			Namespace: getConfigNamespace(),
 			Labels: map[string]string{
 				"app":                        "mcp-gateway",
 				"mcp.kagenti.com/aggregated": "true",

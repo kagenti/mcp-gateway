@@ -1,5 +1,5 @@
 1. Check the status of your deployment:
-  kubectl get pods -n {{ include "mcp-gateway.namespace" . }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+  kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
 
 {{- if .Values.envoyFilter.create }}
 2. Verify EnvoyFilter is installed:
@@ -25,7 +25,7 @@
   kind: HTTPRoute
   metadata:
     name: mcp-route
-    namespace: {{ include "mcp-gateway.namespace" . }}
+    namespace: {{ .Release.Namespace }}
   spec:
     parentRefs:
       - name: mcp-gateway  # Your Gateway name
@@ -69,7 +69,7 @@
   kind: MCPServer
   metadata:
     name: my-mcp-server
-    namespace: {{ include "mcp-gateway.namespace" . }}
+    namespace: {{ .Release.Namespace }}
   spec:
     toolPrefix: "myserver_"
     targetRef:
@@ -83,9 +83,9 @@
 
 7. View logs for troubleshooting:
   # Broker/Router logs
-  kubectl logs -n {{ include "mcp-gateway.namespace" . }} deployment/{{ include "mcp-gateway.fullname" . }}-broker-router
+  kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "mcp-gateway.fullname" . }}-broker-router
   
   # Controller logs  
-  kubectl logs -n {{ include "mcp-gateway.namespace" . }} deployment/{{ include "mcp-gateway.fullname" . }}-controller
+  kubectl logs -n {{ .Release.Namespace }} deployment/{{ include "mcp-gateway.fullname" . }}-controller
 
 For more information, visit: https://github.com/kagenti/mcp-gateway

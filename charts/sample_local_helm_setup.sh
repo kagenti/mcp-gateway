@@ -59,10 +59,10 @@ kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRAN
 # Install MCP Gateway using either local chart or remote OCI chart
 if [ "$USE_LOCAL_CHART" = "true" ]; then
     echo "Installing from local chart: ./charts/mcp-gateway/"
-    helm install mcp-gateway ./charts/mcp-gateway/
+    helm install mcp-gateway ./charts/mcp-gateway/ --create-namespace --namespace mcp-system
 else
     echo "Installing from remote OCI chart: oci://ghcr.io/kagenti/charts/mcp-gateway"
-    helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway
+    helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway --create-namespace --namespace mcp-system
 fi
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/samples/mcpserver-test-servers.yaml
 

@@ -102,7 +102,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Installation Command" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-        echo "helm install mcp-gateway oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/mcp-gateway --version ${{ inputs.chart_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "helm install mcp-gateway oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/mcp-gateway --version ${{ inputs.chart_version }} --create-namespace --namespace mcp-system" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
   create-git-tag:

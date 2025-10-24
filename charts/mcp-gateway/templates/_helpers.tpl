@@ -67,12 +67,6 @@ Create the name of the controller service account to use
 {{ include "mcp-gateway.fullname" . }}-controller
 {{- end }}
 
-{{/*
-Get the namespace
-*/}}
-{{- define "mcp-gateway.namespace" -}}
-mcp-system
-{{- end }}
 
 {{/*
 Docker image name
