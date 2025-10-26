@@ -20,7 +20,30 @@ Execute the following command to deploy each of the aforementioned components to
 The MCP Gateway will be available at the output of the following command:
 
 ```shell
-oc get routes -n gateway-system -o jsonpath='{ .items[0].spec.host }'
+echo https://$(oc get routes -n gateway-system -o jsonpath='{ .items[0].spec.host }')/mcp
+```
+
+## Deploying to OpenShift using OpenShift GitOps (Argo CD)
+
+OpenShift GitOps (Argo CD) can be used to deploy the MCP Gateway to an OpenShift environment.
+
+### Prerequisites
+
+1. Cluster scoped OpenShift GitOps previously deployed
+
+### Deployment
+
+Execute the following command to deploy the MCP Gateway to OpenShift using OpenShift GitOps
+
+
+```shell
+./deploy_openshift_argocd.sh
+```
+
+The MCP Gateway will be available at the output of the following command:
+
+```shell
+echo https://$(oc get routes -n gateway-system -o jsonpath='{ .items[0].spec.host }')/mcp
 ```
 
 ## Verify Access to the MCP Gateway
