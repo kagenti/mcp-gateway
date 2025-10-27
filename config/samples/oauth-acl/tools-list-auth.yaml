@@ -22,7 +22,7 @@ spec:
           patternMatching:
             patterns:
               - predicate: size(auth.identity.groups) >=0
-              - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # add method header
+              - predicate: request.headers['x-mcp-method'] in ["tools/list","initialize","notifications/initialized"] # check method header
       response:
         unauthorized:
           code: 401
