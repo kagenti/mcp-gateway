@@ -1,0 +1,5 @@
+apiVersion: v2
+name: mcp-gateway-ingress
+description: MCP Gateway Ingress Chart
+type: application
+version: 0.1.0
