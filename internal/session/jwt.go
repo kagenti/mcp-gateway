@@ -46,7 +46,7 @@ func NewJWTManager(signingKey string, sessionLength int64, logger *slog.Logger) 
 	}, nil
 }
 
-// GenerateSessionJWT creates a JWT token
+// generateSessionJWT creates a JWT token
 func (m *JWTManager) generateSessionJWT() (string, error) {
 	now := time.Now()
 	claims := SessionClaims{
@@ -63,7 +63,7 @@ func (m *JWTManager) generateSessionJWT() (string, error) {
 	return token.SignedString(m.signingKey)
 }
 
-// Generate returns a session id JWT to fullfil SessionIdManager
+// Generate returns a session id JWT to fullfil SessionIdManager interface
 func (m *JWTManager) Generate() string {
 	m.logger.Info("gerating session id in jwt session manager")
 	sessID, err := m.generateSessionJWT()
@@ -74,7 +74,7 @@ func (m *JWTManager) Generate() string {
 	return sessID
 }
 
-// Validate validates a JWT token
+// Validate validates a JWT token and fullfils SessionIdManager interface
 func (m *JWTManager) Validate(tokenValue string) (bool, error) {
 	token, err := jwt.ParseWithClaims(tokenValue, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
 		m.logger.Info("validating JWT session")
@@ -95,6 +95,7 @@ func (m *JWTManager) Validate(tokenValue string) (bool, error) {
 	return false, nil
 }
 
+// Terminate part of the SessionIDManager interface
 func (m *JWTManager) Terminate(sessionID string) (isNotAllowed bool, err error) {
 	m.logger.Info("terminate session id in jwt session manager", "sesssion", sessionID)
 	return false, nil

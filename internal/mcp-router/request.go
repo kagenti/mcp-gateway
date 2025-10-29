@@ -153,7 +153,7 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	return calculatedResponse
 }
 
-// getRequestSessionID validates existing session JWT or generates a new one if expired/missing
+// getRequestSessionID gets the session id from the request headers
 func (s *ExtProcServer) getRequestSessionID(requestHeaders *eppb.HttpHeaders) string {
 	if requestHeaders == nil || s.requestHeaders.Headers == nil {
 		return ""
