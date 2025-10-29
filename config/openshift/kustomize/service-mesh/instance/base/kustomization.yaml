@@ -6,4 +6,3 @@ resources:
   - istio-cni-namespace.yaml
   - istio.yaml
   - istiocni.yaml
-  
