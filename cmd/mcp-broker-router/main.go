@@ -14,11 +14,15 @@ import (
 	"sync"
 	"time"
 
+	goenv "github.com/caitlinelfring/go-env-default"
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/fsnotify/fsnotify"
 	"github.com/kagenti/mcp-gateway/internal/broker"
 	config "github.com/kagenti/mcp-gateway/internal/config"
 	mcpRouter "github.com/kagenti/mcp-gateway/internal/mcp-router"
+	"github.com/kagenti/mcp-gateway/internal/session"
+	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
+	"github.com/kagenti/mcp-gateway/pkg/controller"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -29,9 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
-	"github.com/kagenti/mcp-gateway/pkg/controller"
 )
 
 var (
@@ -54,6 +55,8 @@ func main() {
 		mcpBrokerAddrFlag        string
 		mcpConfigAddrFlag        string
 		mcpConfigFile            string
+		jwtSigningKeyFlag        string
+		sessionDurationInHours   int64
 		loglevel                 int
 		logFormat                string
 		controllerMode           bool
@@ -90,6 +93,8 @@ func main() {
 		"set the log level 0=info, 4=warn , 8=error and -4=debug",
 	)
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
+	flag.StringVar(&jwtSigningKeyFlag, "session-signing-key", goenv.GetDefault("JWT_SESSION_SIGNING_KEY", "default-not-secure"), "JWT signing key for session tokens (env: JWT_SESSION_SIGNING_KEY)")
+	flag.Int64Var(&sessionDurationInHours, "session-length", 24, "default session length with the gateway in hours")
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
@@ -113,7 +118,7 @@ func main() {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, loggerOpts))
 	}
 	if controllerMode {
-		fmt.Println("Starting in controller mode...")
+		logger.Info("Starting in controller mode...")
 		go func() {
 			if err := runController(); err != nil {
 				log.Fatalf("Controller failed: %v", err)
@@ -127,9 +132,17 @@ func main() {
 		return
 	}
 	ctx := context.Background()
-	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag)
+	var jwtSessionMgr *session.JWTManager
+	if jwtSigningKeyFlag != "" {
+		jwtmgr, err := session.NewJWTManager(jwtSigningKeyFlag, sessionDurationInHours, logger)
+		if err != nil {
+			panic("failed to setup jwt manager " + err.Error())
+		}
+		jwtSessionMgr = jwtmgr
+	}
 	configServer := setUpConfigServer(mcpConfigAddrFlag)
-	routerGRPCServer, router := setUpRouter(mcpBroker)
+	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr)
+	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr)
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(mcpBroker)
 	// Only load config and run broker/router in standalone mode
@@ -192,7 +205,7 @@ func main() {
 	routerGRPCServer.GracefulStop()
 }
 
-func setUpBroker(address string, toolFiltering bool) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
+func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWTManager) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
 
 	mux := http.NewServeMux()
 
@@ -216,10 +229,18 @@ func setUpBroker(address string, toolFiltering bool) (*http.Server, broker.MCPBr
 		broker.WithTrustedHeadersPublicKey(os.Getenv("TRUSTED_HEADER_PUBLIC_KEY")),
 	)
 
-	streamableHTTPServer := server.NewStreamableHTTPServer(
+	var streamableHTTPServer = server.NewStreamableHTTPServer(
 		mcpBroker.MCPServer(),
 		server.WithStreamableHTTPServer(httpSrv),
 	)
+	if sessionManager != nil {
+		logger.Info("jwt session manager configured")
+		streamableHTTPServer = server.NewStreamableHTTPServer(
+			mcpBroker.MCPServer(),
+			server.WithStreamableHTTPServer(httpSrv),
+			server.WithSessionIdManager(sessionManager),
+		)
+	}
 	mux.HandleFunc("/status", mcpBroker.HandleStatusRequest)
 	mux.HandleFunc("/status/", mcpBroker.HandleStatusRequest)
 
@@ -255,14 +276,16 @@ func setUpConfigServer(address string) *http.Server {
 	}
 }
 
-func setUpRouter(broker broker.MCPBroker) (*grpc.Server, *mcpRouter.ExtProcServer) {
+func setUpRouter(broker broker.MCPBroker, logger *slog.Logger, jwtManager *session.JWTManager) (*grpc.Server, *mcpRouter.ExtProcServer) {
 	grpcSrv := grpc.NewServer()
 
 	// Create the ExtProcServer instance
 	server := &mcpRouter.ExtProcServer{
 		RoutingConfig: mcpConfig,
 		// TODO this seems wrong. Why does the router need to be passed an instance of the broker?
-		Broker: broker,
+		Broker:     broker,
+		Logger:     logger,
+		JWTManager: jwtManager,
 	}
 
 	// Setup the session cache with proper initialization

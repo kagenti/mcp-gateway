@@ -14,6 +14,7 @@ import (
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/broker"
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/internal/session"
 	"github.com/stretchr/testify/require"
 )
 
@@ -156,6 +157,14 @@ func TestMCPRequestToolName(t *testing.T) {
 
 func TestHandleRequestBody(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Create JWT manager for test
+	jwtManager, err := session.NewJWTManager("test-signing-key", 0, logger)
+	require.NoError(t, err)
+
+	// Generate a valid JWT token
+	validToken := jwtManager.Generate()
+
 	server := &ExtProcServer{
 		RoutingConfig: &config.MCPServersConfig{
 			Servers: []*config.MCPServer{
@@ -168,7 +177,8 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(logger),
+		Broker:     broker.NewBroker(logger),
+		JWTManager: jwtManager,
 	}
 
 	data := &MCPRequest{
@@ -194,13 +204,13 @@ func TestHandleRequestBody(t *testing.T) {
 
 	var resp []*eppb.ProcessingResponse
 
-	// Inject a request session ID for testing
+	// Inject a valid JWT token for testing
 	server.requestHeaders = &eppb.HttpHeaders{
 		Headers: &corev3.HeaderMap{
 			Headers: []*corev3.HeaderValue{
 				{
 					Key:      "mcp-session-id",
-					RawValue: []byte("123"),
+					RawValue: []byte(validToken),
 				},
 			},
 		},

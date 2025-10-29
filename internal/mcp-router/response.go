@@ -3,7 +3,6 @@ package mcprouter
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -13,6 +12,18 @@ import (
 // Returns empty string if not a backend session ID
 func extractHelperSessionFromBackend(_ string) string {
 	// TODO: check known server session prefixes
+	return ""
+}
+
+func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for _, hk := range headers.Headers {
+		if hk.Key == name {
+			return hk.Value
+		}
+	}
 	return ""
 }
 
@@ -33,13 +44,7 @@ func (s *ExtProcServer) HandleResponseHeaders(
 	}
 
 	// Look for mcp-session-id header that needs reverse mapping
-	var mcpSessionID string
-	for _, header := range headers.Headers.Headers {
-		if strings.ToLower(header.Key) == "mcp-session-id" {
-			mcpSessionID = string(header.RawValue)
-			break
-		}
-	}
+	mcpSessionID := getSingleValueHeader(headers.Headers, "mcp-session-id")
 
 	if mcpSessionID == "" {
 		slog.Info("[EXT-PROC] No mcp-session-id in response headers")
