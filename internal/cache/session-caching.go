@@ -4,6 +4,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -51,8 +52,40 @@ func (c *Cache) GetOrInit(ctx context.Context, serverName string, authority stri
 	return sessionID, nil
 }
 
-// Invalidate removes the session from the cache for the given server and gateway session.
-func (c *Cache) Invalidate(serverName string, gwSessionID string) {
-	k := key{serverName: serverName, gw: gwSessionID}
-	c.sessions.Delete(k)
+// InvalidateByMCPSessionID removes the session entry that contains the given MCP session ID
+func (c *Cache) InvalidateByMCPSessionID(mcpSessionID string) {
+	// Log cache before deletion
+	var beforeCount int
+	c.sessions.Range(func(_, _ interface{}) bool {
+		beforeCount++
+		return true
+	})
+	slog.Debug("Before deletion", "count", beforeCount, "mcpSessionID", mcpSessionID)
+
+	var keyToDelete *key
+	c.sessions.Range(func(k, v interface{}) bool {
+		if v.(string) == mcpSessionID {
+			key := k.(key)
+			keyToDelete = &key
+			return false // stop iteration
+		}
+		return true // continue iteration
+	})
+
+	if keyToDelete != nil {
+		c.sessions.Delete(*keyToDelete)
+
+		// Log cache after deletion
+		var afterCount int
+		c.sessions.Range(func(_, _ interface{}) bool {
+			afterCount++
+			return true
+		})
+		slog.Debug("After deletion", "count", afterCount,
+			"mcpSessionID", mcpSessionID,
+			"serverName", keyToDelete.serverName,
+			"gwSessionID", keyToDelete.gw)
+	} else {
+		slog.Debug("Session not found in cache", "mcpSessionID", mcpSessionID)
+	}
 }
