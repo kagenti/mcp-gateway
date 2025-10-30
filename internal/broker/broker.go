@@ -291,7 +291,7 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(
 	// Add to map BEFORE discovering tools so createMCPClient can find it
 	m.mcpServers[upstreamMCPURL(mcpServer.URL)] = upstream
 
-	discovered, err := m.discoverTools(ctx, upstream)
+	discovered, err := m.discoverUpstream(ctx, upstream)
 	if err != nil {
 		slog.Info("Failed to discover tools, will retry with backoff", "mcpURL", mcpServer.URL, "error", err)
 		// start background retry with exponential backoff
@@ -428,7 +428,7 @@ func (m *mcpBrokerImpl) CallTool(
 	return res, err
 }
 
-func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) (*discoveryResult, error) {
+func (m *mcpBrokerImpl) discoverUpstream(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) (*discoveryResult, error) {
 
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
@@ -577,7 +577,7 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 			"url", upstream.URL,
 			"attempt", attempt)
 
-		discovered, err := m.discoverTools(ctx, upstream)
+		discovered, err := m.discoverUpstream(ctx, upstream)
 		if err != nil {
 			m.logger.Warn("retry discovery failed",
 				"url", upstream.URL,
