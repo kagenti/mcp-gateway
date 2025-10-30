@@ -16,6 +16,18 @@ func extractHelperSessionFromBackend(_ string) string {
 	return ""
 }
 
+func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for _, hk := range headers.Headers {
+		if hk.Key == name {
+			return hk.Value
+		}
+	}
+	return ""
+}
+
 // HandleResponseHeaders handles response headers for session ID reverse mapping
 func (s *ExtProcServer) HandleResponseHeaders(
 	headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
