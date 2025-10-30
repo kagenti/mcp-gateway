@@ -81,14 +81,14 @@ func TestGenerate(t *testing.T) {
 		token := manager.Generate()
 
 		// parse and check claims directly
-		parsedToken, err := jwt.ParseWithClaims(token, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+		parsedToken, err := jwt.ParseWithClaims(token, &Claims{}, func(_ *jwt.Token) (interface{}, error) {
 			return manager.signingKey, nil
 		})
 		if err != nil {
 			t.Fatalf("failed to parse token: %v", err)
 		}
 
-		claims, ok := parsedToken.Claims.(*SessionClaims)
+		claims, ok := parsedToken.Claims.(*Claims)
 		if !ok {
 			t.Fatal("failed to extract claims")
 		}
@@ -165,7 +165,7 @@ func TestValidate(t *testing.T) {
 
 	t.Run("rejects token with wrong algorithm", func(t *testing.T) {
 		// create token with None algorithm instead of HS256
-		claims := SessionClaims{
+		claims := Claims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer: "mcp-gateway",
 			},

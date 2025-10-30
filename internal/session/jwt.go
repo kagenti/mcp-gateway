@@ -13,12 +13,13 @@ import (
 const (
 	// DefaultSessionDuration is the default duration for session JWTs
 	DefaultSessionDuration = 24 * time.Hour
+	Issuer                 = "mcp-gateway"
 )
 
 var _ server.SessionIdManager = &JWTManager{}
 
-// SessionClaims represents the claims in a session JWT
-type SessionClaims struct {
+// Claims represents the claims in a session JWT
+type Claims struct {
 	jwt.RegisteredClaims
 }
 
@@ -49,13 +50,13 @@ func NewJWTManager(signingKey string, sessionLength int64, logger *slog.Logger) 
 // generateSessionJWT creates a JWT token
 func (m *JWTManager) generateSessionJWT() (string, error) {
 	now := time.Now()
-	claims := SessionClaims{
+	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.duration)),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "mcp-gateway",
-			Audience:  jwt.ClaimStrings{"mcp-gateway"},
+			Issuer:    Issuer,
+			Audience:  jwt.ClaimStrings{Issuer},
 		},
 	}
 
@@ -76,11 +77,11 @@ func (m *JWTManager) Generate() string {
 
 // Validate validates a JWT token and fullfils SessionIdManager interface
 func (m *JWTManager) Validate(tokenValue string) (bool, error) {
-	token, err := jwt.ParseWithClaims(tokenValue, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenValue, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 		m.logger.Info("validating JWT session")
 		// verify signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return m.signingKey, nil
 
