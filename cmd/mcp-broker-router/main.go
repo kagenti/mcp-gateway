@@ -36,10 +36,11 @@ import (
 )
 
 var (
-	mcpConfig = &config.MCPServersConfig{}
-	mutex     sync.RWMutex
-	logger    = slog.New(slog.NewTextHandler(os.Stdout, nil))
-	scheme    = runtime.NewScheme()
+	mcpConfig            = &config.MCPServersConfig{}
+	mutex                sync.RWMutex
+	logger               = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	scheme               = runtime.NewScheme()
+	defaultJWTSigningKey = "default-not-secure"
 )
 
 func init() {
@@ -93,7 +94,7 @@ func main() {
 		"set the log level 0=info, 4=warn , 8=error and -4=debug",
 	)
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
-	flag.StringVar(&jwtSigningKeyFlag, "session-signing-key", goenv.GetDefault("JWT_SESSION_SIGNING_KEY", "default-not-secure"), "JWT signing key for session tokens (env: JWT_SESSION_SIGNING_KEY)")
+	flag.StringVar(&jwtSigningKeyFlag, "session-signing-key", goenv.GetDefault("JWT_SESSION_SIGNING_KEY", defaultJWTSigningKey), "JWT signing key for session tokens (env: JWT_SESSION_SIGNING_KEY)")
 	flag.Int64Var(&sessionDurationInHours, "session-length", 24, "default session length with the gateway in hours")
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
@@ -131,15 +132,22 @@ func main() {
 		logger.Info("shutting down controller")
 		return
 	}
+
 	ctx := context.Background()
 	var jwtSessionMgr *session.JWTManager
-	if jwtSigningKeyFlag != "" {
-		jwtmgr, err := session.NewJWTManager(jwtSigningKeyFlag, sessionDurationInHours, logger)
-		if err != nil {
-			panic("failed to setup jwt manager " + err.Error())
-		}
-		jwtSessionMgr = jwtmgr
+	if jwtSigningKeyFlag == "" {
+		panic("jwt session signing key is empty. Cannot proceed")
 	}
+	if jwtSigningKeyFlag == defaultJWTSigningKey {
+		logger.Warn("jwt session signing key is set to the default value. This is not recommended for production")
+	}
+
+	jwtmgr, err := session.NewJWTManager(jwtSigningKeyFlag, sessionDurationInHours, logger)
+	if err != nil {
+		panic("failed to setup jwt manager " + err.Error())
+	}
+	jwtSessionMgr = jwtmgr
+
 	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr)
 	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr)
