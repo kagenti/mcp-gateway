@@ -285,6 +285,7 @@ check-newlines:
 		if [ -f "$$x" ]; then \
 			if [ -s "$$x" ] && [ -n "$$(tail -c 1 "$$x")" ]; then \
 				echo "Missing newline at end of file: $$x"; \
+				echo "Try fixing with 'make fix-newlines'"; \
 				FAIL=1; \
 			fi; \
 		fi; \
