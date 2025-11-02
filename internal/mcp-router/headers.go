@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	mcpServerNameHeader = "x-mcp-servername"
-	toolHeader          = "x-mcp-toolname"
-	methodHeader        = "x-mcp-method"
-	sessionHeader       = "mcp-session-id"
-	authorityHeader     = ":authority"
-	authorizationHeader = "authorization"
+	mcpServerNameHeader   = "x-mcp-servername"
+	toolAnnotationsHeader = "x-mcp-annotation-hints"
+	toolHeader            = "x-mcp-toolname"
+	methodHeader          = "x-mcp-method"
+	sessionHeader         = "mcp-session-id"
+	authorityHeader       = ":authority"
+	authorizationHeader   = "authorization"
 )
 
 // HeadersBuilder builds headers to add to the request or response
@@ -104,6 +105,17 @@ func (hb *HeadersBuilder) WithMCPSession(session string) *HeadersBuilder {
 		Header: &basepb.HeaderValue{
 			Key:      sessionHeader,
 			RawValue: []byte(session),
+		},
+	})
+	return hb
+}
+
+// WithToolAnnotations will set the x-mcp-annotation-hints header
+func (hb *HeadersBuilder) WithToolAnnotations(annotations string) *HeadersBuilder {
+	hb.headers = append(hb.headers, &basepb.HeaderValueOption{
+		Header: &basepb.HeaderValue{
+			Key:      toolAnnotationsHeader,
+			RawValue: []byte(annotations),
 		},
 	})
 	return hb
