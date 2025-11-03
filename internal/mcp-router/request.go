@@ -124,6 +124,32 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 
 	slog.Info("Helper session", "session", mcpReq.SessionID)
 
+	// Get tool annotations from broker and set headers
+	if s.Broker != nil {
+		if annotations, hasAnnotations := s.Broker.ToolAnnotations(toolName); hasAnnotations {
+			// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
+			var parts []string
+			push := func(key string, val *bool) {
+				if val == nil {
+					parts = append(parts, fmt.Sprintf("%s=unspecified", key))
+				} else if *val {
+					parts = append(parts, fmt.Sprintf("%s=true", key))
+				} else {
+					parts = append(parts, fmt.Sprintf("%s=false", key))
+				}
+			}
+
+			push("readOnly", annotations.ReadOnlyHint)
+			push("destructive", annotations.DestructiveHint)
+			push("idempotent", annotations.IdempotentHint)
+			push("openWorld", annotations.OpenWorldHint)
+
+			hintsHeader := strings.Join(parts, ",")
+			headers.WithToolAnnotations(hintsHeader)
+		}
+
+	}
+
 	// Use cache to get or create upstream MCP session
 	var upstreamSession string
 	if s.SessionCache != nil {
