@@ -169,7 +169,4 @@ sequenceDiagram
 
 ## MCP Notifications
 
-TODO (recommend scoping to just tools/list_changed) notifications initially.
-
-The GET /mcp request will fall through to the MCP Broker.
-MCP broker will see the registered session id and any send any ```tools/list_changed` notifications received via its own notifications connection to the backend MCP servers to any registered clients.
+For detailed information on how notifications work in the MCP Gateway, see the [notifications design documentation](./notifications.md).
