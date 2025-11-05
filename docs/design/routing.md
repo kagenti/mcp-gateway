@@ -2,26 +2,64 @@
 
 ### Problem
 
-In order to expose MCP Servers, the MCP Gateway aggregates the available tools from the registered backend MCP servers and presents them as a single tool set to agent applications. As there is only one endpoint expected by the agent: `https://{host}/mcp` , the gateway needs to be able to accept MCP protocol based tools/call requests at that endpoint and then be able to make a routing decision about which backend MCP server should receive the call.
+In order to expose MCP Servers, the MCP Gateway aggregates the available tools from the registered backend MCP servers and presents them as a single tool set to agent applications. As there is only one endpoint expected by the agent: `https://{host}/mcp` , the gateway needs to be able to accept MCP protocol requests at that endpoint and then be able to make a routing decision about which backend MCP server should receive the call.
 
 
 ### Solution
 
 > Note: In describing the solution [Gateway API](https://gateway-api.sigs.k8s.io/) and Kubernetes are used as the basis for defining and deploying routes and gateways. It is worth mentioning that the result of all these APIs is config that is eventually consumed by Envoy and as such could be done without the need for the Gateway API resources.
 
-MCP Gateway intercept the tools/calls hitting the /mcp endpoint before envoy routes them and then based on configuration sets the `authority:` header to force the routing decision of Envoy to choose the correct MCP backend. Setting the `authority:` header allows for distinct routing and hostname per MCP backend.
+MCP Gateway router component as ext_proc intercept all requests hitting the /mcp endpoint before the Envoy router. Based on its configuration the router decides what to set the `:authority` header to in order to define the routing decision for Envoy. The router component owns the `:authority` header for all requests hitting the listener it is programmed to route on (the MCP Gateway listener). It will ensure that the `:authority` header is always set to the correct value for the requests it receives. If there is a failure or the router is not running, envoy will not proceed with the request as the `failure_mode_allow` will be set to false. The correct value for all none tools calls is the external host the gateway is exposed on. The correct value in the case of a `tool/call` is the host set in the HTTPRoute targeted by the `MCPServer` resource. This HTTPRoute host, can be any value, it is purely a value to tell the router what to set the `:authority` header to. 
 
 ![](./images/mcp-gateway-routing.jpg)
 
 
 ### The Router
 
-The router component is configured to know about the different backend MCP Servers that have been registered. This configuration is managed by the MCP Controller component. The router intercepts requests to the gateway before routing has happened and based on its configuration decides whether to route or ignore these requests. The router only routes `tools/calls`.
+The router component is configured to know about the different backend MCP Servers that have been registered. This MCPSever configuration is managed by the MCP Controller component. The router should also be configured with the public listener hostname via `required` flag `--mcp-gateway-public-host`. The router intercepts all requests to the gateway MCP listener before routing has happened and based on its configuration decides whether the request should be processed by the MCP Broker or configure the routing to ensure the request is sent to the correct MCP Server. The router only re-routes `tools/calls` but validates all calls hitting the MCP gateway listener to ensure clients cannot explicitly bypass the broker (note they can never bypass the router).
 
 #### The MCPServer resource
 
 The MCP Server resource is a Kubernetes CRD used to register and configure an MCP server to be exposed via the Gateway. It targets a HTTPRoute and sets some additional configuration. This resource is reconciled by the MCP Controller into configuration that the router can consume to make routing decisions.
 
+### The Gateway Listeners
+
+Although there are many ways to configure the gateway. What is shown here is an example that we use for testing and validation. It clearly separates the MCP Gateway from all other HTTP traffic.
+
+```yaml
+listeners:
+    - name: mcp-gateway # gateway listener
+      hostname: 'mcp.127-0-0-1.sslip.io' #public accessibly MCP host one used by client
+      port: 8080 # this is a port dedicated for use with the MCP Gateway. This way the ext_proc can be configured to only intercept request to this listener port and expect them to be JSONRPC based MCP requests validate them and ensure the :authority header is set correctly based on the type of request
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: mcp-servers # no host name required as the host is set by the HTTRoute
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All #any namespace can register an MCP server route
+```
+
+
+So here we have dedicated port 8080 to MCP requests.  It is strongly recommended to use another port for other workloads so that the router doesn't intercept these requests. In our example gateway we configure a new listener and port for keycloak for example:
+
+
+```yaml
+    - name: keycloak
+      hostname: 'keycloak.127-0-0-1.sslip.io'
+      port: 8889 #notice this is a different port to avoid the ext_proc router receiving these requests
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: keycloak
+
+```
 #### The Routes
 
 To configure the MCP Gateway we have two different routes with distinct routing responsibilities, both of these are required:
@@ -29,13 +67,3 @@ To configure the MCP Gateway we have two different routes with distinct routing 
 - **The MCP Gateway Route:** This route is how agents interact with the Gateway and is intended to be the route exposed for use (for example via a DNS resolvable hostname). The default backend for this route must be the MCP Broker component. From a client perspective this endpoint acts as an MCP Server.[Example](../../config/mcp-system/httproute.yaml). Although this route will also receive tools/calls it does not actually send tools/calls to the broker backend. These are intercepted and re-routed.
 
 - **Individual MCP Server Routes:** These are intended to route to individual MCP Servers that can handle distinct tools/calls from a client. There can be many of these routes but there is expected to be a 1:1 relationship between a route and a MCP Backend. Each MCP Server route should have some form of hostname set. The hostname used, is not hugely important as it is not expected to be DNS resolvable. In our examples we use `server1.mcp.local` etc. Each route should have a single rule that points at the MCP backend. [Example](../../config/test-servers/server1-httproute.yaml).
-
-
-#### The Gateway
-
-The Gateway is an instance of envoy managed by an Istio control plane. To have a gateway that can serve as an MCP Gateway you will need to define two listeners:
-
-1) For the main MCP Gateway Route 
-2) For attaching MCP Server Routes 
-
-[Example Gateway](../../config/istio/gateway/gateway.yaml)

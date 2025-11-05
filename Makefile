@@ -130,6 +130,15 @@ build-and-load-image: kind ## Build & load router/broker/controller image into t
 	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway:latest .
 	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	kubectl rollout restart deployment/mcp-broker-router -n mcp-system 2>/dev/null || true
+	kubectl rollout restart deployment/mcp-controller -n mcp-system 2>/dev/null || true
+
+.PHONY: load-image
+load-image: kind ## Build & load router/broker/controller image into the Kind cluster	
+	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)	
+
+.PHONY: build-image
+build-image: kind ## Build & load router/broker/controller image into the Kind cluster	
+	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway:latest .
 
 # Deploy example MCPServer
 deploy-example: install-crd ## Deploy example MCPServer resource

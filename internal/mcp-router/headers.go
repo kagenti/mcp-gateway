@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
 const (
@@ -11,13 +12,27 @@ const (
 	toolHeader          = "x-mcp-toolname"
 	methodHeader        = "x-mcp-method"
 	sessionHeader       = "mcp-session-id"
+	mcpTarget           = "mcp-target"
 	authorityHeader     = ":authority"
 	authorizationHeader = "authorization"
 )
 
+func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for _, hk := range headers.Headers {
+		if hk.Key == name {
+			return string(hk.RawValue)
+		}
+	}
+	return ""
+}
+
 // HeadersBuilder builds headers to add to the request or response
 type HeadersBuilder struct {
-	headers []*basepb.HeaderValueOption
+	headers         []*basepb.HeaderValueOption
+	originalHeaders *eppb.HttpHeaders
 }
 
 // NewHeaders returns a new HeadersBuilder
