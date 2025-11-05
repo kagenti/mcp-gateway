@@ -39,6 +39,7 @@ spec:
             - --mcp-broker-public-address=0.0.0.0:8080
             - --mcp-broker-config-address=0.0.0.0:8181
             - --mcp-router-address=0.0.0.0:50051
+            - --mcp-gateway-public-host={{ .Values.gateway.publicHost }}
             - --log-level=-4
           env:
             - name: CONFIG_UPDATE_TOKEN

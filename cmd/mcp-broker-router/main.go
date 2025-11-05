@@ -43,10 +43,6 @@ var (
 	defaultJWTSigningKey = "default-not-secure"
 )
 
-const (
-	defaultGatewayHostName = "mcp.127-0-0-1.sslip.io"
-)
-
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = mcpv1alpha1.AddToScheme(scheme)
@@ -82,7 +78,7 @@ func main() {
 	flag.StringVar(
 		&mcpRoutePublicHost,
 		"mcp-gateway-public-host",
-		defaultGatewayHostName,
+		"",
 		"The public host the MCP Gateway is exposing MCP servers on. The gateway router will always set the :authority header to this value to ensure the broker component cannot be bypassed.",
 	)
 	flag.StringVar(
@@ -164,11 +160,9 @@ func main() {
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(mcpBroker)
 	if mcpRoutePublicHost == "" {
-		panic("the mcp gateway needs to be informed of what public host to expect requests from so it can ensure routing and session mgmt happens")
+		panic("--mcp-gateway-public-host cannot be empty. The mcp gateway needs to be informed of what public host to expect requests from so it can ensure routing and session mgmt happens. Set --mcp-gateway-public-host")
 	}
-	if mcpRoutePublicHost == defaultGatewayHostName {
-		logger.Warn("mcp gateway host set to default development setting ", "host", defaultGatewayHostName)
-	}
+
 	mcpConfig.MCPGatewayHostname = mcpRoutePublicHost
 
 	// Only load config and run broker/router in standalone mode
