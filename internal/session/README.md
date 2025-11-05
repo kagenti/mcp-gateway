@@ -1,1 +1,0 @@
-# Session store (in-memory)

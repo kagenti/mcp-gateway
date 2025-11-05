@@ -13,6 +13,7 @@ import (
 	"github.com/kagenti/mcp-gateway/internal/broker"
 	"github.com/kagenti/mcp-gateway/internal/cache"
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/internal/session"
 )
 
 var _ config.Observer = &ExtProcServer{}
@@ -22,6 +23,8 @@ type ExtProcServer struct {
 	RoutingConfig  *config.MCPServersConfig
 	Broker         broker.MCPBroker
 	SessionCache   *cache.Cache
+	JWTManager     *session.JWTManager
+	Logger         *slog.Logger
 	streaming      bool
 	requestHeaders *extProcV3.HttpHeaders
 }

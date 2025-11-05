@@ -96,6 +96,15 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 		calculatedResponse = append(calculatedResponse, s.HeaderResponse(headers.Build()))
 		return calculatedResponse
 	}
+	if mcpReq.SessionID == "" {
+		slog.Info("No mcp-session-id found in headers")
+		return append(calculatedResponse, s.createErrorResponse("No session ID found", 400))
+	}
+
+	if _, err := s.JWTManager.Validate(mcpReq.SessionID); err != nil {
+		slog.Info("mcp session id is invalid")
+		return append(calculatedResponse, s.createErrorResponse("Session Invalid", 404))
+	}
 	// handle tools call
 	toolName := mcpReq.ToolName()
 	if toolName == "" {
@@ -117,10 +126,6 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	slog.Info("Stripped tool name", "tool", mcpReq.ToolName())
 	headers.WithMCPServerName(serverInfo.Name)
 	// Get Helper session ID
-	if mcpReq.SessionID == "" {
-		slog.Info("No mcp-session-id found in headers")
-		return append(calculatedResponse, s.createErrorResponse("No session ID found", 400))
-	}
 
 	slog.Info("Helper session", "session", mcpReq.SessionID)
 
@@ -148,7 +153,7 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	return calculatedResponse
 }
 
-// extractSessionFromContext extracts mcp-session-id from the stored request headers
+// getRequestSessionID gets the session id from the request headers
 func (s *ExtProcServer) getRequestSessionID(requestHeaders *eppb.HttpHeaders) string {
 	if requestHeaders == nil || s.requestHeaders.Headers == nil {
 		return ""
