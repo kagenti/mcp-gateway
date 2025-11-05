@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	basepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
 const (
@@ -31,8 +30,7 @@ func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
 
 // HeadersBuilder builds headers to add to the request or response
 type HeadersBuilder struct {
-	headers         []*basepb.HeaderValueOption
-	originalHeaders *eppb.HttpHeaders
+	headers []*basepb.HeaderValueOption
 }
 
 // NewHeaders returns a new HeadersBuilder

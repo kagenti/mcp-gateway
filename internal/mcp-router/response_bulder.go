@@ -8,13 +8,13 @@ import (
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-// responseBuilder builds envoy external processor responses
-type responseBuilder struct {
+// ResponseBuilder builds envoy external processor responses
+type ResponseBuilder struct {
 	response []*eppb.ProcessingResponse
 }
 
 // WithRequestHeadersReponse adds a request headers response with header mutations, clears route cache
-func (rb *responseBuilder) WithRequestHeadersReponse(headers []*basepb.HeaderValueOption) *responseBuilder {
+func (rb *ResponseBuilder) WithRequestHeadersReponse(headers []*basepb.HeaderValueOption) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &eppb.HeadersResponse{
@@ -31,7 +31,7 @@ func (rb *responseBuilder) WithRequestHeadersReponse(headers []*basepb.HeaderVal
 }
 
 // WithRequestBodyHeadersAndBodyReponse adds request body response with header and body mutations, clears route cache
-func (rb *responseBuilder) WithRequestBodyHeadersAndBodyReponse(headers []*basepb.HeaderValueOption, body []byte) *responseBuilder {
+func (rb *ResponseBuilder) WithRequestBodyHeadersAndBodyReponse(headers []*basepb.HeaderValueOption, body []byte) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestBody{
 			RequestBody: &eppb.BodyResponse{
@@ -54,7 +54,7 @@ func (rb *responseBuilder) WithRequestBodyHeadersAndBodyReponse(headers []*basep
 }
 
 // WithRequestBodyHeadersResponse adds request body response with header mutations only, clears route cache
-func (rb *responseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.HeaderValueOption) *responseBuilder {
+func (rb *ResponseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.HeaderValueOption) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestBody{
 			RequestBody: &eppb.BodyResponse{
@@ -72,7 +72,7 @@ func (rb *responseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.Head
 }
 
 // WithImmediateResponse adds an immediate error response that terminates request processing
-func (rb *responseBuilder) WithImmediateResponse(statusCode int32, message string) *responseBuilder {
+func (rb *ResponseBuilder) WithImmediateResponse(statusCode int32, message string) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &eppb.ImmediateResponse{
@@ -87,8 +87,8 @@ func (rb *responseBuilder) WithImmediateResponse(statusCode int32, message strin
 	return rb
 }
 
-// WithStreamingResponse adds a streaming request body response with headers and body sent as separate chunks
-func (rb *responseBuilder) WithStreamingResponse(headers []*basepb.HeaderValueOption, body []byte) *responseBuilder {
+// WithStreamingResponse adds a streaming request body response with headers
+func (rb *ResponseBuilder) WithStreamingResponse(headers []*basepb.HeaderValueOption, body []byte) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestBody{
 			RequestBody: &eppb.BodyResponse{
@@ -110,7 +110,7 @@ func (rb *responseBuilder) WithStreamingResponse(headers []*basepb.HeaderValueOp
 }
 
 // WithDoNothingResponse adds an empty response that allows request to continue unmodified
-func (rb *responseBuilder) WithDoNothingResponse(isStreaming bool) *responseBuilder {
+func (rb *ResponseBuilder) WithDoNothingResponse(isStreaming bool) *ResponseBuilder {
 	if isStreaming {
 		rb.response = append(rb.response, &eppb.ProcessingResponse{
 			Response: &eppb.ProcessingResponse_RequestHeaders{
@@ -129,13 +129,13 @@ func (rb *responseBuilder) WithDoNothingResponse(isStreaming bool) *responseBuil
 }
 
 // Build returns the accumulated processing responses
-func (rb *responseBuilder) Build() []*eppb.ProcessingResponse {
+func (rb *ResponseBuilder) Build() []*eppb.ProcessingResponse {
 	return rb.response
 }
 
 // NewResponse creates a new response builder
-func NewResponse() *responseBuilder {
-	return &responseBuilder{
+func NewResponse() *ResponseBuilder {
+	return &ResponseBuilder{
 		response: []*eppb.ProcessingResponse{},
 	}
 }
