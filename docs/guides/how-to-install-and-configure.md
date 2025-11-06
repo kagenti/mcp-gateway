@@ -41,13 +41,19 @@ You'll need at least one MCP server to route through the gateway. This can be:
 Install from GitHub Container Registry:
 
 ```bash
-helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway --create-namespace --namespace mcp-system
+helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
+  --create-namespace \
+  --namespace mcp-system \
+  --set gateway.publicHost=your-hostname.example.com
 ```
+
 
 This automatically installs:
 - MCP Gateway components (broker, router, controller)
 - Required CRDs and RBAC
 - EnvoyFilter for Istio integration
+
+> **Note:** The `gateway.publicHost` value must match the hostname configured in your Gateway listener (see [Configure Gateway Listener and Route](./configure-mcp-gateway-listener-and-router.md)).
 
 ### Method 2: Kustomize
 

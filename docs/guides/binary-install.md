@@ -72,11 +72,16 @@ Save this as `config/servers.yaml` or any location you prefer.
 
 ```bash
 # Run with your configuration
-./bin/mcp-broker-router --config=config/servers.yaml --log-level=-4
+./bin/mcp-broker-router \
+  --config=config/servers.yaml \
+  --mcp-gateway-public-host=your-hostname.example.com \
+  --log-level=-4
 ```
 
 **Command Options**:
 - `--config`: Path to your YAML configuration file
+- `--mcp-gateway-public-host`: **Required** - Public hostname for MCP Gateway (must match your Gateway listener hostname)
+- `--mcp-router-address`: Address for gRPC router (default: `0.0.0.0:50051`)
 - `--log-level`: Logging verbosity
   - `-4`: Debug (verbose)
   - `0`: Info (default)
