@@ -50,11 +50,11 @@ func init() {
 }
 
 func main() {
-
 	var (
 		mcpRouterAddrFlag        string
 		mcpBrokerAddrFlag        string
 		mcpConfigAddrFlag        string
+		mcpRoutePublicHost       string
 		mcpConfigFile            string
 		jwtSigningKeyFlag        string
 		sessionDurationInHours   int64
@@ -74,6 +74,12 @@ func main() {
 		"mcp-broker-public-address",
 		"0.0.0.0:8080",
 		"The public address for MCP broker",
+	)
+	flag.StringVar(
+		&mcpRoutePublicHost,
+		"mcp-gateway-public-host",
+		"",
+		"The public host the MCP Gateway is exposing MCP servers on. The gateway router will always set the :authority header to this value to ensure the broker component cannot be bypassed.",
 	)
 	flag.StringVar(
 		&mcpConfigAddrFlag,
@@ -153,6 +159,12 @@ func main() {
 	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr)
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(mcpBroker)
+	if mcpRoutePublicHost == "" {
+		panic("--mcp-gateway-public-host cannot be empty. The mcp gateway needs to be informed of what public host to expect requests from so it can ensure routing and session mgmt happens. Set --mcp-gateway-public-host")
+	}
+
+	mcpConfig.MCPGatewayHostname = mcpRoutePublicHost
+
 	// Only load config and run broker/router in standalone mode
 	LoadConfig(mcpConfigFile)
 

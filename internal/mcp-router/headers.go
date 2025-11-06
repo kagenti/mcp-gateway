@@ -11,9 +11,22 @@ const (
 	toolHeader          = "x-mcp-toolname"
 	methodHeader        = "x-mcp-method"
 	sessionHeader       = "mcp-session-id"
+	mcpTarget           = "mcp-target"
 	authorityHeader     = ":authority"
 	authorizationHeader = "authorization"
 )
+
+func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for _, hk := range headers.Headers {
+		if hk.Key == name {
+			return string(hk.RawValue)
+		}
+	}
+	return ""
+}
 
 // HeadersBuilder builds headers to add to the request or response
 type HeadersBuilder struct {

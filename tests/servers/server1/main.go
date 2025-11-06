@@ -151,7 +151,7 @@ func promptHi(
 func main() {
 	flag.Parse()
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test server 1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test mcp server 1"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "greet", Description: "say hi"}, sayHi)
 	mcp.AddTool(server, &mcp.Tool{Name: "time", Description: "get current time"}, timeTool)
 	mcp.AddTool(server, &mcp.Tool{Name: "slow", Description: "delay N seconds"}, slowTool)

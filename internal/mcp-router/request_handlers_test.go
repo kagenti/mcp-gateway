@@ -179,6 +179,7 @@ func TestHandleRequestBody(t *testing.T) {
 		},
 		Broker:     broker.NewBroker(logger),
 		JWTManager: jwtManager,
+		Logger:     logger,
 	}
 
 	data := &MCPRequest{
@@ -234,4 +235,62 @@ func TestHandleRequestBody(t *testing.T) {
 	require.Equal(t,
 		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
 		string(rb.RequestBody.Response.BodyMutation.GetBody()))
+}
+
+func TestHandleRequestHeaders(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	testCases := []struct {
+		Name            string
+		GatewayHostname string
+	}{
+		{
+			Name:            "sets authority header to gateway hostname",
+			GatewayHostname: "mcp.example.com",
+		},
+		{
+			Name:            "handles wildcard gateway hostname",
+			GatewayHostname: "*.mcp.local",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			server := &ExtProcServer{
+				RoutingConfig: &config.MCPServersConfig{
+					MCPGatewayHostname: tc.GatewayHostname,
+				},
+				Broker: broker.NewBroker(logger),
+				Logger: logger,
+			}
+
+			headers := &eppb.HttpHeaders{
+				Headers: &corev3.HeaderMap{
+					Headers: []*corev3.HeaderValue{
+						{
+							Key:      ":authority",
+							RawValue: []byte("original.host.com"),
+						},
+					},
+				},
+			}
+
+			responses, err := server.HandleRequestHeaders(headers)
+
+			require.NoError(t, err)
+			require.Len(t, responses, 1)
+
+			// should be a request headers response
+			require.IsType(t, &eppb.ProcessingResponse_RequestHeaders{}, responses[0].Response)
+			rh := responses[0].Response.(*eppb.ProcessingResponse_RequestHeaders)
+			require.NotNil(t, rh.RequestHeaders)
+
+			// verify authority header was set
+			headerMutation := rh.RequestHeaders.Response.HeaderMutation
+			require.NotNil(t, headerMutation)
+			require.Len(t, headerMutation.SetHeaders, 1)
+			require.Equal(t, ":authority", headerMutation.SetHeaders[0].Header.Key)
+			require.Equal(t, tc.GatewayHostname, string(headerMutation.SetHeaders[0].Header.RawValue))
+		})
+	}
 }
