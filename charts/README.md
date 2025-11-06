@@ -53,6 +53,7 @@ The chart uses sensible defaults and requires minimal configuration. The configu
 | `configMap.create` | Create initial ConfigMap | `true` |
 | `envoyFilter.create` | Create EnvoyFilter for Istio integration | `true` |
 | `envoyFilter.namespace` | Namespace for EnvoyFilter | `istio-system` |
+| `gateway.publicHost` | Public hostname for MCP Gateway (required) | `mcp.127-0-0-1.sslip.io` |
 
 ## Usage
 
