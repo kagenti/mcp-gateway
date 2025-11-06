@@ -14,6 +14,8 @@ type MCPServersConfig struct {
 	Servers        []*MCPServer
 	VirtualServers []*VirtualServer
 	observers      []Observer
+	//MCPGatewayHostname is the accessible host of the gateway listener
+	MCPGatewayHostname string
 }
 
 // RegisterObserver registers an observer to be notified of changes to the config

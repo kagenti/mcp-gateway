@@ -4,7 +4,11 @@ KIND_CLUSTER_NAME ?= mcp-gateway
 
 .PHONY: kind-create-cluster
 kind-create-cluster: kind # Create the "mcp-gateway" kind cluster.
-	@if $(KIND) get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
+	@# Set KIND provider for podman
+	@if echo "$(CONTAINER_ENGINE)" | grep -q "podman"; then \
+		export KIND_EXPERIMENTAL_PROVIDER=podman; \
+	fi; \
+	if $(KIND) get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
 		echo "Kind cluster '$(KIND_CLUSTER_NAME)' already exists, skipping creation"; \
 	else \
 		echo "Creating Kind cluster '$(KIND_CLUSTER_NAME)' with HTTP port $(KIND_HOST_PORT_HTTP) and HTTPS port $(KIND_HOST_PORT_HTTPS)..."; \
@@ -16,4 +20,8 @@ kind-create-cluster: kind # Create the "mcp-gateway" kind cluster.
 
 .PHONY: kind-delete-cluster
 kind-delete-cluster: kind # Delete the "mcp-gateway" kind cluster.
-	- $(KIND) delete cluster --name $(KIND_CLUSTER_NAME)
+	@# Set KIND provider for podman
+	@if echo "$(CONTAINER_ENGINE)" | grep -q "podman"; then \
+		export KIND_EXPERIMENTAL_PROVIDER=podman; \
+	fi; \
+	$(KIND) delete cluster --name $(KIND_CLUSTER_NAME)

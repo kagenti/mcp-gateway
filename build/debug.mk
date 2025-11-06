@@ -32,7 +32,7 @@ debug-envoy-off-impl:
 debug-envoy-config: # Show Envoy configuration dump
 	@echo "Fetching Envoy configuration..."
 	kubectl exec $$(kubectl get pods -l istio=ingressgateway -n gateway-system -o name) -n gateway-system -- \
-		curl -s http://localhost:15000/config_dump | jq . | less
+		curl -s http://localhost:15000/config_dump | jq .	
 
 # Show Envoy clusters
 .PHONY: debug-envoy-clusters

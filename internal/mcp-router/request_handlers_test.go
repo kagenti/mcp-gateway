@@ -14,6 +14,7 @@ import (
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/broker"
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/internal/session"
 	"github.com/stretchr/testify/require"
 )
 
@@ -156,6 +157,14 @@ func TestMCPRequestToolName(t *testing.T) {
 
 func TestHandleRequestBody(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Create JWT manager for test
+	jwtManager, err := session.NewJWTManager("test-signing-key", 0, logger)
+	require.NoError(t, err)
+
+	// Generate a valid JWT token
+	validToken := jwtManager.Generate()
+
 	server := &ExtProcServer{
 		RoutingConfig: &config.MCPServersConfig{
 			Servers: []*config.MCPServer{
@@ -168,7 +177,9 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker: broker.NewBroker(logger),
+		Broker:     broker.NewBroker(logger),
+		JWTManager: jwtManager,
+		Logger:     logger,
 	}
 
 	data := &MCPRequest{
@@ -194,13 +205,13 @@ func TestHandleRequestBody(t *testing.T) {
 
 	var resp []*eppb.ProcessingResponse
 
-	// Inject a request session ID for testing
+	// Inject a valid JWT token for testing
 	server.requestHeaders = &eppb.HttpHeaders{
 		Headers: &corev3.HeaderMap{
 			Headers: []*corev3.HeaderValue{
 				{
 					Key:      "mcp-session-id",
-					RawValue: []byte("123"),
+					RawValue: []byte(validToken),
 				},
 			},
 		},
@@ -224,4 +235,62 @@ func TestHandleRequestBody(t *testing.T) {
 	require.Equal(t,
 		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
 		string(rb.RequestBody.Response.BodyMutation.GetBody()))
+}
+
+func TestHandleRequestHeaders(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	testCases := []struct {
+		Name            string
+		GatewayHostname string
+	}{
+		{
+			Name:            "sets authority header to gateway hostname",
+			GatewayHostname: "mcp.example.com",
+		},
+		{
+			Name:            "handles wildcard gateway hostname",
+			GatewayHostname: "*.mcp.local",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			server := &ExtProcServer{
+				RoutingConfig: &config.MCPServersConfig{
+					MCPGatewayHostname: tc.GatewayHostname,
+				},
+				Broker: broker.NewBroker(logger),
+				Logger: logger,
+			}
+
+			headers := &eppb.HttpHeaders{
+				Headers: &corev3.HeaderMap{
+					Headers: []*corev3.HeaderValue{
+						{
+							Key:      ":authority",
+							RawValue: []byte("original.host.com"),
+						},
+					},
+				},
+			}
+
+			responses, err := server.HandleRequestHeaders(headers)
+
+			require.NoError(t, err)
+			require.Len(t, responses, 1)
+
+			// should be a request headers response
+			require.IsType(t, &eppb.ProcessingResponse_RequestHeaders{}, responses[0].Response)
+			rh := responses[0].Response.(*eppb.ProcessingResponse_RequestHeaders)
+			require.NotNil(t, rh.RequestHeaders)
+
+			// verify authority header was set
+			headerMutation := rh.RequestHeaders.Response.HeaderMutation
+			require.NotNil(t, headerMutation)
+			require.Len(t, headerMutation.SetHeaders, 1)
+			require.Equal(t, ":authority", headerMutation.SetHeaders[0].Header.Key)
+			require.Equal(t, tc.GatewayHostname, string(headerMutation.SetHeaders[0].Header.RawValue))
+		})
+	}
 }

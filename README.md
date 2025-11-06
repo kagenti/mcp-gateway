@@ -239,4 +239,3 @@ The endpoint returns a JSON response following the OAuth Protected Resource disc
 ## Deployment to OpenShift
 
 A script is available to deploy the MCP Gateway and dependent services to an OpenShift cluster. Utilize the steps described [here](./config/openshift/README.md) to facilitate the deployment.
- 
