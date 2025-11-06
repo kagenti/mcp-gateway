@@ -125,19 +125,17 @@ define load-image
 endef
 
 .PHONY: build-and-load-image
-build-and-load-image: kind ## Build & load router/broker/controller image into the Kind cluster
+build-and-load-image: kind build-image load-image  ## Build & load router/broker/controller image into the Kind cluster and restart
 	@echo "Building and loading image into Kind cluster..."
-	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway:latest .
-	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	kubectl rollout restart deployment/mcp-broker-router -n mcp-system 2>/dev/null || true
 	kubectl rollout restart deployment/mcp-controller -n mcp-system 2>/dev/null || true
 
 .PHONY: load-image
-load-image: kind ## Build & load router/broker/controller image into the Kind cluster	
+load-image: kind ## Load the mcp-gateway image into the kind cluster
 	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)	
 
 .PHONY: build-image
-build-image: kind ## Build & load router/broker/controller image into the Kind cluster	
+build-image: kind ## Build the mcp-gateway image
 	$(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway:latest .
 
 # Deploy example MCPServer
