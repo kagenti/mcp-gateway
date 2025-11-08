@@ -1,0 +1,52 @@
+apiVersion: 1
+kind: GrafanaDashboard
+metadata:
+  name: tool-annotations-bar
+spec:
+  title: Tool Annotations - Bar Graphs
+  panels:
+    - type: bar
+      title: Destructive Annotations Count
+      datasource: Loki
+      targets:
+        - expr: |
+            sum by (destructive) (
+              count_over_time({namespace="mcp-system"} |= `x-mcp-annotation-hints` 
+              | regexp `x-mcp-annotation-hints\\"[^\"]*raw_value:\\\"(?P<annotation_hints>[^\\\"]+)\\\"` 
+              | regexp `"readOnly=(?P<readOnly>[^,]+),destructive=(?P<destructive>[^,]+),idempotent=(?P<idempotent>[^,]+),openWorld=(?P<openWorld>[^\"]+)"` 
+              | destructive = "true" [$__auto])
+            )
+    - type: bar
+      title: ReadOnly Annotations Count
+      datasource: Loki
+      targets:
+        - expr: |
+            sum by (readOnly) (
+              count_over_time({namespace="mcp-system"} |= `x-mcp-annotation-hints` 
+              | regexp `x-mcp-annotation-hints\\"[^\"]*raw_value:\\\"(?P<annotation_hints>[^\\\"]+)\\\"` 
+              | regexp `"readOnly=(?P<readOnly>[^,]+),destructive=(?P<destructive>[^,]+),idempotent=(?P<idempotent>[^,]+),openWorld=(?P<openWorld>[^\"]+)"` 
+              | readOnly = "false" [$__auto])
+            )
+    - type: bar
+      title: Idempotent Annotations Count
+      datasource: Loki
+      targets:
+        - expr: |
+            sum by (idempotent) (
+              count_over_time({namespace="mcp-system"} |= `x-mcp-annotation-hints` 
+              | regexp `x-mcp-annotation-hints\\"[^\"]*raw_value:\\\"(?P<annotation_hints>[^\\\"]+)\\\"` 
+              | regexp `"readOnly=(?P<readOnly>[^,]+),destructive=(?P<destructive>[^,]+),idempotent=(?P<idempotent>[^,]+),openWorld=(?P<openWorld>[^\"]+)"` 
+              | idempotent = "false" [$__auto])
+            )
+    - type: bar
+      title: OpenWorld Annotations Count
+      datasource: Loki
+      targets:
+        - expr: |
+            sum by (openWorld) (
+              count_over_time({namespace="mcp-system"} |= `x-mcp-annotation-hints` 
+              | regexp `x-mcp-annotation-hints\\"[^\"]*raw_value:\\\"(?P<annotation_hints>[^\\\"]+)\\\"` 
+              | regexp `"readOnly=(?P<readOnly>[^,]+),destructive=(?P<destructive>[^,]+),idempotent=(?P<idempotent>[^,]+),openWorld=(?P<openWorld>[^\"]+)"` 
+              | openWorld = "true\\" [$__auto])
+            )
+
