@@ -1,0 +1,31 @@
+apiVersion: perses.io/v1
+kind: Dashboard
+metadata:
+  name: mcp-router-dashboard
+  namespace: default
+spec:
+  display:
+    name: MCP Router Logs
+  duration: 1h
+  variables: []
+  panels:
+    - kind: Table
+      display:
+        name: MCP Router Logs
+      datasource:
+        type: loki
+      queries:
+        - expr: |
+            {app="mcp-router"}
+      options:
+        columns:
+          - name: Timestamp
+            value: "{{ .ts }}"
+          - name: Level
+            value: "{{ .level }}"
+          - name: Message
+            value: "{{ .msg }}"
+          - name: Request ID
+            value: "{{ .request_id }}"
+          - name: Response Code
+            value: "{{ .response_code }}"
