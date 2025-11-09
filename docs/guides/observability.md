@@ -1,6 +1,6 @@
 # Observability Guide
 
-## Adding observability stack
+## Adding/Removing observability stack
 
 ```Makefile
 make observability-setup
@@ -8,10 +8,39 @@ make observability-setup
 
 This will setup Loki, Grafana Alloy, and Grafana Dashboard in your cluster.
 
-## Adding Grafana Dashboard
+```Makefile
+make observability-teardown
+```
+
+Removes the observability stack from your cluster.
+
+## Adding Example Grafana Dashboard
+
+Follow the steps after installing the stack to setup your secret and port forward the Grafana dashboard.
+
+```bash
+# Taken from the output of grafana installation
+1. Get your 'admin' user password by running:
+
+   kubectl get secret --namespace monitoring my-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+
+
+2. The Grafana server can be accessed via port 80 on the following DNS name from within your cluster:
+
+   my-grafana.monitoring.svc.cluster.local
+
+   Get the Grafana URL to visit by running these commands in the same shell:
+     export POD_NAME=$(kubectl get pods --namespace monitoring -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=my-grafana" -o jsonpath="{.items[0].metadata.name}")
+     kubectl --namespace monitoring port-forward $POD_NAME 3000
+```
+
+### MCP Tool Annotation Hints Visualization
+
+Please note that you should try running some MCP traffic through your cluster to see data in this visualization. You can do so using the mcp inspector tool as shown in the main README.
 
 1. Go to Dashboards, create -> add visualization.
-2. Set the type to "Bar Chart".
+   - Select your Loki datasource.
+2. Set some type of graph (bar graph or stat visualizations are easiest to read).
 3. Add four queries using the code editor
 
 ```logql
