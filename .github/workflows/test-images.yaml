@@ -59,6 +59,10 @@ jobs:
             context: tests/servers/oidc-server
             dockerfile: Dockerfile
             image-name: test-oidc-server
+          - server: everything-server
+            context: tests/servers/everything-server
+            dockerfile: Dockerfile
+            image-name: test-everything-server
 
     steps:
       - name: Check out code
