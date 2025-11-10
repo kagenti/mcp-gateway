@@ -433,13 +433,6 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 		return nil, fmt.Errorf("failed to create streamable client: %w", err)
 	}
 
-	// Let transport listen for updates
-	// TODO Note that currently this pollutes the log, see https://github.com/mark3labs/mcp-go/issues/552
-	err = upstream.mpcClient.Start(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to start streamable client: %w", err)
-	}
-
 	upstream.initializeResult = resInit
 
 	resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
@@ -742,6 +735,12 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string
 	httpClient, err := client.NewStreamableHttpClient(mcpURL, options...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Start the client before initialize to listen for notifications
+	err = httpClient.Start(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start streamable client: %w", err)
 	}
 
 	// Configure capabilities and client info based on type
