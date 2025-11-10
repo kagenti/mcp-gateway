@@ -97,3 +97,18 @@ spec:
   credentialRef:
     name: oidc-server-credentials
     key: admin_token
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: everything-server
+  namespace: mcp-test
+  labels:
+    "kagenti/mcp": "true"
+spec:
+  toolPrefix: everything_
+  targetRef:
+    # MCP Everything Server - Typescript SDK based (prompts, tools, resources, sampling)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-everything-server-route
