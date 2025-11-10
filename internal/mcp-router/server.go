@@ -141,13 +141,21 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			}
 			continue
 		case *extProcV3.ProcessingRequest_ResponseBody:
-			responses, _ := s.HandleResponseBody(r.ResponseBody)
-			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending response body processing instructions to Envoy: %+v", response))
-				if err := stream.Send(response); err != nil {
-					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
-					return err
-				}
+			// This should never be called as response_body_mode is set to NONE in the EnvoyFilter.
+			// If this is called, it indicates a configuration issue or Envoy bug.
+			s.Logger.Error("[EXT-PROC] Unexpected response body processing request received",
+				"size", len(r.ResponseBody.GetBody()),
+				"end_of_stream", r.ResponseBody.GetEndOfStream(),
+				"note", "response_body_mode is set to NONE in EnvoyFilter - this should not occur")
+			// Return empty response to satisfy the interface
+			response := &extProcV3.ProcessingResponse{
+				Response: &extProcV3.ProcessingResponse_ResponseBody{
+					ResponseBody: &extProcV3.BodyResponse{},
+				},
+			}
+			if err := stream.Send(response); err != nil {
+				s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
+				return err
 			}
 			continue
 		}
