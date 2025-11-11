@@ -29,3 +29,7 @@ resources:
   - oidc-server-httproute.yaml
   - oidc-server-httproute-ext.yaml
   - oidc-server-secret.yaml
+  - everything-server-deployment.yaml
+  - everything-server-service.yaml
+  - everything-server-httproute.yaml
+  - everything-server-httproute-ext.yaml
