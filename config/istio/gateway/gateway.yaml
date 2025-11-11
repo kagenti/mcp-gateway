@@ -61,6 +61,7 @@ spec:
         namespaces:
           from: All
     - name: mcps
+      hostname: '*.mcp.local'
       port: 8080
       protocol: HTTP
       allowedRoutes:
