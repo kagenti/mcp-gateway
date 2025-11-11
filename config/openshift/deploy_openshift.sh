@@ -2,7 +2,7 @@
 
 set -e
 
-MCP_GATEWAY_HELM_VERSION="${MCP_GATEWAY_HELM_VERSION:-0.3.0}"
+MCP_GATEWAY_HELM_VERSION="${MCP_GATEWAY_HELM_VERSION:-0.4.0}"
 
 MCP_GATEWAY_HOST="${MCP_GATEWAY_HOST:-mcp.apps.$(oc get dns cluster -o jsonpath='{.spec.baseDomain}')}"
 
