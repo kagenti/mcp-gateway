@@ -18,15 +18,15 @@ spec:
           responseHeaderModifier:
             add:
               - name: Access-Control-Allow-Origin
-                value: "*"
+                value: '*'
               - name: Access-Control-Allow-Methods
-                value: "GET, POST, PUT, DELETE, OPTIONS, HEAD"
+                value: 'GET, POST, PUT, DELETE, OPTIONS, HEAD'
               - name: Access-Control-Allow-Headers
-                value: "Content-Type, Authorization, Accept, Origin, X-Requested-With"
+                value: 'Content-Type, Authorization, Accept, Origin, X-Requested-With'
               - name: Access-Control-Max-Age
-                value: "3600"
+                value: '3600'
               - name: Access-Control-Allow-Credentials
-                value: "true"
+                value: 'true'
       backendRefs:
         - name: mcp-broker
           port: 8080

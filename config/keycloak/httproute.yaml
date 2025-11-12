@@ -39,13 +39,13 @@ spec:
               - Access-Control-Allow-Methods
             set:
               - name: Access-Control-Allow-Origin
-                value: "http://localhost:6274"
+                value: 'http://localhost:6274'
               - name: Access-Control-Allow-Credentials
-                value: "true"
+                value: 'true'
               - name: Access-Control-Allow-Headers
-                value: "Content-Type, Authorization"
+                value: 'Content-Type, Authorization'
               - name: Access-Control-Allow-Methods
-                value: "POST, OPTIONS"
+                value: 'POST, OPTIONS'
       backendRefs:
         - name: keycloak
           port: 80
