@@ -18,20 +18,17 @@ Removes the observability stack from your cluster.
 
 Follow the steps after installing the stack to setup your secret and port forward the Grafana dashboard.
 
-```bash
-# Taken from the output of grafana installation
 1. Get your 'admin' user password by running:
 
-   kubectl get secret --namespace monitoring my-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```bash
+# Taken from the output of grafana installation
+kubectl get secret --namespace monitoring my-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
 
+2. Port-forward to expose Grafana at <http://localhost:3000/login>
 
-2. The Grafana server can be accessed via port 80 on the following DNS name from within your cluster:
-
-   my-grafana.monitoring.svc.cluster.local
-
-   Get the Grafana URL to visit by running these commands in the same shell:
-     export POD_NAME=$(kubectl get pods --namespace monitoring -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=my-grafana" -o jsonpath="{.items[0].metadata.name}")
-     kubectl --namespace monitoring port-forward $POD_NAME 3000
+```bash
+kubectl --namespace monitoring port-forward deployment/my-grafana 3000
 ```
 
 ### MCP Tool Annotation Hints Visualization

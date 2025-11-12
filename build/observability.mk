@@ -2,7 +2,7 @@
 ##@ Observability Setup
 
 .PHONY: observability-setup
-observability-setup: $(HELM) ## Setup observability environment with Loki and Perses
+observability-setup: $(HELM) ## Setup observability environment with Loki and Grafana
 	@echo "========================================="
 	@echo "Setting up Observability Environment"
 	@echo "========================================="
