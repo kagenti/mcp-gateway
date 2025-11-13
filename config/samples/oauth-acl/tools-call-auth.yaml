@@ -18,7 +18,7 @@ spec:
       authentication: #validates the token
         'keycloak':
           jwt:
-            issuerUrl: http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp
+            issuerUrl: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
       authorization: #authorizes the tool call
         'allow-tool-call':
           patternMatching:
@@ -37,7 +37,7 @@ spec:
           code: 401
           headers:
             'WWW-Authenticate':
-              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8001/.well-known/oauth-protected-resource/mcp
           body:
             value: |
               {

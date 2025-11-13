@@ -87,7 +87,7 @@ Verify that your MCP server tools are now available through the gateway:
 ```bash
 # Step 1: Initialize MCP session and capture session ID
 # Use -D to dump headers to a file, then read the session ID
-curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}'
 
@@ -97,7 +97,7 @@ SESSION_ID=$(grep -i "mcp-session-id:" /tmp/mcp_headers | cut -d' ' -f2 | tr -d 
 echo "MCP Session ID: $SESSION_ID"
 
 # Step 2: List tools using the session ID
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'

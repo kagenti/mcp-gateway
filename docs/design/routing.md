@@ -51,7 +51,7 @@ So here we have dedicated port 8080 to MCP requests.  It is strongly recommended
 ```yaml
     - name: keycloak
       hostname: 'keycloak.127-0-0-1.sslip.io'
-      port: 8889 #notice this is a different port to avoid the ext_proc router receiving these requests
+      port: 8002 #notice this is a different port to avoid the ext_proc router receiving these requests
       protocol: HTTP
       allowedRoutes:
         namespaces:

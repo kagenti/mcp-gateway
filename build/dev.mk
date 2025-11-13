@@ -35,15 +35,6 @@ dev-reset: # Reset to in-cluster service configuration
 	kubectl apply -f config/istio/envoyfilter.yaml
 	@echo "Reset to in-cluster configuration"
 
-# Port forward to access the gateway locally
-.PHONY: dev-gateway-forward
-dev-gateway-forward: ## Port forward the gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)
-	@echo "Forwarding gateway to localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP)..."
-	@echo "You can now access the gateway at http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
-	@echo "You can also access keycloak via the gateway at http://keycloak.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK)"
-	@echo "Try: curl http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)"
-	kubectl -n gateway-system port-forward svc/mcp-gateway-istio $(GATEWAY_LOCAL_PORT_HTTP_MCP):8080 $(GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK):8889
-
 # Watch logs from the gateway
 .PHONY: dev-logs-gateway
 dev-logs-gateway: # Watch logs from the Istio gateway
@@ -56,7 +47,7 @@ dev-test: # Test MCP request through the gateway
 	curl -X POST \
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' \
-		http://mcp.127-0-0-1.sslip.io:$(GATEWAY_LOCAL_PORT_HTTP_MCP)/mcp
+		http://mcp.127-0-0-1.sslip.io:$(KIND_HOST_PORT_MCP_GATEWAY)/mcp
 
 # Clean up port forwards
 .PHONY: dev-stop-forward

@@ -65,12 +65,15 @@ Also sets up an Istio Gateway API Gateway, and HTTPRoutes for test mcp servers, 
 ```bash
 make local-env-setup
 
-# Or with custom ports (defaults: 8080/8443 for Kind, 8888/8889 for Gateway)
-KIND_HOST_PORT_HTTP=8090 KIND_HOST_PORT_HTTPS=8453 make local-env-setup
-GATEWAY_LOCAL_PORT_HTTP_MCP=9000 GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK=9001 make dev-gateway-forward
+# Or with custom ports (defaults: 8001->30080->8080 for MCP Broker/Gateway, 8002->30089->8002 for Keycloak)
+KIND_HOST_PORT_MCP_GATEWAY=8090 KIND_HOST_PORT_KEYCLOAK=8453 make local-env-setup
 ```
 
-Run the MCP Inspector and connect to the gateway (This also port forwards to the gateway)
+> **Note**: If you change these ports, be mindful that some examples or YAML resources may need to be updated manually to use the updated port. You should check for anything that connects to `mcp.127-0-0-1.sslip.io` or `keycloak.127-0-0-1.sslip.io` and update the port numbers accordingly.
+>
+> **Keycloak Port Requirement**: The host port for Keycloak needs to match the internal listener port (8002 in the default configuration) because there is a `hostAlias` in Authorino in the local dev environment that ensures Authorino calls back to Keycloak at the correct IP/port to validate tokens. If you change the host port (e.g., to 9999), you must also change the listener in the gateway to 9999, otherwise Authorino cannot reach Keycloak over the internal Kubernetes network.
+
+Run the MCP Inspector and connect to the gateway
 
 ```bash
 make inspect-gateway
@@ -94,7 +97,7 @@ This will:
 
 The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
 
-Finally, open MCP Inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp
+Finally, open MCP Inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp
 
 When you click connect with MCP Inspector, you should be redirected to Keycloak. There you will need to login as the MCP user with password mcp. You now should only be able to access tools based on the ACL configuration.
 

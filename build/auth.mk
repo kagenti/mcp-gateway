@@ -10,8 +10,8 @@ oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions man
 	@echo "Step 1/4: Configuring OAuth environment variables..."
 	@kubectl set env deployment/mcp-broker-router \
 		OAUTH_RESOURCE_NAME="MCP Server" \
-		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
-		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
+		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8001/mcp" \
+		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
 		OAUTH_BEARER_METHODS_SUPPORTED="header" \
 		OAUTH_SCOPES_SUPPORTED="basic,groups" \
 		-n mcp-system
@@ -49,8 +49,8 @@ oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 aut
 	@echo "Step 1/5: Configuring OAuth environment variables..."
 	@kubectl set env deployment/mcp-broker-router \
 		OAUTH_RESOURCE_NAME="MCP Server" \
-		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
-		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
+		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8001/mcp" \
+		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
 		OAUTH_BEARER_METHODS_SUPPORTED="header" \
 		OAUTH_SCOPES_SUPPORTED="basic,groups,roles,profile" \
 		-n mcp-system

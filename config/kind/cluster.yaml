@@ -9,9 +9,9 @@ nodes:
       kubeletExtraArgs:
         node-labels: "ingress-ready=true"
   extraPortMappings:
-  - containerPort: 80
-    hostPort: 8080
+  - containerPort: 30080 # MCP Gateway port
+    hostPort: 8001
     protocol: TCP
-  - containerPort: 443
-    hostPort: 8443
+  - containerPort: 30089 # keycloak port
+    hostPort: 8002
     protocol: TCP

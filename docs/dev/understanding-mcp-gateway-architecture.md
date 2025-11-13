@@ -139,7 +139,7 @@ The MCP Inspector provides a web interface for exploring the gateway:
 make inspect-gateway
 ```
 
-This opens `http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp`
+This opens `http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp`
 
 **What you can do:**
 1. **View all tools**: Navigate to **Tools** → **List Tools** to see all available tools with their prefixes
@@ -159,7 +159,6 @@ make status
 
 This shows:
 - Running components and their status
-- Active port forwards
 - Local processes (if any)
 
 ### Inspect Component Pods
