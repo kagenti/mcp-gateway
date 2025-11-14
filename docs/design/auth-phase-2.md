@@ -28,7 +28,7 @@ Example JWT payload:
 
 ```json
 {
-  "allowed-tools": "{\"server1.mcp.local\":[\"greet\"],\"server2.mcp.local\":[\"headers\"],\"server3.mcp.local\":[\"add\"]}",
+  "allowed-tools": "{\"mcp-test/mcp-server1-route\":[\"greet\"],\"mcp-test/mcp-server2-route\":[\"headers\"],\"mcp-test/mcp-server3-route\":[\"add\"]}",
   "exp": 1760004918,
   "iat": 1760004618,
   "iss": "Authorino",
