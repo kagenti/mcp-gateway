@@ -50,6 +50,12 @@ data:
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
+        },
+        {
+          "clientId": "mcp-test/kubernetes-mcp",
+          "publicClient": true,
+          "standardFlowEnabled": false,
+          "fullScopeAllowed": false
         }
       ],
       "roles": {
@@ -108,6 +114,74 @@ data:
             {
               "name": "hello_world"
             }
+          ],
+          "mcp-test/kubernetes-mcp": [
+            {
+              "name": "configuration_contexts_list"
+            },
+            {
+              "name": "configuration_view"
+            },
+            {
+              "name": "events_list"
+            },
+            {
+              "name": "helm_install"
+            },
+            {
+              "name": "helm_list"
+            },
+            {
+              "name": "helm_uninstall"
+            },
+            {
+              "name": "namespaces_list"
+            },
+            {
+              "name": "nodes_log"
+            },
+            {
+              "name": "nodes_stats_summary"
+            },
+            {
+              "name": "nodes_top"
+            },
+            {
+              "name": "pods_delete"
+            },
+            {
+              "name": "pods_exec"
+            },
+            {
+              "name": "pods_get"
+            },
+            {
+              "name": "pods_list"
+            },
+            {
+              "name": "pods_list_in_namespace"
+            },
+            {
+              "name": "pods_log"
+            },
+            {
+              "name": "pods_run"
+            },
+            {
+              "name": "pods_top"
+            },
+            {
+              "name": "resources_create_or_update"
+            },
+            {
+              "name": "resources_delete"
+            },
+            {
+              "name": "resources_get"
+            },
+            {
+              "name": "resources_list"
+            }
           ]
         }
       },
@@ -133,6 +207,35 @@ data:
               "hello_world"
             ]
           }
+        },
+        {
+          "name": "engineering",
+          "clientRoles": {
+            "mcp-test/kubernetes-mcp": [
+              "configuration_contexts_list",
+              "configuration_view",
+              "events_list",
+              "helm_install",
+              "helm_list",
+              "helm_uninstall",
+              "namespaces_list",
+              "nodes_log",
+              "nodes_stats_summary",
+              "nodes_top",
+              "pods_delete",
+              "pods_exec",
+              "pods_get",
+              "pods_list",
+              "pods_list_in_namespace",
+              "pods_log",
+              "pods_run",
+              "pods_top",
+              "resources_create_or_update",
+              "resources_delete",
+              "resources_get",
+              "resources_list"
+            ]
+          }
         }
       ],
       "users": [
@@ -152,7 +255,8 @@ data:
           ],
           "groups": [
             "mcp-users",
-            "accounting"
+            "accounting",
+            "engineering"
           ]
         }
       ],
