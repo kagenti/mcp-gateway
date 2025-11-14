@@ -102,6 +102,7 @@ func main() {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintf(w, "Custom path server with MCP at /v1/special/mcp\n")
 			} else {
+				fmt.Fprintf(w, "Custom path server NOT FOUND")
 				http.NotFound(w, r)
 			}
 		})

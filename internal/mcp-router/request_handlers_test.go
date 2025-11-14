@@ -190,6 +190,14 @@ func TestHandleRequestBody(t *testing.T) {
 			"name":  "s_mytool",
 			"other": "other",
 		},
+		Headers: &corev3.HeaderMap{
+			Headers: []*corev3.HeaderValue{
+				{
+					Key:      "mcp-session-id",
+					RawValue: []byte(validToken),
+				},
+			},
+		},
 	}
 	cfg := &config.MCPServersConfig{
 		Servers: []*config.MCPServer{
@@ -202,21 +210,7 @@ func TestHandleRequestBody(t *testing.T) {
 			},
 		},
 	}
-
-	var resp []*eppb.ProcessingResponse
-
-	// Inject a valid JWT token for testing
-	server.requestHeaders = &eppb.HttpHeaders{
-		Headers: &corev3.HeaderMap{
-			Headers: []*corev3.HeaderValue{
-				{
-					Key:      "mcp-session-id",
-					RawValue: []byte(validToken),
-				},
-			},
-		},
-	}
-	resp = server.HandleMCPRequest(context.Background(), data, cfg)
+	resp := server.HandleMCPRequest(context.Background(), data, cfg)
 	require.Len(t, resp, 1)
 	require.IsType(t, &eppb.ProcessingResponse_RequestBody{}, resp[0].Response)
 	rb := resp[0].Response.(*eppb.ProcessingResponse_RequestBody)
@@ -275,7 +269,7 @@ func TestHandleRequestHeaders(t *testing.T) {
 				},
 			}
 
-			responses, err := server.HandleRequestHeaders(headers)
+			responses, err := server.HandleRequestHeaders(headers, false)
 
 			require.NoError(t, err)
 			require.Len(t, responses, 1)

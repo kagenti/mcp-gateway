@@ -17,8 +17,7 @@ func extractHelperSessionFromBackend(_ string) string {
 }
 
 // HandleResponseHeaders handles response headers for session ID reverse mapping
-func (s *ExtProcServer) HandleResponseHeaders(
-	headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseHeaders(headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
 	slog.Info("[EXT-PROC] Processing response headers for session mapping...", "headers", headers)
 
 	if headers == nil || headers.Headers == nil {
@@ -90,26 +89,6 @@ func (s *ExtProcServer) HandleResponseHeaders(
 						},
 					},
 				},
-			},
-		},
-	}, nil
-}
-
-// HandleResponseBody handles response bodies.
-func (s *ExtProcServer) HandleResponseBody(
-	body *eppb.HttpBody) ([]*eppb.ProcessingResponse, error) {
-	slog.Info(fmt.Sprintf("[EXT-PROC] Processing response body... (size: %d, end_of_stream: %t)",
-		len(body.GetBody()), body.GetEndOfStream()))
-
-	// slog the response body content if it's not too large
-	if len(body.GetBody()) > 0 && len(body.GetBody()) < 1000 {
-		slog.Info(fmt.Sprintf("[EXT-PROC] Response body content: %s", string(body.GetBody())))
-	}
-
-	return []*eppb.ProcessingResponse{
-		{
-			Response: &eppb.ProcessingResponse_ResponseBody{
-				ResponseBody: &eppb.BodyResponse{},
 			},
 		},
 	}, nil

@@ -38,6 +38,7 @@ listeners:
     - name: mcp-servers # no host name required as the host is set by the HTTRoute
       port: 8080
       protocol: HTTP
+      hostname: '*.mcp.local' # this hostname can be any wildcard hostname. It is here to ensure the MCP Server routes attach only to this listener and can be protected by the correct AuthPolicy. 
       allowedRoutes:
         namespaces:
           from: All #any namespace can register an MCP server route
@@ -66,4 +67,4 @@ To configure the MCP Gateway we have two different routes with distinct routing 
 
 - **The MCP Gateway Route:** This route is how agents interact with the Gateway and is intended to be the route exposed for use (for example via a DNS resolvable hostname). The default backend for this route must be the MCP Broker component. From a client perspective this endpoint acts as an MCP Server.[Example](../../config/mcp-system/httproute.yaml). Although this route will also receive tools/calls it does not actually send tools/calls to the broker backend. These are intercepted and re-routed.
 
-- **Individual MCP Server Routes:** These are intended to route to individual MCP Servers that can handle distinct tools/calls from a client. There can be many of these routes but there is expected to be a 1:1 relationship between a route and a MCP Backend. Each MCP Server route should have some form of hostname set. The hostname used, is not hugely important as it is not expected to be DNS resolvable. In our examples we use `server1.mcp.local` etc. Each route should have a single rule that points at the MCP backend. [Example](../../config/test-servers/server1-httproute.yaml).
+- **Individual MCP Server Routes:** These are intended to route to individual MCP Servers that can handle distinct tools/calls from a client. There can be many of these routes but there is expected to be a 1:1 relationship between a route and a MCP Backend. Each MCP Server route should have some form of hostname set and it should match the gateway listener (in the above example `*.mcp.local`). The hostname used, is not hugely important as it is not expected to be DNS resolvable. In our examples we use `{ServerName}.mcp.local` in the HTTPRoute. Each route should have a single rule that points at the MCP backend. [Example](../../config/test-servers/server1-httproute.yaml).

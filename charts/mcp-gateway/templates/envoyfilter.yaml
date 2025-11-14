@@ -35,7 +35,7 @@ spec:
               request_header_mode: 'SEND'
               response_header_mode: 'SEND'
               request_body_mode: 'BUFFERED'
-              response_body_mode: 'BUFFERED'
+              response_body_mode: 'NONE'
               request_trailer_mode: 'SKIP'
               response_trailer_mode: 'SKIP'
             grpc_service:

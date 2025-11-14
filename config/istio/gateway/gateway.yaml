@@ -15,6 +15,13 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: mcps
+      port: 8080
+      protocol: HTTP
+      hostname: '*.mcp.local' # this hostname can be any wildcard. It is here to simplify routing, ensure the MCP Server routes attach to this listener only, can be protected by the AuthPolicy and routed to via envoy and the MCPRouter.
+      allowedRoutes:
+        namespaces:
+          from: All #any namespace can register an MCP server route
     - name: keycloak
       hostname: 'keycloak.127-0-0-1.sslip.io'
       port: 8889
@@ -60,9 +67,3 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcps
-      port: 8080
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: All #any namespace can register an MCP server route

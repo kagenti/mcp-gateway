@@ -81,6 +81,10 @@ inspect-custom-path: ## Open MCP Inspector for custom path server
 inspect-oidc-server: ## Open MCP Inspector for OpenID Connect test server (requires auth)
 	$(call inspect-server-template,OIDC test server,mcp-oidc-server,9094,hello_world tool with authentication,NOTE: This server requires Bearer token authentication)
 
+.PHONY: inspect-everything-server
+inspect-everything-server: ## Open MCP Inspector for test everything server
+	$(call inspect-server-template,test everything server,mcp-everything-server,9095,echo add longRunningOperation printEnv sampleLLM getTinyImage annotatedMessage getResourceReference startElicitation structuredContent listRoots)
+
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1
 

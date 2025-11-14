@@ -132,7 +132,7 @@ static_resources:
                 request_header_mode: SEND
                 response_header_mode: SEND
                 request_body_mode: BUFFERED
-                response_body_mode: BUFFERED
+                response_body_mode: NONE
           - name: envoy.filters.http.router
 
   clusters:
