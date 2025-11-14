@@ -9,7 +9,7 @@ func Test_Headers(t *testing.T) {
 
 	expected := map[string]string{
 		toolHeader:            "test_tool",
-		toolAnnotationsHeader: "detructive=true,indempotent=true,readOnly=false",
+		toolAnnotationsHeader: "destructive=true,idempotent=true,readOnly=false",
 		authorityHeader:       "mcp1.mcp.local",
 		"authorization":       "auth",
 		methodHeader:          "tools/call",
