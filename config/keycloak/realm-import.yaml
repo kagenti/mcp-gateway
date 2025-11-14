@@ -23,7 +23,8 @@ data:
             "roles"
           ],
           "optionalClientScopes": [
-            "groups"
+            "groups",
+            "profile"
           ]
         },
         {

@@ -22,16 +22,6 @@ spec:
       allowedRoutes:
         namespaces:
           from: All #any namespace can register an MCP server route
-    - name: keycloak
-      hostname: 'keycloak.127-0-0-1.sslip.io'
-      port: 8002
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: Selector
-          selector:
-            matchLabels:
-              kubernetes.io/metadata.name: keycloak
     - name: mcp-server1-route-ext
       hostname: 'server1.127-0-0-1.sslip.io'
       port: 8080
