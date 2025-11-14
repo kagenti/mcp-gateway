@@ -14,7 +14,7 @@ spec:
       metadata:
         rbac: #fetches hard coded acl currrently
           http:
-            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers[":authority"]'
+            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers["x-mcp-servername"]'
       authentication: #validates the token
         'keycloak':
           jwt:

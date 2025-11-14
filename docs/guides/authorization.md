@@ -44,7 +44,7 @@ data:
     {
         "acls": [
             {
-                "id": "server1.mcp.local",
+                "id": "mcp-test/mcp-server1-route",
                 "access": {
                     "accounting": [
                         "test_headers"
@@ -55,7 +55,7 @@ data:
                 }
             },
             {
-                "id": "server2.mcp.local", 
+                "id": "mcp-test/mcp-server2-route",
                 "access": {
                     "accounting": [
                         "test2_headers"
@@ -64,7 +64,7 @@ data:
             }
         ]
     }
-    
+
     # NOTE: This is an example ACL configuration. Replace with your own:
     # - "id" should match your MCP server hostnames
     # - "access" groups should match your Keycloak groups
@@ -160,7 +160,7 @@ spec:
           body:
             value: |
               {
-                "error": "Forbidden", 
+                "error": "Forbidden",
                 "message": "MCP Tool Access denied. Insufficient permissions for this tool."
               }
         unauthenticated:
