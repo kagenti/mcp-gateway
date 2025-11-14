@@ -16,8 +16,7 @@ func extractHelperSessionFromBackend(_ string) string {
 }
 
 // HandleResponseHeaders handles response headers for session ID reverse mapping
-func (s *ExtProcServer) HandleResponseHeaders(
-	headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
+func (s *ExtProcServer) HandleResponseHeaders(headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
 	slog.Info("[EXT-PROC] Processing response headers for session mapping...", "headers", headers)
 
 	if headers == nil || headers.Headers == nil {

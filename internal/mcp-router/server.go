@@ -20,13 +20,11 @@ var _ config.Observer = &ExtProcServer{}
 
 // ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
-	RoutingConfig  *config.MCPServersConfig
-	Broker         broker.MCPBroker
-	SessionCache   *cache.Cache
-	JWTManager     *session.JWTManager
-	Logger         *slog.Logger
-	streaming      bool
-	requestHeaders *extProcV3.HttpHeaders
+	RoutingConfig *config.MCPServersConfig
+	Broker        broker.MCPBroker
+	SessionCache  *cache.Cache
+	JWTManager    *session.JWTManager
+	Logger        *slog.Logger
 }
 
 // OnConfigChange is used to register the router for config changes
@@ -61,6 +59,8 @@ func (s *ExtProcServer) SetupSessionCache() {
 
 // Process function
 func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer) error {
+	streaming := false // TODO this seems to do nothing right now
+	var localRequestHeaders *extProcV3.HttpHeaders
 	for {
 		req, err := stream.Recv()
 		if err != nil {
@@ -72,10 +72,10 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		switch r := req.Request.(type) {
 		case *extProcV3.ProcessingRequest_RequestHeaders:
 			// TODO we are ignoring errors here
-			responses, _ := s.HandleRequestHeaders(r.RequestHeaders)
+			responses, _ := s.HandleRequestHeaders(r.RequestHeaders, streaming)
 			// Store the processed request headers for later use in body processing
-			s.requestHeaders = r.RequestHeaders
-			s.Logger.Debug("post request headers handler ", "headers", s.requestHeaders)
+			localRequestHeaders = r.RequestHeaders
+			s.Logger.Debug("post request headers handler ", "headers", localRequestHeaders)
 			for _, response := range responses {
 				s.Logger.Info(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
@@ -88,8 +88,8 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		case *extProcV3.ProcessingRequest_RequestBody:
 			var mcpRequest = &MCPRequest{}
 			// default response
-			responses := responseBuilder.WithDoNothingResponse(s.streaming).Build()
-			if s.requestHeaders == nil || s.requestHeaders.Headers == nil {
+			responses := responseBuilder.WithDoNothingResponse(streaming).Build()
+			if localRequestHeaders == nil || localRequestHeaders.Headers == nil {
 				s.Logger.Error("Error no request headers present. Exiting ")
 				for _, response := range responses {
 					if err := stream.Send(response); err != nil {
@@ -120,6 +120,8 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 				}
 			}
 			// override responses with custom handle responses
+			mcpRequest.Headers = localRequestHeaders.Headers
+			mcpRequest.Streaming = streaming
 			responses = s.HandleMCPRequest(stream.Context(), mcpRequest, s.RoutingConfig)
 			for _, response := range responses {
 				s.Logger.Info(fmt.Sprintf("Sending MCP body routing instructions to Envoy: %+v", response))
