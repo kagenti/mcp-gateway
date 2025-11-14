@@ -157,6 +157,16 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	}
 	// reset the host name now we have identifed the correct tool and backend
 	headers.WithAuthority(serverInfo.Hostname)
+	path, err := serverInfo.Path()
+	if err != nil {
+		s.Logger.Error("failed to parse url for backend ", "error ", err)
+		calculatedResponse.WithImmediateResponse(500, "internal error")
+		return calculatedResponse.Build()
+	}
+	if path != "/mcp" {
+		headers.WithPath(path)
+	}
+
 	// ensure our contnent length has been reset
 	headers.WithContentLength(len(body))
 	if mcpReq.Streaming {
