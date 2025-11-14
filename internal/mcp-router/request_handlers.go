@@ -8,6 +8,7 @@ import (
 
 	"errors"
 
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/config"
 )
@@ -17,11 +18,13 @@ var ErrInvalidRequest = fmt.Errorf("MCP Request is invalid")
 
 // MCPRequest encapsulates a mcp protocol request to the gateway
 type MCPRequest struct {
-	ID        *int           `json:"id"`
-	JSONRPC   string         `json:"jsonrpc"`
-	Method    string         `json:"method"`
-	Params    map[string]any `json:"params"`
-	SessionID string         `json:"-"`
+	ID        *int              `json:"id"`
+	JSONRPC   string            `json:"jsonrpc"`
+	Method    string            `json:"method"`
+	Params    map[string]any    `json:"params"`
+	SessionID string            `json:"-"`
+	Headers   *corev3.HeaderMap `json:"-"`
+	Streaming bool              `json:"-"`
 }
 
 // Validate validates the mcp request
@@ -76,10 +79,8 @@ func (mr *MCPRequest) ToBytes() ([]byte, error) {
 }
 
 // HandleRequestHeaders handles request headers minimally.
-func (s *ExtProcServer) HandleRequestHeaders(
-	headers *eppb.HttpHeaders,
-) ([]*eppb.ProcessingResponse, error) {
-	s.Logger.Info("Request Handler: HandleRequestHeaders called", "streaming", s.streaming)
+func (s *ExtProcServer) HandleRequestHeaders(headers *eppb.HttpHeaders, streaming bool) ([]*eppb.ProcessingResponse, error) {
+	s.Logger.Info("Request Handler: HandleRequestHeaders called", "streaming", streaming)
 	requestHeaders := NewHeaders()
 	response := NewResponse()
 	s.Logger.Info("HandleRequestHeaders ", "request headers", headers.Headers)
@@ -89,7 +90,7 @@ func (s *ExtProcServer) HandleRequestHeaders(
 
 // HandleMCPRequest handles request bodies for MCP requests.
 func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest, config *config.MCPServersConfig) []*eppb.ProcessingResponse {
-	mcpReq.SessionID = getSingleValueHeader(s.requestHeaders.Headers, sessionHeader)
+	mcpReq.SessionID = getSingleValueHeader(mcpReq.Headers, sessionHeader)
 	s.Logger.Debug("HandleMCPRequest: Processing request body for MCP requests...", "data", mcpReq)
 
 	headers := NewHeaders()
@@ -97,15 +98,10 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	// Extract tool name for routing
 	calculatedResponse := NewResponse()
 	if !mcpReq.isToolCall() {
-		s.Logger.Debug("HandleMCPRequest not a tool call", "request headers", s.requestHeaders.Headers)
-
 		headers.WithMCPServerName("mcpBroker")
-		s.Logger.Debug(
-			"[EXT-PROC] HandleRequestBody None tool call setting method header only" + mcpReq.Method,
-		)
+		s.Logger.Debug("[EXT-PROC] HandleRequestBody None tool call", "method", mcpReq.Method)
 		// none tool call set headers
 		calculatedResponse.WithRequestBodyHeadersResponse(headers.Build())
-		// calculatedResponse = append(calculatedResponse, s.HeaderBodyResponse(headers.Build()))
 		return calculatedResponse.Build()
 	}
 	// handle tools call
@@ -161,14 +157,24 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 	}
 	// reset the host name now we have identifed the correct tool and backend
 	headers.WithAuthority(serverInfo.Hostname)
+	path, err := serverInfo.Path()
+	if err != nil {
+		s.Logger.Error("failed to parse url for backend ", "error ", err)
+		calculatedResponse.WithImmediateResponse(500, "internal error")
+		return calculatedResponse.Build()
+	}
+	if path != "/mcp" {
+		headers.WithPath(path)
+	}
+
 	// ensure our contnent length has been reset
 	headers.WithContentLength(len(body))
-	if s.streaming {
+	if mcpReq.Streaming {
+		// TODO evaluate if we need this as we get progress updates fine without this
 		s.Logger.Debug("returning streaming response")
 		calculatedResponse.WithStreamingResponse(headers.Build(), body)
 		return calculatedResponse.Build()
 	}
-	s.Logger.Debug("returning none streaming response")
 	calculatedResponse.WithRequestBodyHeadersAndBodyReponse(headers.Build(), body)
 	return calculatedResponse.Build()
 }
