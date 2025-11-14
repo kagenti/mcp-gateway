@@ -283,72 +283,7 @@ spec:
 EOF
 ```
 
-### ❸ Define an OAuth2 resource server client for the Kubernetes server
-
-Obtain a token for the Keycloak admin API:
-
-```sh
-export KEYCLOAK_ADMIN_TOKEN=$(curl -sk -X POST \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin" -d "password=admin" -d "grant_type=password" -d "client_id=admin-cli" \
-  "https://keycloak.127-0-0-1.sslip.io:8002/realms/master/protocol/openid-connect/token" | jq -r .access_token)
-```
-
-Create the client:
-
-```sh
-curl -k -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"clientId": "mcp-test/kubernetes-mcp", "publicClient": true, "standardFlowEnabled": false, "fullScopeAllowed": false}' \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/clients"
-```
-
-Define client roles for each MCP tool: (This will be used for authorization.)
-
-```sh
-export CLIENT_ID=$(curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/clients" | jq -r '.[] | select(.clientId == "mcp-test/kubernetes-mcp").id')
-
-for ROLE in configuration_contexts_list configuration_view events_list helm_install helm_list helm_uninstall namespaces_list nodes_log nodes_stats_summary nodes_top pods_delete pods_exec pods_get pods_list pods_list_in_namespace pods_log pods_run pods_top resources_create_or_update resources_delete resources_get resources_list; do
-  curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"name\": \"$ROLE\"}" \
-    "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/clients/$CLIENT_ID/roles"
-done
-```
-
-### ❹ Authorize the `mcp` user to call tools from the Kubernetes MCP server
-
-Create an `engineering` group:
-
-```sh
-curl -k -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"name":"engineering"}' \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/groups"
-
-export GROUP_ID=$(curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/groups" | jq -r '.[] | select(.name == "engineering").id')
-
-curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -X POST \
-  -H "Content-Type: application/json" \
-  -d "$(curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/clients/$CLIENT_ID/roles")" \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/groups/$GROUP_ID/role-mappings/clients/$CLIENT_ID"
-```
-
-Make the `mcp` user a member of the group:
-
-```sh
-export USER_ID=$(curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/users" | jq -r '.[] | select(.username == "mcp").id')
-
-curl -sk -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -X PUT \
-  -H "Content-Type: application/json" \
-  -d '{}' \
-  "https://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/users/$USER_ID/groups/$GROUP_ID"
-```
-
-### ❺ Authorize the `mcp` user for the Kubernetes API server
+### ❸ Authorize the `mcp` Keycloak user for the Kubernetes API server
 
 ```sh
 kubectl apply -f -<<EOF
@@ -367,7 +302,7 @@ subjects:
 EOF
 ```
 
-### ❻ Try the MCP server behind the gateway with OIDC authentication and token exchange performed by the MCP gateway
+### ❹ Try the MCP server behind the gateway with OIDC authentication and token exchange performed by the MCP gateway
 
 Follow the same steps as [before](#-try-the-mcp-server-behind-the-gateway) to try the MCP server behind the gateway using the MCP Inspector as client.
 
