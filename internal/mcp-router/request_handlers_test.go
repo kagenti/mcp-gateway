@@ -210,10 +210,7 @@ func TestHandleRequestBody(t *testing.T) {
 			},
 		},
 	}
-
-	var resp []*eppb.ProcessingResponse
-
-	resp = server.HandleMCPRequest(context.Background(), data, cfg)
+	resp := server.HandleMCPRequest(context.Background(), data, cfg)
 	require.Len(t, resp, 1)
 	require.IsType(t, &eppb.ProcessingResponse_RequestBody{}, resp[0].Response)
 	rb := resp[0].Response.(*eppb.ProcessingResponse_RequestBody)
