@@ -64,8 +64,9 @@ type toolName string
 
 // upstreamToolInfo references a single tool on an upstream MCP server
 type upstreamToolInfo struct {
-	url      upstreamMCPURL // An MCP server URL
-	toolName string         // A tool name
+	url         upstreamMCPURL // An MCP server URL
+	toolName    string         // A tool name
+	annotations mcp.ToolAnnotation
 }
 
 // MCPBroker manages a set of MCP servers and their sessions
@@ -84,6 +85,9 @@ type MCPBroker interface {
 		downstreamSession downstreamSessionID,
 		request mcp.CallToolRequest,
 	) (*mcp.CallToolResult, error)
+
+	// Returns tool annotations for a given tool name
+	ToolAnnotations(tool string) (mcp.ToolAnnotation, bool)
 
 	// Cleanup any upstream connections being held open on behalf of downstreamSessionID
 	Close(ctx context.Context, downstreamSession downstreamSessionID) error
@@ -138,10 +142,10 @@ type mcpBrokerImpl struct {
 
 	logger *slog.Logger
 
-	//enforceToolFilter if set will ensure only a filtered list of tools is returned this list is based on the x-authorized-tools trusted header
+	// enforceToolFilter if set will ensure only a filtered list of tools is returned this list is based on the x-authorized-tools trusted header
 	enforceToolFilter bool
 
-	//trustedHeadersPublicKey this is the key to verify that a trusted header came from the trusted source (the owner of the private key)
+	// trustedHeadersPublicKey this is the key to verify that a trusted header came from the trusted source (the owner of the private key)
 	trustedHeadersPublicKey string
 }
 
@@ -164,7 +168,6 @@ func WithTrustedHeadersPublicKey(key string) func(mb *mcpBrokerImpl) {
 
 // NewBroker creates a new MCPBroker accepts optional config functions such as WithEnforceToolFilter
 func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
-
 	mcpBkr := &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
 		serverSessions: map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
@@ -208,7 +211,6 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	)
 
 	return mcpBkr
-
 }
 
 func (m *mcpBrokerImpl) IsRegistered(mcpURL string) bool {
@@ -227,7 +229,6 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 				m.logger.Warn("unregister failed ", "server", upstreamHost)
 			}
 		}
-
 	}
 	// ensure new servers registered
 	for _, mcpServer := range conf.Servers {
@@ -413,8 +414,15 @@ func (m *mcpBrokerImpl) CallTool(
 	return res, err
 }
 
-func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) ([]mcp.Tool, error) {
+func (m *mcpBrokerImpl) ToolAnnotations(tool string) (mcp.ToolAnnotation, bool) {
+	upstreamToolInfo, ok := m.toolMapping[toolName(tool)]
+	if !ok {
+		return mcp.ToolAnnotation{}, false
+	}
+	return upstreamToolInfo.annotations, true
+}
 
+func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) ([]mcp.Tool, error) {
 	// Some MCP servers require a bearer token or other Authorization to init and list tools
 	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
 	if serverAuthHeaderValue != "" {
@@ -549,7 +557,6 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newTools)...)
 		return true, nil
 	})
-
 	if err != nil {
 		if wait.Interrupted(err) {
 			m.logger.Error("max retries exceeded for discovery",
@@ -568,7 +575,6 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 // and returns a list of the new uniquely prefixed tools,
 // and a list of the removed prefixed tools
 func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP, addTools []mcp.Tool, removeTools []mcp.Tool) ([]mcp.Tool, []string) {
-
 	// Remove any tools no longer present in the upstream
 	retvalRemovals := make([]string, 0)
 	for _, tool := range removeTools {
@@ -589,8 +595,9 @@ func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP, addTools []mc
 		retvalAdditions = append(retvalAdditions, gatewayTool)
 
 		m.toolMapping[gatewayToolName] = &upstreamToolInfo{
-			url:      upstreamMCPURL(upstream.URL),
-			toolName: tool.Name,
+			url:         upstreamMCPURL(upstream.URL),
+			toolName:    tool.Name,
+			annotations: tool.Annotations,
 		}
 	}
 	return retvalAdditions, retvalRemovals
@@ -826,7 +833,6 @@ func toolToServerTool(newTool mcp.Tool) server.ServerTool {
 }
 
 func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool {
-
 	tools := make([]server.ServerTool, 0)
 	for _, newTool := range newTools {
 		slog.Info("Federating tool", "mcpURL", mcpURL, "federated name", newTool.Name)

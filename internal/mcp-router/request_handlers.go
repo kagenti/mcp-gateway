@@ -3,10 +3,9 @@ package mcprouter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
-
-	"errors"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -110,6 +109,31 @@ func (s *ExtProcServer) HandleMCPRequest(ctx context.Context, mcpReq *MCPRequest
 		s.Logger.Error("[EXT-PROC] HandleRequestBody no tool name set in tools/call")
 		calculatedResponse.WithImmediateResponse(400, "no tool name set")
 		return calculatedResponse.Build()
+	}
+
+	// Get tool annotations from broker and set headers
+	if s.Broker != nil {
+		if annotations, hasAnnotations := s.Broker.ToolAnnotations(toolName); hasAnnotations {
+			// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
+			var parts []string
+			push := func(key string, val *bool) {
+				if val == nil {
+					parts = append(parts, fmt.Sprintf("%s=unspecified", key))
+				} else if *val {
+					parts = append(parts, fmt.Sprintf("%s=true", key))
+				} else {
+					parts = append(parts, fmt.Sprintf("%s=false", key))
+				}
+			}
+
+			push("readOnly", annotations.ReadOnlyHint)
+			push("destructive", annotations.DestructiveHint)
+			push("idempotent", annotations.IdempotentHint)
+			push("openWorld", annotations.OpenWorldHint)
+
+			hintsHeader := strings.Join(parts, ",")
+			headers.WithToolAnnotations(hintsHeader)
+		}
 	}
 
 	// TODO prefix here really is the the server id. It is confusing to think of it as both

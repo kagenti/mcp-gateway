@@ -8,13 +8,14 @@ func Test_Headers(t *testing.T) {
 	headersBuilder := NewHeaders()
 
 	expected := map[string]string{
-		toolHeader:          "test_tool",
-		authorityHeader:     "mcp1.mcp.local",
-		"authorization":     "auth",
-		methodHeader:        "tools/call",
-		mcpServerNameHeader: "mcp1",
-		sessionHeader:       "xxxx",
-		":path":             "/mcp1",
+		toolHeader:            "test_tool",
+		toolAnnotationsHeader: "destructive=true,idempotent=true,readOnly=false",
+		authorityHeader:       "mcp1.mcp.local",
+		"authorization":       "auth",
+		methodHeader:          "tools/call",
+		mcpServerNameHeader:   "mcp1",
+		sessionHeader:         "xxxx",
+		":path":               "/mcp1",
 	}
 
 	headers := headersBuilder.
@@ -24,6 +25,7 @@ func Test_Headers(t *testing.T) {
 		WithMCPServerName(expected[mcpServerNameHeader]).
 		WithMCPSession(expected[sessionHeader]).
 		WithMCPToolName(expected[toolHeader]).
+		WithToolAnnotations(expected[toolAnnotationsHeader]).
 		WithPath("/mcp1").
 		Build()
 

@@ -40,7 +40,6 @@ func (s *ExtProcServer) SetupSessionCache() {
 		authority string,
 		gwSessionID string,
 	) (string, error) {
-
 		// Checks if the authority is provided
 		if authority == "" {
 			return "", fmt.Errorf("no authority provided for server: %s", serverName)
@@ -86,7 +85,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 
 		case *extProcV3.ProcessingRequest_RequestBody:
-			var mcpRequest = &MCPRequest{}
+			mcpRequest := &MCPRequest{}
 			// default response
 			responses := responseBuilder.WithDoNothingResponse(streaming).Build()
 			if localRequestHeaders == nil || localRequestHeaders.Headers == nil {
@@ -162,5 +161,4 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 		}
 	}
-
 }
