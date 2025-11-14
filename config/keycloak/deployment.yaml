@@ -36,6 +36,8 @@ spec:
           value: "true"
         - name: KC_HEALTH_ENABLED
           value: "true"
+        - name: KC_HOSTNAME
+          value: https://keycloak.127-0-0-1.sslip.io:8002
         ports:
         - name: http
           containerPort: 8080

@@ -13,7 +13,7 @@ spec:
     authentication: #validates the token
       'keycloak':
         jwt:
-          issuerUrl: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
+          issuerUrl: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
     metadata:
       vault:
         http:
@@ -32,7 +32,7 @@ spec:
           - predicate: "!has(auth.metadata.vault.data) || !has(auth.metadata.vault.data.data) || !has(auth.metadata.vault.data.data.token) || type(auth.metadata.vault.data.data.token) != string"
           - predicate: type(auth.identity.aud) != string || auth.identity.aud != request.host
         http:
-          url: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp/protocol/openid-connect/token
+          url: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp/protocol/openid-connect/token
           method: POST
           credentials:
             authorizationHeader:

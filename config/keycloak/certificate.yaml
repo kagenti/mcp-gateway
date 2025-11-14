@@ -1,0 +1,22 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: mcp-gateway-ca
+spec:
+  selfSigned: {}
+---
+apiVersion: kuadrant.io/v1
+kind: TLSPolicy
+metadata:
+  name: mcp-gateway-tls
+  namespace: gateway-system
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mcp-gateway
+    sectionName: keycloak
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: mcp-gateway-ca

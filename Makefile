@@ -134,7 +134,7 @@ build-and-load-image: kind build-image load-image  ## Build & load router/broker
 
 .PHONY: load-image
 load-image: kind ## Load the mcp-gateway image into the kind cluster
-	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)	
+	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 
 .PHONY: build-image
 build-image: kind ## Build the mcp-gateway image
@@ -190,6 +190,10 @@ kind-load-test-servers: kind build-test-servers ## Load test server images into 
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing
 	@echo "Deploying test MCP servers..."
 	kubectl apply -k config/test-servers/
+	@echo "Patching OIDC-enabled MCP server to be able to connect to Keycloak..."
+	@kubectl create configmap mcp-gateway-keycloak-cert -n mcp-test --from-file=keycloak.crt=./out/certs/ca.crt 2>/dev/null || true
+	@export GATEWAY_IP=$$(kubectl get gateway/mcp-gateway -n gateway-system -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '127.0.0.1'); \
+	  kubectl patch deployment mcp-oidc-server -n mcp-test --type='json' -p="$$(cat config/keycloak/patch-hostaliases.json | envsubst)"
 
 # Build and push container image
 docker-build: ## Build container image locally
@@ -353,8 +357,9 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	$(MAKE) metallb-install
 	$(MAKE) deploy-namespaces
 	$(MAKE) deploy-gateway
-	$(MAKE) keycloak-install
+	$(MAKE) cert-manager-install
 	$(MAKE) kuadrant-install
+	$(MAKE) keycloak-install
 	$(MAKE) deploy
 	$(MAKE) deploy-test-servers
 	$(MAKE) deploy-example
@@ -395,6 +400,11 @@ status: ## Show status of all MCP components
 .PHONY: istioctl
 istioctl: ## Download and install istioctl
 	@$(MAKE) -s -f build/istio.mk istioctl-impl
+
+.PHONY: cert-manager-install
+cert-manager-install: ## Install cert-manager for TLS certificate management
+	@echo "Installing Cert-manager"
+	@$(MAKE) -s -f build/cert-manager.mk cert-manager-install-impl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development

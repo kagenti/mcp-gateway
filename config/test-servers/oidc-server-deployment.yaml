@@ -27,10 +27,22 @@ spec:
         - name: PORT
           value: "9090"
         - name: ISSUER_URL
-          value: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+          value: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
         - name: EXPECTED_AUD
           value: oidc-server.mcp.local
         - name: EXPECTED_ADMIN_TOKEN
           value: test-api-key-secret-token-for-oidc-server
         - name: LOG_LEVEL
           value: debug
+        volumeMounts:
+        - name: keycloak-cert
+          mountPath: /etc/ssl/certs/keycloak.crt
+          subPath: keycloak.crt
+          readOnly: true
+      volumes:
+      - name: keycloak-cert
+        configMap:
+          name: mcp-gateway-keycloak-cert
+          items:
+          - key: keycloak.crt
+            path: keycloak.crt
