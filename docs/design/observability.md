@@ -193,3 +193,4 @@ Observability data must be handled securely:
 
 3. **Performance Impact**: What is the acceptable performance overhead for observability instrumentation? Should observability be configurable/optional?
 
+TODO: Implementation Details
