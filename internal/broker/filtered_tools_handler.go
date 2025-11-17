@@ -29,7 +29,6 @@ func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, _ any, mcpReq *mcp
 	copy(originalTools, mcpRes.Tools)
 	// set to empty by default
 	mcpRes.Tools = []mcp.Tool{}
-	broker.logger.Debug("FilteredTools: called", "result", originalTools)
 
 	var allowedToolsValue string
 	if _, ok := mcpReq.Header[authorizedToolsHeader]; !ok {

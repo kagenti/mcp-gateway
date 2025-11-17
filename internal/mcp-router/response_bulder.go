@@ -128,6 +128,32 @@ func (rb *ResponseBuilder) WithDoNothingResponse(isStreaming bool) *ResponseBuil
 	return rb
 }
 
+// WithDoNothingResponseHeaderResponse will return a processing response that makes no changes
+func (rb *ResponseBuilder) WithDoNothingResponseHeaderResponse() *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_ResponseHeaders{
+			ResponseHeaders: &eppb.HeadersResponse{},
+		},
+	})
+	return rb
+}
+
+// WithResponseHeaderResponse will return a processing response to set the headers passed into the response
+func (rb *ResponseBuilder) WithResponseHeaderResponse(headers []*basepb.HeaderValueOption) *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_ResponseHeaders{
+			ResponseHeaders: &eppb.HeadersResponse{
+				Response: &eppb.CommonResponse{
+					HeaderMutation: &eppb.HeaderMutation{
+						SetHeaders: headers,
+					},
+				},
+			},
+		},
+	})
+	return rb
+}
+
 // Build returns the accumulated processing responses
 func (rb *ResponseBuilder) Build() []*eppb.ProcessingResponse {
 	return rb.response
