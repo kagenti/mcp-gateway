@@ -17,6 +17,18 @@ In the MCP Gateway architecture, clients connect to the gateway's `/mcp` endpoin
 
 The gateway uses a **lazy initialization** approach where backend sessions to MCP servers are only established when a client makes a tool call. However, some notifications (like `list_changed` notifications) are logically 'broadcast' notifications and should be sent to all connected clients, not just those who have made tool calls.
 
+### Non-Goals
+
+At this time, the MCP Gateway does **not** support client-specific notifications that require out-of-band communication over the GET `/mcp` notification channel. Only state change events that are logically 'broadcast' (safe to send to all connected clients) are supported over the GET notification channel.
+
+This is a technical limitation due to the complexity of implementing a fan-out approach where the broker would need to maintain separate GET connections to each backend MCP server for each client, particularly when those connections require the client's authentication credentials. The challenges include:
+
+- Managing per-client, per-server GET connections with client-specific authentication
+- Connection lifecycle management and reconnection logic for multiple fan-out connections
+- Resource overhead of maintaining many concurrent connections
+
+Client-specific events (progress updates and elicitations) are instead handled as streamed events within tool call POST responses, which naturally align with the client's authentication context and tool call lifecycle.
+
 ### Solution
 
 The MCP Gateway supports two distinct types of notification mechanisms:
