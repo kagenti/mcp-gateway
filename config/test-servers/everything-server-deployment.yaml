@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-everything-server
+  name: everything-server
   labels:
-    app: mcp-everything-server
+    app: everything-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mcp-everything-server
+      app: everything-server
   template:
     metadata:
       labels:
-        app: mcp-everything-server
+        app: everything-server
     spec:
       containers:
-      - name: mcp-everything-server
+      - name: everything-server
         image: ghcr.io/kagenti/mcp-gateway/test-everything-server:latest
         imagePullPolicy: IfNotPresent
         ports:
