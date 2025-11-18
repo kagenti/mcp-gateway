@@ -67,3 +67,10 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: mcp-everything-server-route-ext
+      hostname: 'everything-server.127-0-0-1.sslip.io'
+      port: 8080
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
