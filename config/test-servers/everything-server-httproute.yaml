@@ -1,7 +1,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: mcp-everything-server-route
+  name: everything-server-route
   labels:
     mcp-server: 'true'
 spec:
@@ -9,12 +9,12 @@ spec:
     - name: mcp-gateway
       namespace: gateway-system
   hostnames:
-    - 'mcp-everything-server' #note this is purely for internal routing by Envoy
+    - 'everything-server.mcp.local' #note this is purely for internal routing by Envoy
   rules:
     - matches:
         - path:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: mcp-everything-server
+        - name: everything-server
           port: 9090

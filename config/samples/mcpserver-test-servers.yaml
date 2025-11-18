@@ -111,4 +111,4 @@ spec:
     # MCP Everything Server - Typescript SDK based (prompts, tools, resources, sampling)
     group: gateway.networking.k8s.io
     kind: HTTPRoute
-    name: mcp-everything-server-route
+    name: everything-server-route

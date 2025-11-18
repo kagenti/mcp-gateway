@@ -22,8 +22,8 @@ The included Dockerfile uses this source code as a dependency.
 ## Docker Build and Run
 
 ```bash
-docker build --load --tag mcp-everything-server .
-docker run -p 9090:9090 --env PORT=9090 mcp-everything-server
+docker build --load --tag everything-server .
+docker run -p 9090:9090 --env PORT=9090 everything-server
 ```
 
 

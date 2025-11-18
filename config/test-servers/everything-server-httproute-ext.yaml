@@ -1,7 +1,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: mcp-everything-server-route-ext
+  name: everything-server-route-ext
   labels:
     mcp-server: 'true'
 spec:
@@ -16,5 +16,5 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: mcp-everything-server
+        - name: everything-server
           port: 9090
