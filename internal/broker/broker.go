@@ -948,7 +948,7 @@ func (m *mcpBrokerImpl) validateServerConnectivity(upstream *upstreamMCP) Connec
 // validateProtocol validates the MCP protocol version
 func validateProtocol(initResp *mcp.InitializeResult) ProtocolValidation {
 	return ProtocolValidation{
-		IsValid:          initResp.ProtocolVersion == mcp.LATEST_PROTOCOL_VERSION,
+		IsValid:          slices.Contains(mcp.ValidProtocolVersions, initResp.ProtocolVersion),
 		SupportedVersion: initResp.ProtocolVersion,
 		ExpectedVersion:  mcp.LATEST_PROTOCOL_VERSION,
 	}

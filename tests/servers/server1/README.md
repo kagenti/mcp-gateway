@@ -33,7 +33,7 @@ curl --include -X POST -H "Content-Type: application/json" -H "Accept: applicati
   "id": 1,
   "method": "initialize",
   "params": {
-    "protocolVersion": "2025-03-26",
+    "protocolVersion": "2025-06-18",
     "capabilities": {
       "roots": {
         "listChanged": true

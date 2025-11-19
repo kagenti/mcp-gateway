@@ -180,7 +180,7 @@ curl http://localhost:8080/health
 # Test through Envoy proxy
 curl http://localhost:8888/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
 
 # List available tools
 curl -X POST http://localhost:8888/mcp \
