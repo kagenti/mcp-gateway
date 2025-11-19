@@ -54,7 +54,7 @@ apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
   name: my-mcp-server
-  namespace: mcp-system
+  namespace: mcp-test
 spec:
   toolPrefix: "myserver_"
   targetRef:
