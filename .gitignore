@@ -37,3 +37,6 @@ go.work.sum
 
 # Ignore Python bytecode cache
 **/__pycache__/
+
+# Ignore personal TODO lists
+TODO
