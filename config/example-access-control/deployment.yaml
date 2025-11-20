@@ -15,6 +15,8 @@ spec:
     spec:
       containers:
         - name: server
+          # Built from https://github.com/maleck13/fserver
+          # Listens on 8383 and serves the entire config for /config and the specific server config for /config/{server}
           image: quay.io/maleck13/config_server:latest
           volumeMounts:
             - name: config
