@@ -40,6 +40,17 @@ impact and time-sensitivity:
 [GitHub milestones]:https://github.com/kagenti/mcp-gateway/milestones
 [GitHub project boards]:https://github.com/orgs/kagenti/projects/6
 
+### Triage
+
+We have some light automation and process around triaging issues. This process
+is centered around milestones:
+
+1. When issues don't have a milestone: they are considered "in need of triage",
+   so the maintainers can review and decide whether they will be accepted, and
+   if so which milestone they belong to.
+2. When issues have a milestone: they are considered `triage/accepted`, and
+   need a priority. The priority will default to `priority/normal`.
+
 ## Contributing Code
 
 Please follow the [Contribution guide](https://github.com/kagenti/kagenti/blob/main/CONTRIBUTING.md#contributing-to-this-project), as found in the Kagenti Repository, for instructions on how to contribute to our repositories. 
