@@ -78,19 +78,6 @@ func (mr *MCPRequest) GetSingleHeaderValue(key string) string {
 	return getSingleValueHeader(mr.Headers, key)
 }
 
-func (mr *MCPRequest) RemoveHeader(key string) {
-	headers := []*corev3.HeaderValue{}
-	if mr.Headers == nil {
-		return
-	}
-	for _, h := range mr.Headers.Headers {
-		if h.Key != key {
-			headers = append(headers, h)
-		}
-	}
-	mr.Headers.Headers = headers
-}
-
 // GetSessionID returns the mcp session id
 func (mr *MCPRequest) GetSessionID() string {
 	if mr.sessionID == "" {

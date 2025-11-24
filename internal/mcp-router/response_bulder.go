@@ -71,6 +71,7 @@ func (rb *ResponseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.Head
 	return rb
 }
 
+// WithRequestBodySetUnsetHeadersResponse will set and unset headers in the request
 func (rb *ResponseBuilder) WithRequestBodySetUnsetHeadersResponse(set []*basepb.HeaderValueOption, unset []string) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
 		Response: &eppb.ProcessingResponse_RequestBody{
