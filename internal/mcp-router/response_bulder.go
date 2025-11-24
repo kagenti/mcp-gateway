@@ -71,6 +71,24 @@ func (rb *ResponseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.Head
 	return rb
 }
 
+func (rb *ResponseBuilder) WithRequestBodySetUnsetHeadersResponse(set []*basepb.HeaderValueOption, unset []string) *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_RequestBody{
+			RequestBody: &eppb.BodyResponse{
+				Response: &eppb.CommonResponse{
+					// Necessary so that the new headers are used in the routing decision.
+					ClearRouteCache: true,
+					HeaderMutation: &eppb.HeaderMutation{
+						SetHeaders:    set,
+						RemoveHeaders: unset,
+					},
+				},
+			},
+		},
+	})
+	return rb
+}
+
 // WithImmediateResponse adds an immediate error response that terminates request processing
 func (rb *ResponseBuilder) WithImmediateResponse(statusCode int32, message string) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{

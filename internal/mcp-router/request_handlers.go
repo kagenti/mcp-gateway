@@ -78,6 +78,19 @@ func (mr *MCPRequest) GetSingleHeaderValue(key string) string {
 	return getSingleValueHeader(mr.Headers, key)
 }
 
+func (mr *MCPRequest) RemoveHeader(key string) {
+	headers := []*corev3.HeaderValue{}
+	if mr.Headers == nil {
+		return
+	}
+	for _, h := range mr.Headers.Headers {
+		if h.Key != key {
+			headers = append(headers, h)
+		}
+	}
+	mr.Headers.Headers = headers
+}
+
 // GetSessionID returns the mcp session id
 func (mr *MCPRequest) GetSessionID() string {
 	if mr.sessionID == "" {
@@ -295,16 +308,18 @@ func (s *ExtProcServer) initializeMCPSeverSession(ctx context.Context, mcpReq *M
 	}
 	passThroughHeaders := map[string]string{}
 	if mcpReq.Headers != nil {
-		// TODO do we need to pass more than this?
+		// We don't want to pass through any sudo routing headers :authority, :path etc or the mcp-session-id from the gateway. The mcp-session-id will be
+		// set by the client based on the target backend. otherwise pass through everything from the client in case of custom headers
 		for _, h := range mcpReq.Headers.Headers {
-			key := strings.ToLower(h.Key)
-			if key == "authorization" || key == "x-request-id" {
+			if !strings.HasPrefix(strings.ToLower(h.Key), ":") && strings.ToLower(h.Key) != "mcp-session-id" {
 				passThroughHeaders[h.Key] = string(h.RawValue)
 			}
 		}
+		// ensure these gateway heades are set
 		passThroughHeaders["x-mcp-method"] = mcpReq.Method
 		passThroughHeaders["x-mcp-servername"] = mcpReq.serverName
 		passThroughHeaders["x-mcp-toolname"] = mcpReq.ToolName()
+		passThroughHeaders["user-agent"] = "mcp-router"
 	}
 	s.Logger.Debug("initializing target as no mcp-session-id found for client", "server ", mcpReq.serverName, "with passthrough headers", passThroughHeaders)
 
@@ -351,14 +366,16 @@ func (s *ExtProcServer) HandleNoneToolCall(mcpReq *MCPRequest) []*eppb.Processin
 		remoteInitializeTarget := mcpReq.GetSingleHeaderValue("mcp-init-host")
 		if remoteInitializeTarget != "" {
 			// TODO look to use a signed key possible the JWT session key
-			key := mcpReq.GetSingleHeaderValue("router-key")
+			key := mcpReq.GetSingleHeaderValue(RoutingKey)
 			if key != s.RoutingConfig.RouterAPIKey {
 				s.Logger.Warn("unexpected remote initialize request. Key does not match. Rejecting", "sent headers", mcpReq.Headers)
 				return response.WithImmediateResponse(400, "bad request").Build()
 			}
+
 			s.Logger.Debug("HandleMCPBrokerRequest initialize request", "target", remoteInitializeTarget, "call", mcpReq.Method)
 			headers.WithAuthority(remoteInitializeTarget)
-			return response.WithRequestBodyHeadersResponse(headers.Build()).Build()
+			// ensure we unset the router specific headers so they are not sent to the backend
+			return response.WithRequestBodySetUnsetHeadersResponse(headers.Build(), []string{"mcp-init-host", RoutingKey}).Build()
 		}
 
 	}

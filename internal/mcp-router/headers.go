@@ -15,6 +15,7 @@ const (
 	authorityHeader       = ":authority"
 	authorizationHeader   = "authorization"
 	mcpTarget             = "mcp-target"
+	RoutingKey            = "router-key"
 )
 
 func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
+	mcprouter "github.com/kagenti/mcp-gateway/internal/mcp-router"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -18,15 +19,8 @@ import (
 func Initialize(ctx context.Context, gatewayHost, routerKey string, conf *config.MCPServer, passThroughHeaders map[string]string) (*client.Client, error) {
 	//mcp-gateway-istio
 	// force the initialize to hairpin back through envoy
-	defaultHeaders := map[string]string{
-		"router-key":    routerKey,
-		"mcp-init-host": conf.Hostname,
-	}
-	for key, val := range passThroughHeaders {
-		if _, ok := defaultHeaders[key]; !ok {
-			defaultHeaders[key] = val
-		}
-	}
+	passThroughHeaders[mcprouter.RoutingKey] = routerKey
+	passThroughHeaders["mcp-init-host"] = conf.Hostname
 
 	mcpPath, err := conf.Path()
 	if err != nil {
@@ -35,9 +29,7 @@ func Initialize(ctx context.Context, gatewayHost, routerKey string, conf *config
 
 	url := fmt.Sprintf("http://%s%s", gatewayHost, mcpPath)
 
-	fmt.Println("initilizing backend mcp with ", "url", url, "headers", defaultHeaders)
-
-	httpClient, err := client.NewStreamableHttpClient(url, transport.WithHTTPHeaders(defaultHeaders))
+	httpClient, err := client.NewStreamableHttpClient(url, transport.WithHTTPHeaders(passThroughHeaders))
 	if err != nil {
 		return nil, err
 	}

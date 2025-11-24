@@ -66,7 +66,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			responses, _ := s.HandleRequestHeaders(r.RequestHeaders)
 			s.Logger.Debug("[ext_proc ] Process: request headers", "local headers ", localRequestHeaders.Headers)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
@@ -114,7 +114,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			mcpRequest.Streaming = streaming
 			responses = s.RouteMCPRequest(stream.Context(), mcpRequest)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending MCP body routing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending MCP body routing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
@@ -125,7 +125,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
 			responses, _ := s.HandleResponseHeaders(stream.Context(), r.ResponseHeaders, localRequestHeaders, mcpRequest)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
