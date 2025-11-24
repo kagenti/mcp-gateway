@@ -137,12 +137,20 @@ jobs:
 
             for (const label of labelsToRemove) {
               console.log(`Removing label: ${label}`);
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                name: label
-              });
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch (error) {
+                if (error.status === 404) {
+                  console.log(`Label ${label} not found (may have been already removed)`);
+                } else {
+                  throw error;
+                }
+              }
             }
 
             if (labelsToAdd.length === 0 && labelsToRemove.length === 0) {
