@@ -1,0 +1,150 @@
+name: Issue Triage
+
+on:
+  issues:
+    types:
+      [opened, reopened, edited, labeled, unlabeled, milestoned, demilestoned]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Triage issue
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // ------------------------------------------------------
+            // Vars
+            // ------------------------------------------------------
+
+            const issue = context.payload.issue;
+            const issueNumber = issue.number;
+            const hasMilestone = !!issue.milestone;
+            const currentLabels = issue.labels.map(label => label.name);
+
+            // ------------------------------------------------------
+            // Helper Functions
+            // ------------------------------------------------------
+
+            const hasLabelStartingWith = (prefix) => {
+              return currentLabels.some(label => label.startsWith(prefix));
+            };
+
+            const getLabelsStartingWith = (prefix) => {
+              return currentLabels.filter(label => label.startsWith(prefix));
+            };
+
+            // ------------------------------------------------------
+            // Setup
+            // ------------------------------------------------------
+
+            console.log(`Processing issue #${issueNumber}`);
+            console.log(`Has milestone: ${hasMilestone}`);
+            console.log(`Current labels: ${currentLabels.join(', ')}`);
+
+            const labelsToAdd = [];
+            const labelsToRemove = [];
+
+            // ------------------------------------------------------
+            // Apply Rules
+            //
+            // 1. If an issue has no milestone:
+            //    a. Ensure it has the label 'triage/needs-triage'
+            //       (unless it already has a different triage label).
+            //    b. Remove 'triage/accepted' if present.
+            //    c. Remove all priority labels if present.
+            //
+            // 2. If an issue has a milestone:
+            //    a. Ensure it has the label 'triage/accepted' and
+            //       no other triage labels.
+            //    b. If no priority labels exist, assign
+            //       'priority/normal'.
+            //
+            // 3. If another triage label is added, remove the
+            //    'triage/needs-triage' label.
+            //
+            // ------------------------------------------------------
+
+            if (!hasMilestone) {
+              // remove 'triage/accepted' when there's no milestone (e.g., milestone was removed)
+              if (currentLabels.includes('triage/accepted')) {
+                labelsToRemove.push('triage/accepted');
+                console.log('No milestone -> removing triage/accepted');
+              }
+
+              // remove all priority labels when there's no milestone
+              const priorityLabels = getLabelsStartingWith('priority/');
+              priorityLabels.forEach(label => {
+                labelsToRemove.push(label);
+                console.log(`No milestone -> removing ${label}`);
+              });
+
+              // ensure 'triage/needs-triage' label (only if no other triage label exists)
+              // note: we need to account for triage/accepted being removed above
+              const remainingTriageLabels = currentLabels.filter(l =>
+                l.startsWith('triage/') &&
+                l !== 'triage/accepted' &&
+                !labelsToRemove.includes(l)
+              );
+
+              if (remainingTriageLabels.length === 0) {
+                labelsToAdd.push('triage/needs-triage');
+                console.log('No milestone and no triage label -> adding triage/needs-triage');
+              } else if (currentLabels.includes('triage/needs-triage')) {
+                // if another triage label exists, remove 'triage/needs-triage'
+                labelsToRemove.push('triage/needs-triage');
+                console.log('Other triage label found -> removing triage/needs-triage');
+              }
+
+            } else {
+              // ensure 'triage/accepted' and remove other triage labels
+              const triageLabels = getLabelsStartingWith('triage/');
+              if (!triageLabels.includes('triage/accepted')) {
+                labelsToAdd.push('triage/accepted');
+                console.log('Has milestone but missing triage/accepted -> adding it');
+              }
+
+              // remove all other triage labels
+              triageLabels.forEach(label => {
+                if (label !== 'triage/accepted') {
+                  labelsToRemove.push(label);
+                  console.log(`Has milestone -> removing ${label}`);
+                }
+              });
+
+              // ensure some priority is set
+              if (!hasLabelStartingWith('priority/')) {
+                labelsToAdd.push('priority/normal');
+                console.log('Has milestone but no priority label -> adding priority/normal');
+              }
+            }
+
+            // ------------------------------------------------------
+            // Apply Changes
+            // ------------------------------------------------------
+
+            if (labelsToAdd.length > 0) {
+              console.log(`Adding labels: ${labelsToAdd.join(', ')}`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: labelsToAdd
+              });
+            }
+
+            for (const label of labelsToRemove) {
+              console.log(`Removing label: ${label}`);
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: label
+              });
+            }
+
+            if (labelsToAdd.length === 0 && labelsToRemove.length === 0) {
+              console.log('No label changes needed');
+            }
