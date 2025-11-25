@@ -15,6 +15,11 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            if (context.payload.issue.pull_request) {
+              console.log('Skipping pull request');
+              return;
+            }
+
             // ------------------------------------------------------
             // Vars
             // ------------------------------------------------------
