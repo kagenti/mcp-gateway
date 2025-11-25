@@ -24,7 +24,7 @@ spec:
           from: All #any namespace can register an MCP server route
     - name: keycloak
       hostname: 'keycloak.127-0-0-1.sslip.io'
-      port: 8889
+      port: 8002
       protocol: HTTP
       allowedRoutes:
         namespaces:

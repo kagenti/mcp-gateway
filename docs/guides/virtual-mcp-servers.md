@@ -89,7 +89,7 @@ Test your virtual servers using curl with the appropriate header:
 ### Test Development Tools Virtual Server
 
 ```bash
-curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -s -D /tmp/mcp_headers -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}'
 
@@ -99,7 +99,7 @@ SESSION_ID=$(grep -i "mcp-session-id:" /tmp/mcp_headers | cut -d' ' -f2 | tr -d 
 echo "MCP Session ID: $SESSION_ID"
 
 # Request tools from the dev-tools virtual server
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -H "X-Mcp-Virtualserver: mcp-system/dev-tools" \
@@ -112,7 +112,7 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
 
 ```bash
 # Request tools from the data-tools virtual server
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -H "X-Mcp-Virtualserver: mcp-system/data-tools" \
@@ -125,7 +125,7 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
 
 ```bash
 # Request all available tools (no filtering)
-curl -X POST http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "mcp-session-id: $SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | jq '.result.tools[].name'

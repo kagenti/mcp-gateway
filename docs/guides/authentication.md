@@ -42,7 +42,7 @@ Create the MCP realm and test user. This sets up a dedicated OAuth realm for MCP
 
 ```bash
 # Get admin access token from Keycloak
-TOKEN=$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8889/realms/master/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8002/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin" \
   -d "password=admin" \
@@ -50,72 +50,72 @@ TOKEN=$(curl -s -X POST "http://keycloak.127-0-0-1.sslip.io:8889/realms/master/p
   -d "client_id=admin-cli" | jq -r '.access_token')
 
 # Create MCP realm
-curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms" \
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"realm":"mcp","enabled":true}'
 
 # Update MCP realm token settings
-curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp" \
+curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"realm":"mcp","enabled":true,"ssoSessionIdleTimeout":1800,"accessTokenLifespan":1800}'
 
 # Create test user 'mcp' with password 'mcp'
-curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users" \
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"username":"mcp","email":"mcp@example.com","firstName":"mcp","lastName":"mcp","enabled":true,"emailVerified":true,"credentials":[{"type":"password","value":"mcp","temporary":false}]}'
 
 # Create accounting group
-curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/groups" \
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/groups" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"accounting"}'
 
 # Add mcp user to accounting group
 # First get the user ID
-USER_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users?username=mcp" \
+USER_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/users?username=mcp" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/json" | jq -r '.[0].id')
 
 # Get the group ID
-GROUP_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/groups" \
+GROUP_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/groups" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/json" | jq -r '.[] | select(.name == "accounting") | .id')
 
 # Add user to group
-curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/users/$USER_ID/groups/$GROUP_ID" \
+curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/users/$USER_ID/groups/$GROUP_ID" \
   -H "Authorization: Bearer $TOKEN"
 
 # Create groups client scope
-curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes" \
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/client-scopes" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"groups","protocol":"openid-connect","attributes":{"display.on.consent.screen":"false","include.in.token.scope":"true"}}'
 
 # Get the client scope ID
-SCOPE_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes" \
+SCOPE_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/client-scopes" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/json" | jq -r '.[] | select(.name == "groups") | .id')
 
 # Add groups mapper to client scope
-curl -X POST "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/client-scopes/$SCOPE_ID/protocol-mappers/models" \
+curl -X POST "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/client-scopes/$SCOPE_ID/protocol-mappers/models" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"groups","protocol":"openid-connect","protocolMapper":"oidc-group-membership-mapper","config":{"claim.name":"groups","full.path":"false","id.token.claim":"true","access.token.claim":"true","userinfo.token.claim":"true"}}'
 
 # Add groups client scope to realm's optional client scopes
-curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/default-optional-client-scopes/$SCOPE_ID" \
+curl -X PUT "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/default-optional-client-scopes/$SCOPE_ID" \
   -H "Authorization: Bearer $TOKEN"
 
 # (FOR DEVELOPMENT ONLY) Remove trusted hosts policy for anonymous client registration
-COMPONENT_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components?name=Trusted%20Hosts" \
+COMPONENT_ID=$(curl -s -X GET "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/components?name=Trusted%20Hosts" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/json" | jq -r '.[0].id // empty' 2>/dev/null)
 
 if [ -n "$COMPONENT_ID" ] && [ "$COMPONENT_ID" != "null" ]; then
-  curl -X DELETE "http://keycloak.127-0-0-1.sslip.io:8889/admin/realms/mcp/components/$COMPONENT_ID" \
+  curl -X DELETE "http://keycloak.127-0-0-1.sslip.io:8002/admin/realms/mcp/components/$COMPONENT_ID" \
     -H "Authorization: Bearer $TOKEN"
   echo "Trusted hosts policy removed"
 else
@@ -144,8 +144,8 @@ Configure the MCP Gateway broker to respond with OAuth discovery information:
 ```bash
 kubectl set env deployment/mcp-gateway-broker-router \
   OAUTH_RESOURCE_NAME="MCP Server" \
-  OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8888/mcp" \
-  OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp" \
+  OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8001/mcp" \
+  OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
   OAUTH_BEARER_METHODS_SUPPORTED="header" \
   OAUTH_SCOPES_SUPPORTED="basic,groups" \
   -n mcp-system
@@ -189,7 +189,7 @@ spec:
           code: 401
           headers:
             'WWW-Authenticate':
-              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8001/.well-known/oauth-protected-resource/mcp
           body:
             value: |
               {
@@ -212,14 +212,14 @@ Test that the broker now serves OAuth discovery information:
 
 ```bash
 # Check the protected resource metadata endpoint
-curl http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource
+curl http://mcp.127-0-0-1.sslip.io:8001/.well-known/oauth-protected-resource
 
 # Should return OAuth 2.0 Protected Resource Metadata like:
 # {
 #   "resource_name": "MCP Server",
-#   "resource": "http://mcp.127-0-0-1.sslip.io:8888/mcp",
+#   "resource": "http://mcp.127-0-0-1.sslip.io:8001/mcp",
 #   "authorization_servers": [
-#     "http://keycloak.127-0-0-1.sslip.io:8889/realms/mcp"
+#     "http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp"
 #   ],
 #   "bearer_methods_supported": [
 #     "header"
@@ -235,7 +235,7 @@ Test that protected endpoints now require authentication:
 
 ```bash
 # This should return 401 with WWW-Authenticate header
-curl -v http://mcp.127-0-0-1.sslip.io:8888/mcp \
+curl -v http://mcp.127-0-0-1.sslip.io:8001/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
@@ -251,13 +251,9 @@ You should get a response like this:
 
 ## Step 5: Test Authentication Flow
 
-Use the MCP Inspector to test the complete OAuth flow. You'll need to set up port forwarding to access the gateway through your local browser:
+Use the MCP Inspector to test the complete OAuth flow.
 
 ```bash
-# Start port forwarding to the Istio gateway
-kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 &
-PORT_FORWARD_PID=$!
-
 # Start MCP Inspector (requires Node.js/npm)
 npx @modelcontextprotocol/inspector@latest &
 INSPECTOR_PID=$!
@@ -266,17 +262,16 @@ INSPECTOR_PID=$!
 sleep 3
 
 # Open MCP Inspector with the gateway URL
-open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"
+open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp"
 ```
 
 **What this does:**
-- **Port Forwarding**: Makes the Istio gateway accessible on localhost:8888
 - **MCP Inspector**: Launches the official MCP debugging tool
 - **Auto-Configuration**: Pre-configures the inspector to connect to your gateway
 
 **To stop the services later:**
 ```bash
-kill $PORT_FORWARD_PID $INSPECTOR_PID
+kill $INSPECTOR_PID
 ```
 
 The MCP Inspector will:

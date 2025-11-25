@@ -51,7 +51,6 @@ The setup script automatically:
 5. **Installs MCP Gateway** using the Helm chart
 6. **Deploys test MCP servers** for demonstration
 7. **Configures routing** with HTTPRoute resources
-8. **Starts port forwarding** to make services accessible
 9. **Launches MCP Inspector** for testing and exploration
 
 ## Testing Your Setup
@@ -60,7 +59,7 @@ Once the script completes, you'll have:
 
 ### MCP Inspector Access
 - **URL**: http://localhost:6274
-- **Gateway URL**: http://mcp.127-0-0-1.sslip.io:8888/mcp
+- **Gateway URL**: http://mcp.127-0-0-1.sslip.io:8001/mcp
 - **Pre-configured**: The inspector opens with the correct gateway URL
 
 ### Available Test Tools
@@ -81,7 +80,6 @@ The setup includes example MCP servers with tools like:
 To stop the services and clean up:
 
 ```bash
-# Stop port forwarding (Ctrl+C in the terminal running the script)
 # Then delete the Kind cluster
 kind delete cluster
 ```

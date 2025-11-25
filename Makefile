@@ -395,10 +395,6 @@ keycloak-install: ## Install Keycloak IdP for development
 	@echo "Installing Keycloak - using official image with dev-file database"
 	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
 
-.PHONY: keycloak-forward
-keycloak-forward: ## Port forward Keycloak to localhost:8090
-	@$(MAKE) -s -f build/keycloak.mk keycloak-forward-impl
-
 .PHONY: keycloak-status
 keycloak-status: ## Show Keycloak URLs, credentials, and OIDC endpoints
 	@$(MAKE) -s -f build/keycloak.mk keycloak-status-impl

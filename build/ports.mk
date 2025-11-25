@@ -2,16 +2,9 @@
 # These variables control both Kind cluster ports and local port forwarding
 
 # Kind cluster host ports (what gets exposed on your local machine from Kind)
-KIND_HOST_PORT_HTTP ?= 8080
-KIND_HOST_PORT_HTTPS ?= 8443
-
-# Local port forwarding ports (for accessing services via kubectl port-forward)
-# Gateway ports
-GATEWAY_LOCAL_PORT_HTTP_MCP ?= 8888
-GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK ?= 8889
+KIND_HOST_PORT_MCP_GATEWAY ?= 8001
+KIND_HOST_PORT_KEYCLOAK ?= 8002
 
 # Export for use in shell commands
-export KIND_HOST_PORT_HTTP
-export KIND_HOST_PORT_HTTPS
-export GATEWAY_LOCAL_PORT_HTTP_MCP
-export GATEWAY_LOCAL_PORT_HTTP_KEYCLOAK
+export KIND_HOST_PORT_MCP_GATEWAY
+export KIND_HOST_PORT_KEYCLOAK

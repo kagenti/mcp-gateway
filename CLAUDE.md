@@ -48,7 +48,6 @@ Client → Gateway (Envoy) → Router (ext_proc) → Broker → Upstream MCP Ser
 ### Quick Start
 ```bash
 make local-env-setup     # Create Kind cluster with everything
-make dev-gateway-forward # Access gateway at localhost:8888
 make reload              # Build, load to Kind, and restart controller and broker
 ```
 
@@ -85,7 +84,8 @@ This prevents resource waste during rapid development/force-pushing.
 - 8080: Broker HTTP (/mcp endpoint)
 - 50051: Router gRPC (ext_proc)
 - 8081: Controller health probes
-- 8888: Gateway forward for dev
+- 8001: Gateway port mapping
+- 8002: Keycloak port mapping
 
 ## Known Issues & Solutions
 

@@ -69,7 +69,7 @@ data:
     # - "id" should match your MCP server hostnames
     # - "access" groups should match your Keycloak groups
     # - Tool names should match your actual MCP server tools
-    # Use 'curl http://mcp.127-0-0-1.sslip.io:8888/mcp' with tools/list to discover available tools
+    # Use 'curl http://mcp.127-0-0-1.sslip.io:8001/mcp' with tools/list to discover available tools
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -167,7 +167,7 @@ spec:
           code: 401
           headers:
             'WWW-Authenticate':
-              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8888/.well-known/oauth-protected-resource/mcp
+              value: Bearer resource_metadata=http://mcp.127-0-0-1.sslip.io:8001/.well-known/oauth-protected-resource/mcp
           body:
             value: |
               {
@@ -192,13 +192,9 @@ EOF
 
 **Note**: The authentication guide already created the `accounting` group, added the `mcp` user to it, and configured group claims in JWT tokens. No additional Keycloak configuration is needed.
 
-Test that authorization now controls tool access by setting up the MCP Inspector with port forwarding:
+Test that authorization now controls tool access by setting up the MCP Inspector:
 
 ```bash
-# Start port forwarding to the Istio gateway
-kubectl -n gateway-system port-forward svc/mcp-gateway-istio 8888:8080 &
-PORT_FORWARD_PID=$!
-
 # Start MCP Inspector (requires Node.js/npm)
 npx @modelcontextprotocol/inspector@latest &
 INSPECTOR_PID=$!
@@ -207,7 +203,7 @@ INSPECTOR_PID=$!
 sleep 3
 
 # Open MCP Inspector with the gateway URL
-open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8888/mcp"
+open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp"
 ```
 
 **What this accomplishes:**

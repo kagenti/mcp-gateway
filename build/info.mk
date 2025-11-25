@@ -10,20 +10,13 @@ info-impl:
 	@echo "      Requires: Go 1.20+ for some tool installations."
 	@echo ""
 	@echo "Service URLs:"
-	@echo "  Gateway:     http://localhost:$(GATEWAY_LOCAL_PORT_HTTP_MCP) (run: make dev-gateway-forward)"
-	@echo "  Broker:      http://localhost:8080 (run: make run-broker)"
-	@echo "  Router:      grpc://localhost:9002 (run: make run-router)"
-	@echo "  Mock MCP:    http://localhost:8081/mcp (run: kubectl port-forward -n mcp-server svc/mcp-test 8081:8081)"
-	@if kubectl get svc -n keycloak keycloak >/dev/null 2>&1; then \
-		echo "  Keycloak:    http://localhost:8095 (run: make keycloak-forward)"; \
-		echo "               Admin: admin / admin"; \
-	fi
+	@echo "  Gateway:     http://mcp.127-0-0-1.sslip.io:$(KIND_HOST_PORT_MCP_GATEWAY)"
+	@echo "  Keycloak:    http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
 	@echo ""
 	@echo "Quick Start Commands:"
 	@echo "  make dev                 # Configure for local development"
 	@echo "  make run-router          # Start router locally"
 	@echo "  make run-broker          # Start broker locally"
-	@echo "  make dev-gateway-forward # Access gateway"
 	@echo "  make logs                # Tail gateway logs"
 	@echo ""
 	@echo "Inspection:"
