@@ -33,3 +33,6 @@ resources:
   - everything-server-service.yaml
   - everything-server-httproute.yaml
   - everything-server-httproute-ext.yaml
+  - custom-response-deployment.yaml
+  - custom-response-httproute.yaml
+  - custom-response-service.yaml

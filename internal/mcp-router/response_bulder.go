@@ -71,6 +71,25 @@ func (rb *ResponseBuilder) WithRequestBodyHeadersResponse(headers []*basepb.Head
 	return rb
 }
 
+// WithRequestBodySetUnsetHeadersResponse will set and unset headers in the request
+func (rb *ResponseBuilder) WithRequestBodySetUnsetHeadersResponse(set []*basepb.HeaderValueOption, unset []string) *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_RequestBody{
+			RequestBody: &eppb.BodyResponse{
+				Response: &eppb.CommonResponse{
+					// Necessary so that the new headers are used in the routing decision.
+					ClearRouteCache: true,
+					HeaderMutation: &eppb.HeaderMutation{
+						SetHeaders:    set,
+						RemoveHeaders: unset,
+					},
+				},
+			},
+		},
+	})
+	return rb
+}
+
 // WithImmediateResponse adds an immediate error response that terminates request processing
 func (rb *ResponseBuilder) WithImmediateResponse(statusCode int32, message string) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{
@@ -125,6 +144,32 @@ func (rb *ResponseBuilder) WithDoNothingResponse(isStreaming bool) *ResponseBuil
 		})
 	}
 
+	return rb
+}
+
+// WithDoNothingResponseHeaderResponse will return a processing response that makes no changes
+func (rb *ResponseBuilder) WithDoNothingResponseHeaderResponse() *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_ResponseHeaders{
+			ResponseHeaders: &eppb.HeadersResponse{},
+		},
+	})
+	return rb
+}
+
+// WithResponseHeaderResponse will return a processing response to set the headers passed into the response
+func (rb *ResponseBuilder) WithResponseHeaderResponse(headers []*basepb.HeaderValueOption) *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_ResponseHeaders{
+			ResponseHeaders: &eppb.HeadersResponse{
+				Response: &eppb.CommonResponse{
+					HeaderMutation: &eppb.HeaderMutation{
+						SetHeaders: headers,
+					},
+				},
+			},
+		},
+	})
 	return rb
 }
 

@@ -5,7 +5,7 @@ metadata:
   name: test-server1
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   # Tool prefix applied to all servers in this MCPServer
   toolPrefix: test_
@@ -21,7 +21,7 @@ metadata:
   name: test-server2
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   toolPrefix: test2_
   targetRef:
@@ -36,7 +36,7 @@ metadata:
   name: test-server3
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   toolPrefix: test3_
   targetRef:
@@ -51,7 +51,7 @@ metadata:
   name: api-key-server
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   toolPrefix: apikey_
   targetRef:
@@ -69,7 +69,7 @@ metadata:
   name: custom-path-server
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   # custom path - this server uses /v1/special/mcp instead of /mcp
   path: /v1/special/mcp
@@ -86,7 +86,7 @@ metadata:
   name: oidc-server
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   # Validates OpenID Connect (OIDC) Bearer tokens issued by a configured OIDC provider
   toolPrefix: oidc_
@@ -104,7 +104,7 @@ metadata:
   name: everything-server
   namespace: mcp-test
   labels:
-    "kagenti/mcp": "true"
+    'kagenti/mcp': 'true'
 spec:
   toolPrefix: everything_
   targetRef:
@@ -112,3 +112,18 @@ spec:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: everything-server-route
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: custom-response
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  toolPrefix: custom_resp_
+  targetRef:
+    # MCP Everything Server - Typescript SDK based (prompts, tools, resources, sampling)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-custom-response-route

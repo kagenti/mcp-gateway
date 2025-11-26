@@ -7,24 +7,36 @@ import (
 	"fmt"
 	"log/slog"
 
-	// "github.com/kagenti/mcp-gateway/internal/config"
-
 	extProcV3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/kagenti/mcp-gateway/internal/broker"
-	"github.com/kagenti/mcp-gateway/internal/cache"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/session"
+	"github.com/mark3labs/mcp-go/client"
 )
 
 var _ config.Observer = &ExtProcServer{}
 
+// SessionCache defines how the router interacts with a store to store and retrieves sessions
+type SessionCache interface {
+	GetSession(ctx context.Context, key string) (map[string]string, error)
+	AddSession(ctx context.Context, key, mcpID, mcpSession string) (bool, error)
+	DeleteSessions(ctx context.Context, key ...string) error
+	RemoveServerSession(ctx context.Context, key, mcpServerID string) error
+	KeyExists(ctx context.Context, key string) (bool, error)
+}
+
+// InitForClient defines a function for initializing an MCP server for a client
+type InitForClient func(ctx context.Context, gatewayHost, routerKey string, conf *config.MCPServer, passThroughHeaders map[string]string) (*client.Client, error)
+
 // ExtProcServer struct boolean for streaming & Store headers for later use in body processing
 type ExtProcServer struct {
 	RoutingConfig *config.MCPServersConfig
-	Broker        broker.MCPBroker
-	SessionCache  *cache.Cache
 	JWTManager    *session.JWTManager
 	Logger        *slog.Logger
+	InitForClient InitForClient
+	SessionCache  SessionCache
+	//TODO this should not be needed
+	Broker broker.MCPBroker
 }
 
 // OnConfigChange is used to register the router for config changes
@@ -32,51 +44,29 @@ func (s *ExtProcServer) OnConfigChange(_ context.Context, newConfig *config.MCPS
 	s.RoutingConfig = newConfig
 }
 
-// SetupSessionCache initializes the session cache with broker's real MCP initialization logic
-func (s *ExtProcServer) SetupSessionCache() {
-	s.SessionCache = cache.New(func(
-		ctx context.Context,
-		serverName string,
-		authority string,
-		gwSessionID string,
-	) (string, error) {
-		// Checks if the authority is provided
-		if authority == "" {
-			return "", fmt.Errorf("no authority provided for server: %s", serverName)
-		}
-
-		// Creates a MCP session
-		s.Logger.Info("No mcp session id found for", "serverName", serverName, "gateway session", gwSessionID)
-		sessionID, err := s.Broker.CreateSession(ctx, authority)
-		if err != nil {
-			return "", fmt.Errorf("failed to create session: %w", err)
-		}
-		s.Logger.Info("Created MCP session ", "sessionID", sessionID, "server", serverName, "host", authority)
-		return sessionID, nil
-	})
-}
-
 // Process function
 func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer) error {
-	streaming := false // TODO this seems to do nothing right now
-	var localRequestHeaders *extProcV3.HttpHeaders
+	var (
+		localRequestHeaders *extProcV3.HttpHeaders
+		streaming           = false
+		mcpRequest          *MCPRequest
+	)
 	for {
 		req, err := stream.Recv()
+
 		if err != nil {
 			s.Logger.Error("[ext_proc] Process: Error receiving request", "error", err)
 			return err
 		}
 		responseBuilder := NewResponse()
-		// Log request details
 		switch r := req.Request.(type) {
 		case *extProcV3.ProcessingRequest_RequestHeaders:
 			// TODO we are ignoring errors here
-			responses, _ := s.HandleRequestHeaders(r.RequestHeaders, streaming)
-			// Store the processed request headers for later use in body processing
 			localRequestHeaders = r.RequestHeaders
-			s.Logger.Debug("post request headers handler ", "headers", localRequestHeaders)
+			responses, _ := s.HandleRequestHeaders(r.RequestHeaders)
+			s.Logger.Debug("[ext_proc ] Process: request headers", "local headers ", localRequestHeaders.Headers)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
@@ -85,7 +75,6 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 
 		case *extProcV3.ProcessingRequest_RequestBody:
-			mcpRequest := &MCPRequest{}
 			// default response
 			responses := responseBuilder.WithDoNothingResponse(streaming).Build()
 			if localRequestHeaders == nil || localRequestHeaders.Headers == nil {
@@ -108,22 +97,24 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 						}
 					}
 				}
-			}
-			if _, err := mcpRequest.Validate(); err != nil {
-				s.Logger.Error(fmt.Sprintf("Error request is not valid MCPRequest: %v", err))
-				for _, response := range responses {
-					if err := stream.Send(response); err != nil {
-						s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
-						return err
+				if _, err := mcpRequest.Validate(); err != nil {
+					s.Logger.Error("Invalid MCPRequest", "error", err)
+					resp := responseBuilder.WithImmediateResponse(400, "invalid mcp request").Build()
+					for _, res := range resp {
+						if err := stream.Send(res); err != nil {
+							s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
+							return err
+						}
 					}
 				}
 			}
 			// override responses with custom handle responses
+			// GET /mcp would come through here
 			mcpRequest.Headers = localRequestHeaders.Headers
 			mcpRequest.Streaming = streaming
-			responses = s.HandleMCPRequest(stream.Context(), mcpRequest, s.RoutingConfig)
+			responses = s.RouteMCPRequest(stream.Context(), mcpRequest)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending MCP body routing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending MCP body routing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err
@@ -132,9 +123,9 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
-			responses, _ := s.HandleResponseHeaders(r.ResponseHeaders)
+			responses, _ := s.HandleResponseHeaders(stream.Context(), r.ResponseHeaders, localRequestHeaders, mcpRequest)
 			for _, response := range responses {
-				s.Logger.Info(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
+				s.Logger.Debug(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error sending response: %v", err))
 					return err

@@ -15,6 +15,8 @@ const (
 	authorityHeader       = ":authority"
 	authorizationHeader   = "authorization"
 	mcpTarget             = "mcp-target"
+	// RoutingKey is an internal header used to authenticate a request from the router
+	RoutingKey = "router-key"
 )
 
 func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {

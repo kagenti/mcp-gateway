@@ -464,11 +464,8 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 	})
 
 	upstream.mpcClient.OnNotification(func(notification mcp.JSONRPCNotification) {
-		m.logger.Debug("Broker OnNotification",
-			"notification.Method", notification.Method,
-			"notification.Params", notification.Params,
-		)
 		if notification.Method == "notifications/tools/list_changed" {
+			m.logger.Debug("notifications/tools/list_changed received")
 			resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
 			if err != nil {
 				m.logger.Warn("failed to list tools", "err", err)

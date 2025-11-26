@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-custom-response
+  namespace: 'mcp-test'
+  labels:
+    app: mcp-custom-response
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-custom-response
+  template:
+    metadata:
+      labels:
+        app: mcp-custom-response
+    spec:
+      containers:
+        - name: mcp-custom-response
+          image: ghcr.io/kagenti/mcp-gateway/custom-response-server:latest
+          imagePullPolicy: IfNotPresent
+          command: ['/mcp-test-server']
+          args: ['--http', '0.0.0.0:9090']
+          ports:
+            - containerPort: 9090
+              name: http
+          env:
+            - name: LOG_LEVEL
+              value: 'info'
+          resources:
+            limits:
+              memory: '128Mi'
+              cpu: '100m'
+            requests:
+              memory: '64Mi'
+              cpu: '50m'

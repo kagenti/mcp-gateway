@@ -16,7 +16,7 @@ func testLogger() *slog.Logger {
 func TestNewJWTManager(t *testing.T) {
 	t.Run("with custom key", func(t *testing.T) {
 		key := "test-signing-key"
-		manager, err := NewJWTManager(key, 0, testLogger())
+		manager, err := NewJWTManager(key, 0, testLogger(), nil)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -34,19 +34,19 @@ func TestNewJWTManager(t *testing.T) {
 
 	t.Run("with custom session duration", func(t *testing.T) {
 		key := "test-signing-key"
-		manager, err := NewJWTManager(key, 48, testLogger())
+		manager, err := NewJWTManager(key, 48, testLogger(), nil)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expectedDuration := 48 * time.Hour
+		expectedDuration := 48 * time.Minute
 		if manager.duration != expectedDuration {
 			t.Errorf("expected duration %v, got %v", expectedDuration, manager.duration)
 		}
 	})
 
 	t.Run("with empty key returns error", func(t *testing.T) {
-		manager, err := NewJWTManager("", 0, testLogger())
+		manager, err := NewJWTManager("", 0, testLogger(), nil)
 
 		if err == nil {
 			t.Error("expected error for empty signing key")
@@ -58,7 +58,7 @@ func TestNewJWTManager(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
-	manager, _ := NewJWTManager("test-key", 0, testLogger())
+	manager, _ := NewJWTManager("test-key", 0, testLogger(), nil)
 
 	t.Run("generates valid JWT", func(t *testing.T) {
 		token := manager.Generate()
@@ -109,7 +109,7 @@ func TestGenerate(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	manager, _ := NewJWTManager("test-key", 0, testLogger())
+	manager, _ := NewJWTManager("test-key", 0, testLogger(), nil)
 
 	t.Run("validates correct token", func(t *testing.T) {
 		token := manager.Generate()
@@ -124,7 +124,7 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("rejects token with wrong signing key", func(t *testing.T) {
-		otherManager, _ := NewJWTManager("different-key", 0, testLogger())
+		otherManager, _ := NewJWTManager("different-key", 0, testLogger(), nil)
 		token := otherManager.Generate()
 
 		isNotAllowed, err := manager.Validate(token)
@@ -148,7 +148,7 @@ func TestValidate(t *testing.T) {
 
 	t.Run("rejects expired token", func(t *testing.T) {
 		// create a manager with very short duration
-		shortManager, _ := NewJWTManager("test-key", 0, testLogger())
+		shortManager, _ := NewJWTManager("test-key", 0, testLogger(), nil)
 		shortManager.duration = 1 * time.Nanosecond
 
 		token := shortManager.Generate()
@@ -184,7 +184,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestTerminate(t *testing.T) {
-	manager, _ := NewJWTManager("test-key", 0, testLogger())
+	manager, _ := NewJWTManager("test-key", 0, testLogger(), nil)
 
 	t.Run("terminate returns no error", func(t *testing.T) {
 		token := manager.Generate()

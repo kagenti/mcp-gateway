@@ -2,6 +2,7 @@ package mcprouter
 
 import (
 	"context"
+	"fmt"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"k8s.io/utils/ptr"
@@ -12,9 +13,9 @@ import (
 	"testing"
 
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/kagenti/mcp-gateway/internal/broker"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/session"
+	"github.com/mark3labs/mcp-go/client"
 	"github.com/stretchr/testify/require"
 )
 
@@ -158,12 +159,28 @@ func TestMCPRequestToolName(t *testing.T) {
 func TestHandleRequestBody(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
+	// Create session cache
+	cache, err := session.NewCache()
+	require.NoError(t, err)
+
 	// Create JWT manager for test
-	jwtManager, err := session.NewJWTManager("test-signing-key", 0, logger)
+	jwtManager, err := session.NewJWTManager("test-signing-key", 0, logger, cache)
 	require.NoError(t, err)
 
 	// Generate a valid JWT token
 	validToken := jwtManager.Generate()
+
+	// Pre-populate the session cache so InitForClient won't be called
+	// This simulates the case where the session already exists
+	sessionAdded, err := cache.AddSession(context.Background(), validToken, "dummy", "mock-upstream-session-id")
+	require.NoError(t, err)
+	require.True(t, sessionAdded)
+
+	// Mock InitForClient - should not be called since session exists
+	mockInitForClient := func(_ context.Context, _, _ string, _ *config.MCPServer, _ map[string]string) (*client.Client, error) {
+		// This should not be called in this test since session exists in cache
+		return nil, fmt.Errorf("InitForClient should not be called when session exists")
+	}
 
 	server := &ExtProcServer{
 		RoutingConfig: &config.MCPServersConfig{
@@ -177,9 +194,10 @@ func TestHandleRequestBody(t *testing.T) {
 				},
 			},
 		},
-		Broker:     broker.NewBroker(logger),
-		JWTManager: jwtManager,
-		Logger:     logger,
+		JWTManager:    jwtManager,
+		Logger:        logger,
+		SessionCache:  cache,
+		InitForClient: mockInitForClient,
 	}
 
 	data := &MCPRequest{
@@ -199,32 +217,26 @@ func TestHandleRequestBody(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.MCPServersConfig{
-		Servers: []*config.MCPServer{
-			{
-				Name:       "dummy",
-				URL:        "http://localhost:8080/mcp",
-				ToolPrefix: "s_",
-				Enabled:    true,
-				Hostname:   "localhost",
-			},
-		},
-	}
-	resp := server.HandleMCPRequest(context.Background(), data, cfg)
+
+	resp := server.RouteMCPRequest(context.Background(), data)
 	require.Len(t, resp, 1)
 	require.IsType(t, &eppb.ProcessingResponse_RequestBody{}, resp[0].Response)
 	rb := resp[0].Response.(*eppb.ProcessingResponse_RequestBody)
 	require.NotNil(t, rb.RequestBody.Response)
-	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 5)
+	require.Len(t, rb.RequestBody.Response.HeaderMutation.SetHeaders, 7)
 	require.Equal(t, "x-mcp-method", rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.Key)
 	require.Equal(t, []uint8("tools/call"), rb.RequestBody.Response.HeaderMutation.SetHeaders[0].Header.RawValue)
 	require.Equal(t, "x-mcp-toolname", rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.Key)
 	require.Equal(t, []uint8("mytool"), rb.RequestBody.Response.HeaderMutation.SetHeaders[1].Header.RawValue)
 	require.Equal(t, "x-mcp-servername", rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.Key)
 	require.Equal(t, []uint8("dummy"), rb.RequestBody.Response.HeaderMutation.SetHeaders[2].Header.RawValue)
-	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
-	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
-	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.Key)
+	require.Equal(t, "mcp-session-id", rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.Key)
+	require.Equal(t, []uint8("mock-upstream-session-id"), rb.RequestBody.Response.HeaderMutation.SetHeaders[3].Header.RawValue)
+	require.Equal(t, ":authority", rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.Key)
+	require.Equal(t, []uint8("localhost"), rb.RequestBody.Response.HeaderMutation.SetHeaders[4].Header.RawValue)
+	require.Equal(t, ":path", rb.RequestBody.Response.HeaderMutation.SetHeaders[5].Header.Key)
+	require.Equal(t, []uint8("/mcp"), rb.RequestBody.Response.HeaderMutation.SetHeaders[5].Header.RawValue)
+	require.Equal(t, "content-length", rb.RequestBody.Response.HeaderMutation.SetHeaders[6].Header.Key)
 
 	require.Equal(t,
 		`{"id":0,"jsonrpc":"2.0","method":"tools/call","params":{"name":"mytool","other":"other"}}`,
@@ -252,9 +264,8 @@ func TestHandleRequestHeaders(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			server := &ExtProcServer{
 				RoutingConfig: &config.MCPServersConfig{
-					MCPGatewayHostname: tc.GatewayHostname,
+					MCPGatewayExternalHostname: tc.GatewayHostname,
 				},
-				Broker: broker.NewBroker(logger),
 				Logger: logger,
 			}
 
@@ -269,7 +280,7 @@ func TestHandleRequestHeaders(t *testing.T) {
 				},
 			}
 
-			responses, err := server.HandleRequestHeaders(headers, false)
+			responses, err := server.HandleRequestHeaders(headers)
 
 			require.NoError(t, err)
 			require.Len(t, responses, 1)

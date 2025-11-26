@@ -14,8 +14,10 @@ type MCPServersConfig struct {
 	Servers        []*MCPServer
 	VirtualServers []*VirtualServer
 	observers      []Observer
-	//MCPGatewayHostname is the accessible host of the gateway listener
-	MCPGatewayHostname string
+	//MCPGatewayExternalHostname is the accessible host of the gateway listener
+	MCPGatewayExternalHostname string
+	MCPGatewayInternalHostname string
+	RouterAPIKey               string
 }
 
 // RegisterObserver registers an observer to be notified of changes to the config
@@ -62,6 +64,16 @@ func (config *MCPServersConfig) GetServerInfo(toolName string) *MCPServer {
 	}
 
 	slog.Info("Tool name doesn't match any configured server prefix", "tool", toolName)
+	return nil
+}
+
+// GetServerConfigByName get the routing config by server name
+func (config *MCPServersConfig) GetServerConfigByName(serverName string) *MCPServer {
+	for _, server := range config.Servers {
+		if server.Name == serverName {
+			return server
+		}
+	}
 	return nil
 }
 
