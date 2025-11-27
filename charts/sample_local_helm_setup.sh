@@ -29,11 +29,11 @@ nodes:
       kubeletExtraArgs:
         node-labels: "ingress-ready=true"
   extraPortMappings:
-  - containerPort: 80
-    hostPort: 8080
+  - containerPort: 30080
+    hostPort: 7001
     protocol: TCP
-  - containerPort: 443
-    hostPort: 8443
+  - containerPort: 30089
+    hostPort: 7002
     protocol: TCP
 EOF
 
@@ -46,6 +46,7 @@ helm install istiod istio/istiod -n istio-system --wait
 
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/istio/gateway/namespace.yaml
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/istio/gateway/gateway.yaml -n gateway-system
+kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/istio/gateway/nodeport.yaml -n gateway-system
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/namespace.yaml
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-deployment.yaml -n mcp-test
 kubectl apply -f https://raw.githubusercontent.com/$GITHUB_ORG/mcp-gateway/$BRANCH/config/test-servers/server1-service.yaml -n mcp-test
@@ -126,7 +127,7 @@ echo "================================================================"
 echo "Setup complete! 🎉"
 echo "================================================================"
 echo "MCP Inspector: http://localhost:6274"
-echo "Gateway URL: http://mcp.127-0-0-1.sslip.io:8001/mcp"
+echo "Gateway URL: http://mcp.127-0-0-1.sslip.io:7001/mcp"
 echo ""
 echo "Check status:"
 echo "  kubectl get pods -n mcp-system"
@@ -136,7 +137,7 @@ echo ""
 echo "Press Ctrl+C to stop and cleanup."
 echo "================================================================"
 
-open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp" 2>/dev/null || echo "Open manually: http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp"
+open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:7001/mcp" 2>/dev/null || echo "Open manually: http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:7001/mcp"
 
 # Cleanup function
 cleanup() {

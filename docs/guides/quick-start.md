@@ -59,7 +59,7 @@ Once the script completes, you'll have:
 
 ### MCP Inspector Access
 - **URL**: http://localhost:6274
-- **Gateway URL**: http://mcp.127-0-0-1.sslip.io:8001/mcp
+- **Gateway URL**: http://mcp.127-0-0-1.sslip.io:7001/mcp
 - **Pre-configured**: The inspector opens with the correct gateway URL
 
 ### Available Test Tools
