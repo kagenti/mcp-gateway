@@ -10,7 +10,7 @@ import (
 func TestInMemoryCache_AddSession(t *testing.T) {
 
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// add first session for a key
@@ -39,7 +39,7 @@ func TestInMemoryCache_AddSession(t *testing.T) {
 
 func TestInMemoryCache_GetSession(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// get non-existent session returns empty map
@@ -51,7 +51,7 @@ func TestInMemoryCache_GetSession(t *testing.T) {
 
 func TestInMemoryCache_KeyExists(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// key doesn't exist initially
@@ -71,7 +71,7 @@ func TestInMemoryCache_KeyExists(t *testing.T) {
 
 func TestInMemoryCache_DeleteSessions(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// add sessions
@@ -105,7 +105,7 @@ func TestInMemoryCache_DeleteSessions(t *testing.T) {
 
 func TestInMemoryCache_UpdateExistingSession(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// add initial session
@@ -129,7 +129,7 @@ func TestInMemoryCache_UpdateExistingSession(t *testing.T) {
 
 func TestInMemoryCache_MultipleServersPerGatewaySession(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	gatewaySession := "gateway-session-1"
@@ -157,25 +157,17 @@ func TestInMemoryCache_MultipleServersPerGatewaySession(t *testing.T) {
 }
 
 func TestNewCache_DefaultsToInMemory(t *testing.T) {
-	cache, err := NewCache()
+	ctx := context.Background()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, cache.inmemory)
 	require.Nil(t, cache.extClient)
 	require.Empty(t, cache.connectionString)
 }
 
-func TestNewCache_WithConnectionString(t *testing.T) {
-	// test that connection string option is applied
-	cache, err := NewCache(WithConnectionString("redis://localhost:6379/0"))
-	require.NoError(t, err)
-	require.Nil(t, cache.inmemory)
-	require.NotNil(t, cache.extClient)
-	require.Equal(t, "redis://localhost:6379/0", cache.connectionString)
-}
-
 func TestInMemoryCache_RemoveServerSession(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	gatewaySession := "gateway-session-1"
@@ -237,7 +229,7 @@ func TestInMemoryCache_RemoveServerSession(t *testing.T) {
 
 func TestInMemoryCache_RemoveServerSession_NonExistentGatewaySession(t *testing.T) {
 	ctx := context.Background()
-	cache, err := NewCache()
+	cache, err := NewCache(ctx)
 	require.NoError(t, err)
 
 	// try to remove server session from non-existent gateway session

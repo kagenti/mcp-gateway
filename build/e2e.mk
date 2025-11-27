@@ -1,7 +1,7 @@
 # E2E test targets
 
 GINKGO = $(shell pwd)/bin/ginkgo
-GINKGO_VERSION = v2.22.0
+GINKGO_VERSION = v2.27.2
 
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary

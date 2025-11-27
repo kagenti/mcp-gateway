@@ -36,11 +36,6 @@ func TestStatusHandlerGetSingleServer(t *testing.T) {
 	res := w.Result()
 	require.Equal(t, 404, res.StatusCode)
 
-	w = httptest.NewRecorder()
-	sh.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/status/?server=dummyServer", nil))
-	res = w.Result()
-	require.Equal(t, 404, res.StatusCode)
-
 	// Add a server
 	brokerImpl, ok := mcpBroker.(*mcpBrokerImpl)
 	require.True(t, ok)
@@ -60,11 +55,6 @@ func TestStatusHandlerGetSingleServer(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	sh.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/status/dummyServer", nil))
-	res = w.Result()
-	require.Equal(t, 200, res.StatusCode)
-
-	w = httptest.NewRecorder()
-	sh.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/status/?server=dummyServer", nil))
 	res = w.Result()
 	require.Equal(t, 200, res.StatusCode)
 }

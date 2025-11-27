@@ -2,7 +2,7 @@
 
 # CI setup - lighter weight than local-env-setup, assumes Kind is already created
 .PHONY: ci-setup
-ci-setup: kind ## Setup environment for CI (creates Kind cluster if needed)
+ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed)
 	@echo "Setting up CI environment..."
 	# Create Kind cluster if it doesn't exist
 	@if ! $(KIND) get clusters | grep -q mcp-gateway; then \
@@ -20,6 +20,9 @@ ci-setup: kind ## Setup environment for CI (creates Kind cluster if needed)
 	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	# Install CRDs and deploy
 	$(MAKE) install-crd
+	$(MAKE) istio-install
+	$(MAKE) metallb-install
+	$(MAKE) deploy-gateway	
 	$(MAKE) deploy
 	# Wait for deployments
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-controller -n mcp-system

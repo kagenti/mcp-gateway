@@ -74,7 +74,7 @@ func (h *ConfigUpdateHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 		h.config.VirtualServers = configData.VirtualServers
 	}
 
-	h.config.Notify(r.Context())
+	h.config.Notify()
 
 	h.logger.Debug("configuration updated via API", "serverCount", len(configData.Servers), "virtualServerCount", len(configData.VirtualServers))
 

@@ -231,6 +231,7 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 	// create a new session with backend mcp if one doesn't exist
 	exists, err := s.SessionCache.GetSession(ctx, mcpReq.GetSessionID())
 	if err != nil {
+		s.Logger.Error("failed to get session from cache", "error", err)
 		calculatedResponse.WithImmediateResponse(500, "internal error")
 		return calculatedResponse.Build()
 	}

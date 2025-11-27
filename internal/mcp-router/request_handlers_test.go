@@ -160,7 +160,7 @@ func TestHandleRequestBody(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Create session cache
-	cache, err := session.NewCache()
+	cache, err := session.NewCache(context.Background())
 	require.NoError(t, err)
 
 	// Create JWT manager for test

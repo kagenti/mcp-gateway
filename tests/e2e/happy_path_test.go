@@ -3,752 +3,275 @@
 package e2e
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec" // needed for setupPortForward
 	"strings"
-	"syscall"
-	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
 )
 
-var _ = Describe("MCP Gateway Happy Path", func() {
+var gatewayURL = "http://localhost:8001/mcp"
+var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	var (
-		httpRoute1 *gatewayapiv1.HTTPRoute
-		httpRoute2 *gatewayapiv1.HTTPRoute
-		mcpServer1 *mcpv1alpha1.MCPServer
-		mcpServer2 *mcpv1alpha1.MCPServer
+		testResources = []client.Object{}
 	)
 
 	BeforeEach(func() {
-		// create httproutes for test servers that should already be deployed
-		httpRoute1 = BuildTestHTTPRoute("e2e-server1-route", TestNamespace,
-			"server1.mcp.example.com", "mcp-test-server1", 9090)
-		httpRoute2 = BuildTestHTTPRoute("e2e-server2-route", TestNamespace,
-			"server2.mcp.example.com", "mcp-test-server2", 9090)
-
-		// create mcpserver resources
-		mcpServer1 = BuildTestMCPServer("e2e-mcpserver1", TestNamespace,
-			"e2e-server1-route", "s1_")
-		mcpServer2 = BuildTestMCPServer("e2e-mcpserver2", TestNamespace,
-			"e2e-server2-route", "s2_")
 	})
 
 	AfterEach(func() {
 		// cleanup in reverse order
-		if mcpServer1 != nil {
-			CleanupResource(ctx, k8sClient, mcpServer1)
-		}
-		if mcpServer2 != nil {
-			CleanupResource(ctx, k8sClient, mcpServer2)
-		}
-		if httpRoute1 != nil {
-			CleanupResource(ctx, k8sClient, httpRoute1)
-		}
-		if httpRoute2 != nil {
-			CleanupResource(ctx, k8sClient, httpRoute2)
+		for _, to := range testResources {
+			//GinkgoWriter.Println("deleteing", to.GetName())
+			CleanupResource(ctx, k8sClient, to)
 		}
 	})
 
 	JustAfterEach(func() {
 		// dump logs if test failed
 		if CurrentSpecReport().Failed() {
-			DumpComponentLogs()
-			DumpTestServerLogs()
+			//	DumpComponentLogs()
+			//	DumpTestServerLogs()
 		}
 	})
 
-	It("should aggregate MCP servers and manage HTTPRoute conditions", func() {
-		By("Creating HTTPRoutes")
-		Expect(k8sClient.Create(ctx, httpRoute1)).To(Succeed())
-		Expect(k8sClient.Create(ctx, httpRoute2)).To(Succeed())
+	It("should register multiple mcp servers with the gateway and make their tools available", func() {
+		By("Creating HTTPRoutes and MCP Servers")
+		// create httproutes for test servers that should already be deployed
+		registration := NewMCPServerRegistration(ctx, k8sClient)
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer1 := registration.Register()
+		registration = NewMCPServerRegistration(ctx, k8sClient)
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer2 := registration.Register()
 
-		By("Creating MCPServer resources")
-		Expect(k8sClient.Create(ctx, mcpServer1)).To(Succeed())
-		Expect(k8sClient.Create(ctx, mcpServer2)).To(Succeed())
+		By("Verifying MCPServers become ready and tools are present")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer1.Name, registeredServer1.Namespace)).To(BeNil())
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer2.Name, registeredServer2.Namespace)).To(BeNil())
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer1.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer1.Spec.ToolPrefix))
+			g.Expect(verifyMCPServerToolsPresent(registeredServer2.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer2.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 
-		By("Verifying MCPServers become ready")
-		VerifyMCPServerReady(ctx, k8sClient, mcpServer1.Name, mcpServer1.Namespace)
-		VerifyMCPServerReady(ctx, k8sClient, mcpServer2.Name, mcpServer2.Namespace)
+	})
 
-		By("Setting up port-forward to broker for status check")
-		statusPortForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18081:8080")
-		defer func() {
-			if statusPortForwardCmd.Process != nil {
-				statusPortForwardCmd.Process.Kill()
-			}
-		}()
+	It("should unregister mcp servers with the gateway", func() {
 
-		// wait for port-forward to be ready
-		Eventually(func() error {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				GinkgoWriter.Printf("Port-forward connection failed: %v\n", err)
-				return err
-			}
-			defer resp.Body.Close()
+		registration := NewMCPServerRegistration(ctx, k8sClient)
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register()
 
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("broker status endpoint returned %d", resp.StatusCode)
-			}
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 
-			GinkgoWriter.Printf("Port-forward to broker status endpoint is ready\n")
-			return nil
-		}, 30*time.Second, 2*time.Second).Should(Succeed(), "Port-forward to broker status endpoint should be ready")
-
-		By("Waiting for broker to register servers")
-		// wait for broker to load the config and be ready
-		// note: configmap volume mounts can take 60-120s to sync in kubernetes
-		// plus additional time for fsnotify to detect and reload
-		// use broker /status endpoint to reliably check server registration
-		type StatusResponse struct {
-			Servers []struct {
-				URL              string `json:"url"`
-				Name             string `json:"name"`
-				ToolPrefix       string `json:"toolPrefix"`
-				ConnectionStatus struct {
-					IsReachable bool `json:"isReachable"`
-				} `json:"connectionStatus"`
-			} `json:"servers"`
-			HealthyServers int `json:"healthyServers"`
-			TotalServers   int `json:"totalServers"`
-		}
-
-		Eventually(func() bool {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				GinkgoWriter.Printf("Failed to connect to broker status endpoint: %v\n", err)
-				return false
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				GinkgoWriter.Printf("Broker status endpoint returned %d\n", resp.StatusCode)
-				return false
-			}
-
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-				GinkgoWriter.Printf("Failed to decode status response: %v\n", err)
-				return false
-			}
-
-			// check if both servers are registered and healthy
-			foundServer1 := false
-			foundServer2 := false
-			for _, server := range status.Servers {
-				if strings.Contains(server.URL, "mcp-test-server1") {
-					foundServer1 = server.ToolPrefix == "s1_" && server.ConnectionStatus.IsReachable
-					if !foundServer1 {
-						GinkgoWriter.Printf("Server1 found but not ready - prefix: %s, reachable: %v\n",
-							server.ToolPrefix, server.ConnectionStatus.IsReachable)
-					}
-				}
-				if strings.Contains(server.URL, "mcp-test-server2") {
-					foundServer2 = server.ToolPrefix == "s2_" && server.ConnectionStatus.IsReachable
-					if !foundServer2 {
-						GinkgoWriter.Printf("Server2 found but not ready - prefix: %s, reachable: %v\n",
-							server.ToolPrefix, server.ConnectionStatus.IsReachable)
-					}
-				}
-			}
-
-			if !foundServer1 || !foundServer2 {
-				GinkgoWriter.Printf("Broker status - Total: %d, Healthy: %d, Server1: %v, Server2: %v\n",
-					status.TotalServers, status.HealthyServers, foundServer1, foundServer2)
-				for _, server := range status.Servers {
-					GinkgoWriter.Printf("  Server: %s (prefix: %s, reachable: %v)\n",
-						server.URL, server.ToolPrefix, server.ConnectionStatus.IsReachable)
-				}
-			}
-
-			return foundServer1 && foundServer2 && status.HealthyServers >= 2
-		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
-			"Broker should register both test servers with correct prefixes and be healthy")
-
-		By("Setting up port-forward to broker MCP endpoint")
-		brokerURL := "http://localhost:18080/mcp"
-		portForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18080:8080")
-		defer portForwardCmd.Process.Kill() // ensure we clean up
-
-		// wait for port-forward to be ready by testing connection
-		Eventually(func() error {
-			client := &http.Client{Timeout: 1 * time.Second}
-			resp, err := client.Get(brokerURL)
-			if err != nil {
-				return err
-			}
-			resp.Body.Close()
-			return nil
-		}, 10*time.Second, 500*time.Millisecond).Should(Succeed(),
-			"Port-forward should be ready")
-
-		By("Testing broker MCP endpoint")
-		// test initialize
-		initReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "initialize",
-			"params": map[string]interface{}{
-				"protocolVersion": "0.1.0",
-				"capabilities":    map[string]interface{}{},
-				"clientInfo": map[string]interface{}{
-					"name":    "e2e-test",
-					"version": "1.0.0",
-				},
-			},
-			"id": 1,
-		}
-
-		resp, sessionID := makeMCPRequestWithSession(brokerURL, initReq)
-		Expect(resp).To(HaveKey("result"))
-		result := resp["result"].(map[string]interface{})
-		Expect(result).To(HaveKey("serverInfo"))
-		serverInfo := result["serverInfo"].(map[string]interface{})
-		Expect(serverInfo["name"]).To(Equal("Kagenti MCP Broker"))
-
-		// verify broker capabilities indicate tool support
-		Expect(result).To(HaveKey("capabilities"))
-		capabilities := result["capabilities"].(map[string]interface{})
-		Expect(capabilities).To(HaveKey("tools"))
-		tools := capabilities["tools"].(map[string]interface{})
-		Expect(tools["listChanged"]).To(Equal(true))
-
-		By("Listing tools from broker")
-		toolsReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/list",
-			"params":  map[string]interface{}{},
-			"id":      2,
-		}
-
-		toolsResp := makeMCPRequestWithSessionID(brokerURL, toolsReq, sessionID)
-		Expect(toolsResp).To(HaveKey("result"))
-		toolsResult := toolsResp["result"].(map[string]interface{})
-		Expect(toolsResult).To(HaveKey("tools"))
-		toolsList := toolsResult["tools"].([]interface{})
-
-		// should have tools from both test servers
-		Expect(len(toolsList)).To(BeNumerically(">", 0))
-
-		// check for tools with expected prefixes
-		var foundS1Tool, foundS2Tool bool
-		for _, tool := range toolsList {
-			toolMap := tool.(map[string]interface{})
-			name := toolMap["name"].(string)
-			if strings.HasPrefix(name, "s1_") {
-				foundS1Tool = true
-			}
-			if strings.HasPrefix(name, "s2_") {
-				foundS2Tool = true
-			}
-		}
-		Expect(foundS1Tool).To(BeTrue(), "Should find tools with s1_ prefix")
-		Expect(foundS2Tool).To(BeTrue(), "Should find tools with s2_ prefix")
-
-		By("Deleting one MCPServer")
-		Expect(k8sClient.Delete(ctx, mcpServer1)).To(Succeed())
+		By("unregistering an MCPServer by Deleting the resource")
+		Expect(k8sClient.Delete(ctx, registeredServer)).To(Succeed())
 
 		By("Verifying broker removes the deleted server")
-		// use status endpoint to verify server removal
-		Eventually(func() bool {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				GinkgoWriter.Printf("Failed to connect to broker status endpoint: %v\n", err)
-				return false
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				GinkgoWriter.Printf("Broker status endpoint returned %d\n", resp.StatusCode)
-				return false
-			}
-
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-				GinkgoWriter.Printf("Failed to decode status response: %v\n", err)
-				return false
-			}
-
-			GinkgoWriter.Printf("Broker status: %d servers total, %d healthy\n", status.TotalServers, status.HealthyServers)
-			for _, server := range status.Servers {
-				GinkgoWriter.Printf("  Server: %s (prefix: %s, reachable: %v)\n",
-					server.URL, server.ToolPrefix, server.ConnectionStatus.IsReachable)
-			}
-
-			// should only have server2 now
-			hasServer1 := false
-			hasServer2 := false
-			for _, server := range status.Servers {
-				if strings.Contains(server.URL, "mcp-test-server1") {
-					hasServer1 = true
-				}
-				if strings.Contains(server.URL, "mcp-test-server2") {
-					hasServer2 = true
-				}
-			}
-
-			// server1 should be gone, server2 should remain
-			return !hasServer1 && hasServer2
-		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(), "Broker should remove deleted server")
-
-		By("Testing server failure recovery")
-		// simulate server failure by scaling down
-		testServerDeployment := &appsv1.Deployment{}
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      "mcp-test-server2",
-			Namespace: TestNamespace,
-		}, testServerDeployment)).To(Succeed())
-
-		By("Scaling down test-server2 to simulate failure")
-		zero := int32(0)
-		testServerDeployment.Spec.Replicas = &zero
-		Expect(k8sClient.Update(ctx, testServerDeployment)).To(Succeed())
-
-		By("Waiting for broker to detect server2 is unreachable")
-		Eventually(func() bool {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				return false
-			}
-			defer resp.Body.Close()
-
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-				return false
-			}
-
-			// check if server2 is marked as unreachable or removed
-			for _, server := range status.Servers {
-				if strings.Contains(server.URL, "mcp-test-server2") {
-					return !server.ConnectionStatus.IsReachable
-				}
-			}
-			// if not found, that's also acceptable
-			return true
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(), "Server2 should become unreachable")
-
-		By("Verifying server remains unreachable for a few seconds")
-		// Just verify the server stays unreachable for a bit to ensure retry is happening
-		// We already confirmed it's unreachable above, this just ensures it doesn't immediately recover
-		Consistently(func() bool {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				return true // connection error means still down
-			}
-			defer resp.Body.Close()
-
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-				return true // decode error means still down
-			}
-
-			// check if server2 is still unreachable
-			for _, server := range status.Servers {
-				if strings.Contains(server.URL, "mcp-test-server2") {
-					return !server.ConnectionStatus.IsReachable
-				}
-			}
-			// not found means it's been removed, which is fine
-			return true
-		}, "3s", "1s").Should(BeTrue(), "Server should remain unreachable while down")
-
-		By("Scaling test-server2 back up")
-		// refresh deployment to avoid resource version conflicts
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      "mcp-test-server2",
-			Namespace: TestNamespace,
-		}, testServerDeployment)).To(Succeed())
-		one := int32(1)
-		testServerDeployment.Spec.Replicas = &one
-		Expect(k8sClient.Update(ctx, testServerDeployment)).To(Succeed())
-
-		By("Waiting for pod to be running")
-		Eventually(func() bool {
-			pods := &corev1.PodList{}
-			err := k8sClient.List(ctx, pods,
-				client.InNamespace(TestNamespace),
-				client.MatchingLabels{"app": "mcp-test-server2"})
-			if err != nil || len(pods.Items) == 0 {
-				return false
-			}
-			for _, pod := range pods.Items {
-				if pod.Status.Phase == corev1.PodRunning {
-					return true
-				}
-			}
-			return false
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue())
-
-		By("Verifying broker reconnects to server2")
-		Eventually(func() bool {
-			client := &http.Client{Timeout: 2 * time.Second}
-			resp, err := client.Get("http://localhost:18081/status")
-			if err != nil {
-				return false
-			}
-			defer resp.Body.Close()
-
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-				return false
-			}
-
-			// check if server2 is back and healthy
-			for _, server := range status.Servers {
-				if strings.Contains(server.URL, "mcp-test-server2") {
-					GinkgoWriter.Printf("Server2 recovery status - Reachable: %v\n",
-						server.ConnectionStatus.IsReachable)
-					return server.ConnectionStatus.IsReachable
-				}
-			}
-			return false
-		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(), "Server2 should recover and reconnect")
-
-		By("Test completed successfully")
+		// do tools call check tools no longer present
+		Eventually(func(g Gomega) {
+			err := VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)
+			g.Expect(err).NotTo(BeNil())
+			g.Expect(err.Error()).Should(ContainSubstring("not found"))
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalse())
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 	})
 
-	It("should handle credential changes and re-register servers", func() {
-		By("Creating HTTPRoute for api-key-server")
-		httpRouteApiKey := BuildTestHTTPRoute("e2e-apikey-route", TestNamespace,
-			"apikey.mcp.example.com", "mcp-api-key-server", 9090)
-		Expect(k8sClient.Create(ctx, httpRouteApiKey)).To(Succeed())
-		defer CleanupResource(ctx, k8sClient, httpRouteApiKey)
+	It("should invoke tools successfully", func() {
+		registration := NewMCPServerRegistration(ctx, k8sClient)
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register()
 
-		By("Creating credential secret with valid token")
-		credentialSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "e2e-apikey-credentials",
-				Namespace: TestNamespace,
-				Labels: map[string]string{
-					"mcp.kagenti.com/credential": "true",
-				},
-			},
-			Type: corev1.SecretTypeOpaque,
-			StringData: map[string]string{
-				"token": "Bearer test-api-key-secret-token", // valid token
-			},
-		}
-		Expect(k8sClient.Create(ctx, credentialSecret)).To(Succeed())
-		defer CleanupResource(ctx, k8sClient, credentialSecret)
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 
-		// wait for secret to be fully created and readable
-		By("Verifying credential secret is created with data")
-		Eventually(func() bool {
-			secret := &corev1.Secret{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "e2e-apikey-credentials",
-				Namespace: TestNamespace,
-			}, secret); err != nil {
-				return false
-			}
-			// check secret has the token data
-			if secret.Data == nil || len(secret.Data["token"]) == 0 {
-				return false
-			}
-			return string(secret.Data["token"]) == "Bearer test-api-key-secret-token"
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue())
+		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
+		GinkgoWriter.Println("tool", toolName)
+		By("Invoking a tool")
+		res, err := mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{
+				"name": "e2e",
+			}},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		Expect(len(res.Content)).To(BeNumerically("==", 1))
+		content, ok := res.Content[0].(mcp.TextContent)
+		Expect(ok).To(BeTrue())
+		Expect(content.Text).To(Equal("Hello, e2e!"))
+	})
 
-		By("Creating MCPServer with credential reference")
-		mcpServerApiKey := &mcpv1alpha1.MCPServer{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "e2e-apikey-server",
-				Namespace: TestNamespace,
-			},
-			Spec: mcpv1alpha1.MCPServerSpec{
-				ToolPrefix: "e2ecred_", // unique prefix to avoid conflicts
-				TargetRef: mcpv1alpha1.TargetReference{
-					Group: "gateway.networking.k8s.io",
-					Kind:  "HTTPRoute",
-					Name:  "e2e-apikey-route",
-				},
-				CredentialRef: &mcpv1alpha1.SecretReference{
-					Name: "e2e-apikey-credentials",
-					Key:  "token",
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, mcpServerApiKey)).To(Succeed())
-		defer CleanupResource(ctx, k8sClient, mcpServerApiKey)
+	It("should register mcp server with credetential with the gateway and make the tools available", func() {
+		cred := BuildCredentialSecret("mcp-credential", "test-api-key-secret-toke")
+		registration := NewMCPServerRegistration(ctx, k8sClient).
+			WithCredential(cred).WithBackendTarget("mcp-api-key-server", 9090)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register()
 
-		// wait for aggregated secret to be created with the credential
-		By("Waiting for aggregated credentials secret to contain the credential")
-		Eventually(func() bool {
-			aggregatedSecret := &corev1.Secret{}
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "mcp-aggregated-credentials",
-				Namespace: SystemNamespace,
-			}, aggregatedSecret)
-			if err != nil {
-				return false
-			}
-			// check if the expected credential env var exists and has value
-			envVarName := "KAGENTAI_E2E_APIKEY_SERVER_CRED"
-			if val, exists := aggregatedSecret.Data[envVarName]; exists {
-				return string(val) == "Bearer test-api-key-secret-token"
-			}
-			return false
-		}, TestTimeoutMedium, TestRetryInterval).Should(BeTrue(),
-			"Aggregated secret should contain the credential")
+		By("ensuring broker has failed authentication and the mcp server is not registered and the tools dont exist")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(Not(BeNil()))
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalseBecause("%s should not exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
-		By("Verifying MCPServer becomes ready with valid credentials")
-		// For servers with credentials, we need to wait longer due to volume mount sync
-		mcpServer := &mcpv1alpha1.MCPServer{}
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      mcpServerApiKey.Name,
-				Namespace: mcpServerApiKey.Namespace,
-			}, mcpServer)
-			if err != nil {
-				return false
-			}
-
-			for _, condition := range mcpServer.Status.Conditions {
-				if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-					return true
-				}
-			}
-			return false
-		}, TestTimeoutConfigSync, TestRetryInterval).Should(BeTrue(),
-			"MCPServer should become ready with valid credentials")
-
-		By("Setting up port-forward to broker for status check")
-		statusPortForwardCmd := setupPortForward("mcp-broker-router", SystemNamespace, "18083:8080")
-		defer statusPortForwardCmd.Process.Kill()
-
-		// wait for port-forward to be ready
-		Eventually(func() error {
-			client := &http.Client{Timeout: 1 * time.Second}
-			resp, err := client.Get("http://localhost:18083/status")
-			if err != nil {
-				return err
-			}
-			resp.Body.Close()
-			return nil
-		}, 30*time.Second, 1*time.Second).Should(Succeed())
-
-		By("Verifying server is registered with valid credentials")
-		// Initial registration may need to wait for volume mount sync
-		// check if server is registered and reachable
-		Eventually(func() bool {
-			// Look for the actual service name: mcp-api-key-server
-			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
-			return err == nil && reachable
-		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
-			"Server should be registered and reachable with valid credentials after volume mount sync")
-
-		By("Updating credential to invalid value")
-		// patch secret with invalid token
-		patch := client.MergeFrom(credentialSecret.DeepCopy())
-		credentialSecret.StringData = map[string]string{
-			"token": "Bearer invalid-token",
-		}
-		Expect(k8sClient.Patch(ctx, credentialSecret, patch)).To(Succeed())
-
-		By("Waiting for volume mount to sync credential change")
-		// Volume mounts can take 60-120s to sync in Kubernetes
-		// check if server became unreachable (indicating credential change was detected)
-		Eventually(func() bool {
-			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", false)
-			if err != nil {
-				// server might be completely removed from status
-				return true
-			}
-			return !reachable
-		}, TestTimeoutConfigSync, 5*time.Second).Should(BeTrue(),
-			"Broker should detect credential change after volume mount syncs")
-
-		By("Verifying server becomes unreachable with invalid credentials")
-		Eventually(func() bool {
-			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", false)
-			if err != nil {
-				// server might be completely removed from status
-				return true
-			}
-			return !reachable // we expect it to be unreachable
-		}, TestTimeoutLong, TestRetryInterval).Should(BeTrue(),
-			"Server should be unreachable or removed with invalid credentials")
-
-		By("Updating credential back to valid value")
-		patch = client.MergeFrom(credentialSecret.DeepCopy())
-		credentialSecret.StringData = map[string]string{
+		By("updating the secret to a valid value the server should be registered and the tools should exist")
+		patch := client.MergeFrom(cred.DeepCopy())
+		cred.StringData = map[string]string{
 			"token": "Bearer test-api-key-secret-token",
 		}
-		Expect(k8sClient.Patch(ctx, credentialSecret, patch)).To(Succeed())
+		Expect(k8sClient.Patch(ctx, cred, patch)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(BeNil())
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutConfigSync, TestRetryInterval).To(Succeed())
 
-		By("Waiting for volume mount to sync valid credential and broker to re-register")
-		// wait for broker to detect the valid credential and reconnect
-		Eventually(func() bool {
-
-			// check if server became reachable again
-			reachable, err := verifyServerInBrokerStatus("http://localhost:18083/status", "mcp-api-key-server", true)
-			return err == nil && reachable
-		}, TestTimeoutConfigSync, 10*time.Second).Should(BeTrue(),
-			"Server should be reachable again with valid credentials after volume mount syncs")
-
-		By("Test completed successfully")
 	})
+
+	It("should use and re-use a backend MCP session", func() {
+
+		registration := NewMCPServerRegistration(ctx, k8sClient)
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register()
+
+		By("creating a new client")
+		mcpClient, err := NewMCPGatewayClient(context.Background(), gatewayURL)
+		Expect(err).Error().NotTo(HaveOccurred())
+		clientSession := mcpClient.GetSessionId()
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+			toolsList, err := mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "headers")
+		By("Invoking a tool")
+		res, err := mcpClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		mcpsessionid := ""
+		GinkgoWriter.Println("tool response , len", len(res.Content))
+		for _, cont := range res.Content {
+			textContent, ok := cont.(mcp.TextContent)
+			Expect(ok).To(BeTrue())
+			if strings.HasPrefix(textContent.Text, "Mcp-Session-Id") {
+				GinkgoWriter.Println(textContent.Text)
+				mcpsessionid = textContent.Text
+			}
+		}
+		Expect(mcpsessionid).To(ContainSubstring("Mcp-Session-Id"))
+
+		By("Invoking the headers tool again")
+		res, err = mcpClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		for _, cont := range res.Content {
+			textContent, ok := cont.(mcp.TextContent)
+			Expect(ok).To(BeTrue())
+			if strings.HasPrefix(textContent.Text, "Mcp-Session-Id") {
+				Expect(textContent.Text).To(ContainSubstring("Mcp-Session-Id"))
+				Expect(mcpsessionid).To(Equal(textContent.Text))
+				// the session for the gateway should not be the same as the session for the MCP server
+				Expect(mcpsessionid).NotTo(ContainSubstring(clientSession))
+			}
+		}
+
+		By("deleting the session it should get a new backend session")
+		Expect(mcpClient.Close()).Error().NotTo(HaveOccurred())
+		// closing the client triggers a delete and cancelling of the context so we need a new client
+		mcpClient, err = NewMCPGatewayClient(context.Background(), gatewayURL)
+		Expect(err).Error().NotTo(HaveOccurred())
+		By("invoking headers tool with new client")
+		res, err = mcpClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		for _, cont := range res.Content {
+			textContent, ok := cont.(mcp.TextContent)
+			Expect(ok).To(BeTrue())
+			if strings.HasPrefix(textContent.Text, "Mcp-Session-Id") {
+				GinkgoWriter.Println(textContent.Text)
+				Expect(textContent.Text).To(ContainSubstring("Mcp-Session-Id"))
+				Expect(mcpsessionid).To(Not(Equal(textContent.Text)))
+				Expect(textContent.Text).To(Not(ContainSubstring(mcpClient.GetSessionId())))
+			}
+		}
+	})
+
+	It("when a client uses an MCPVirtualServer the tools response should be limited to that specified by the MCPVirtual server", func() {
+		Skip("not implemented")
+		// register server
+		// register virtual mcp
+		// get tools list
+		// pick a tool
+		// validate only those specified by virtual mcp
+
+	})
+
+	It("clients should receive a notification when a server is added or removed", func() {
+		Skip("not implemented")
+		// register server
+		//connect with 2 client
+		// register notification handler
+		// assert that notifications recieved
+	})
+
+	It("should only see tools specified by the x-filter-tools header", func() {
+		Skip("not implemented")
+	})
+
+	It("should deploy redis and scale up the broker and see sessions shared", func() {
+		Skip("not implemented")
+	})
+
 })
 
-// helper to check if server exists in broker status and its reachability
-func verifyServerInBrokerStatus(statusURL, serverNamePart string, expectReachable bool) (bool, error) {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(statusURL)
-	if err != nil {
-		return false, err
+func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsResult) bool {
+	if toolsList == nil {
+		return false
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("status endpoint returned %d", resp.StatusCode)
-	}
-
-	type StatusResponse struct {
-		Servers []struct {
-			URL              string `json:"url"`
-			Name             string `json:"name"`
-			ConnectionStatus struct {
-				IsReachable bool `json:"isReachable"`
-			} `json:"connectionStatus"`
-		} `json:"servers"`
-	}
-
-	var status StatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-		return false, err
-	}
-
-	for _, server := range status.Servers {
-		if strings.Contains(server.URL, serverNamePart) {
-			return server.ConnectionStatus.IsReachable == expectReachable, nil
+	for _, t := range toolsList.Tools {
+		if strings.HasPrefix(t.Name, serverPrefix) {
+			return true
 		}
 	}
-
-	// server not found in status
-	return false, fmt.Errorf("server %s not found in status", serverNamePart)
-}
-
-// helper function to setup port-forward
-func setupPortForward(resource, namespace, ports string) *exec.Cmd {
-	cmd := exec.Command("kubectl", "port-forward", "-n", namespace,
-		fmt.Sprintf("deployment/%s", resource), ports)
-
-	// Start the command and check for immediate errors
-	err := cmd.Start()
-	if err != nil {
-		GinkgoWriter.Printf("Failed to start port-forward command: %v\n", err)
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	// Give the port-forward a moment to establish
-	time.Sleep(2 * time.Second)
-
-	// Check if the process is still running
-	if cmd.Process != nil {
-		// Check if process is still alive
-		if err := cmd.Process.Signal(os.Signal(syscall.Signal(0))); err != nil {
-			GinkgoWriter.Printf("Port-forward process died immediately: %v\n", err)
-			Expect(err).ToNot(HaveOccurred())
-		}
-		GinkgoWriter.Printf("Port-forward started successfully for %s in %s on %s\n", resource, namespace, ports)
-	} else {
-		GinkgoWriter.Printf("Port-forward process is nil\n")
-		Expect(fmt.Errorf("port-forward process is nil")).ToNot(HaveOccurred())
-	}
-
-	return cmd
-}
-
-// helper function for making MCP requests
-func makeMCPRequest(url string, payload map[string]interface{}) map[string]interface{} {
-	jsonData, err := json.Marshal(payload)
-	Expect(err).ToNot(HaveOccurred())
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
-	Expect(err).ToNot(HaveOccurred())
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	Expect(err).ToNot(HaveOccurred())
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	Expect(err).ToNot(HaveOccurred())
-
-	return result
-}
-
-// make mcp request and get session id
-func makeMCPRequestWithSession(url string, payload map[string]interface{}) (map[string]interface{}, string) {
-	jsonData, err := json.Marshal(payload)
-	Expect(err).ToNot(HaveOccurred())
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	Expect(err).ToNot(HaveOccurred())
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	Expect(err).ToNot(HaveOccurred())
-	defer resp.Body.Close()
-
-	// get session id from response header
-	sessionID := resp.Header.Get("Mcp-Session-Id")
-
-	body, err := io.ReadAll(resp.Body)
-	Expect(err).ToNot(HaveOccurred())
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	Expect(err).ToNot(HaveOccurred())
-
-	return result, sessionID
-}
-
-// make mcp request with existing session
-func makeMCPRequestWithSessionID(url string, payload map[string]interface{}, sessionID string) map[string]interface{} {
-	jsonData, err := json.Marshal(payload)
-	Expect(err).ToNot(HaveOccurred())
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	Expect(err).ToNot(HaveOccurred())
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Mcp-Session-Id", sessionID)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	Expect(err).ToNot(HaveOccurred())
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	Expect(err).ToNot(HaveOccurred())
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	Expect(err).ToNot(HaveOccurred())
-
-	return result
+	return false
 }

@@ -172,13 +172,13 @@ func main() {
 
 	ctx := context.Background()
 
-	sessionCache, err := session.NewCache()
+	sessionCache, err := session.NewCache(ctx)
 	if err != nil {
 		panic("failed to setup session cache" + err.Error())
 	}
 	if cacheConnectionStringFlag != "" {
 		logger.Info("session cache using external store")
-		sessionCache, err = session.NewCache(session.WithConnectionString(cacheConnectionStringFlag))
+		sessionCache, err = session.NewCache(ctx, session.WithConnectionString(cacheConnectionStringFlag))
 		if err != nil {
 			panic("failed to setup session cache" + err.Error())
 		}
@@ -215,14 +215,14 @@ func main() {
 	LoadConfig(mcpConfigFile)
 
 	logger.Info("config: notifying observers of config change")
-	mcpConfig.Notify(ctx)
+	mcpConfig.Notify()
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
 		logger.Info("mcp servers config changed ", "config file", in.Name)
 		mutex.Lock()
 		defer mutex.Unlock()
 		LoadConfig(mcpConfigFile)
-		mcpConfig.Notify(ctx)
+		mcpConfig.Notify()
 	})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
