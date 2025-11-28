@@ -14,8 +14,38 @@ keycloak-install-impl:
 	@echo "Waiting for Keycloak to be ready..."
 	@kubectl wait --for=condition=ready pod -l app=keycloak -n $(KEYCLOAK_NAMESPACE) --timeout=120s || true
 	@echo ""
+	@echo "Patching Gateway for the Keycloak route..."
+	@kubectl patch gateway mcp-gateway -n gateway-system --type json -p "$$(cat config/keycloak/patch-gateway.json)"
+	@echo ""
 	@echo "Creating HTTPRoute"
 	@kubectl apply -f config/keycloak/httproute.yaml
+	@echo ""
+	@echo "Requesting a certificate for Keycloak..."
+	@kubectl apply -f config/keycloak/certificate.yaml
+	@until kubectl get secret mcp-gateway-keycloak-cert -n gateway-system &>/dev/null; do echo "Waiting for secret..."; sleep 2; done
+	@echo ""
+	@echo "Reconfiguring the Kubernetes API server to trust the Keycloak server for authentication..."
+	@mkdir -p out/certs
+	@kubectl get secret mcp-gateway-keycloak-cert -n gateway-system -o jsonpath='{.data.ca\.crt}' | base64 -d > out/certs/ca.crt
+	@echo "Keycloak TLS certificate extracted to out/certs/ca.crt (bind-mounted to API server)"
+	@GATEWAY_IP=$$(kubectl get gateway/mcp-gateway -n gateway-system -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '127.0.0.1'); \
+		echo "Setting Keycloak hostname to resolve to the MCP Gateway IP: $$GATEWAY_IP"; \
+		docker exec mcp-gateway-control-plane bash -c "grep -q 'keycloak.127-0-0-1.sslip.io' /etc/hosts || echo '$$GATEWAY_IP keycloak.127-0-0-1.sslip.io' >> /etc/hosts" || \
+		podman exec mcp-gateway-control-plane bash -c "grep -q 'keycloak.127-0-0-1.sslip.io' /etc/hosts || echo '$$GATEWAY_IP keycloak.127-0-0-1.sslip.io' >> /etc/hosts"
+	@echo "Keycloak hostname set to resolve to the MCP Gateway IP"
+	@echo "Restarting Kubernetes API server to pick up new configs..."
+	@docker exec mcp-gateway-control-plane pkill -f kube-apiserver || \
+		podman exec mcp-gateway-control-plane pkill -f kube-apiserver
+	@echo "Waiting for API server to restart..."
+	@sleep 5
+	@echo "Waiting for API server to be ready..."
+	@for i in $$(seq 1 30); do \
+		if kubectl get --raw /healthz >/dev/null 2>&1; then \
+			echo "Kubernetes API server updated with new configs"; \
+			break; \
+		fi; \
+		sleep 2; \
+	done
 	@echo ""
 	@echo "🎉 Keycloak installed with bootstrapped MCP realm!"
 	@echo ""
@@ -32,6 +62,8 @@ keycloak-install-impl:
 
 .PHONY: keycloak-uninstall
 keycloak-uninstall: # Uninstall Keycloak
+	@idx=$$(kubectl get gateway mcp-gateway -n gateway-system -o json | jq -r '.spec.listeners | map(.name=="keycloak") | index(true)') && \
+		kubectl patch gateway mcp-gateway -n gateway-system --type='json' -p="[{\"op\":\"remove\",\"path\":\"/spec/listeners/$${idx}\"}]"
 	@kubectl delete -f config/keycloak/httproute.yaml 2>/dev/null || true
 	@kubectl delete -f config/keycloak/deployment.yaml 2>/dev/null || true
 	@kubectl delete -f config/keycloak/realm-import.yaml 2>/dev/null || true

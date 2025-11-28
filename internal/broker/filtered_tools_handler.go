@@ -90,18 +90,18 @@ func (broker *mcpBrokerImpl) filterTools(authorizedTools map[string][]string) []
 	var filteredTools []mcp.Tool
 	for server, allowedToolNames := range authorizedTools {
 		slog.Debug("checking tools for server ", "server", server, "allowed tools for server", allowedToolNames, "mcpServers", broker.mcpServers)
-		// we key off the host so have to iterate for now
-		upstreamServer := broker.mcpServers.findByHost(server)
+		// we key off the name of the mcp server so have to iterate for now
+		upstreamServer := broker.mcpServers.findByName(server)
 		if upstreamServer == nil {
 			broker.logger.Debug("failed to find registered upstream ", "server", server)
 			continue
 		}
-		if upstreamServer.Hostname != server {
+		if upstreamServer.Name != server {
 			continue
 		}
 
 		if upstreamServer.toolsResult == nil {
-			broker.logger.Debug("no tools registered for upstream server", "server", upstreamServer.Hostname)
+			broker.logger.Debug("no tools registered for upstream server", "server", upstreamServer.Name)
 			continue
 		}
 		broker.logger.Debug("upstream server found ", "upstream ", upstreamServer, "tools", upstreamServer.toolsResult.Tools)
