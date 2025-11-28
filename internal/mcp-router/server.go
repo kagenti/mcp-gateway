@@ -48,6 +48,7 @@ func (s *ExtProcServer) OnConfigChange(_ context.Context, newConfig *config.MCPS
 func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer) error {
 	var (
 		localRequestHeaders *extProcV3.HttpHeaders
+		requestID           string
 		streaming           = false
 		mcpRequest          *MCPRequest
 	)
@@ -62,9 +63,15 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 		switch r := req.Request.(type) {
 		case *extProcV3.ProcessingRequest_RequestHeaders:
 			// TODO we are ignoring errors here
+			if r.RequestHeaders == nil {
+				return fmt.Errorf("no request headers present")
+			}
 			localRequestHeaders = r.RequestHeaders
 			responses, _ := s.HandleRequestHeaders(r.RequestHeaders)
-			s.Logger.Debug("[ext_proc ] Process: request headers", "local headers ", localRequestHeaders.Headers)
+			requestID = getSingleValueHeader(localRequestHeaders.Headers, "x-request-id")
+			path := getSingleValueHeader(localRequestHeaders.Headers, ":path")
+			method := getSingleValueHeader(localRequestHeaders.Headers, ":method")
+			s.Logger.Debug("[ext_proc ] Process: ProcessingRequest_RequestHeaders", "request id:", requestID, "path", path, "method", method)
 			for _, response := range responses {
 				s.Logger.Debug(fmt.Sprintf("Sending header processing instructions to Envoy: %+v", response))
 				if err := stream.Send(response); err != nil {
@@ -86,7 +93,7 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 					}
 				}
 			}
-
+			s.Logger.Debug("[ext_proc ] Process: ProcessingRequest_RequestBody", "request id:", requestID)
 			if len(r.RequestBody.Body) > 0 {
 				if err := json.Unmarshal(r.RequestBody.Body, &mcpRequest); err != nil {
 					s.Logger.Error(fmt.Sprintf("Error unmarshalling request body: %v", err))
@@ -123,6 +130,10 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			continue
 
 		case *extProcV3.ProcessingRequest_ResponseHeaders:
+			if r.ResponseHeaders == nil || localRequestHeaders == nil {
+				return fmt.Errorf("no response headers or request headers")
+			}
+			s.Logger.Debug("[ext_proc ] Process: ProcessingRequest_ResponseHeaders", "request id:", requestID)
 			responses, _ := s.HandleResponseHeaders(stream.Context(), r.ResponseHeaders, localRequestHeaders, mcpRequest)
 			for _, response := range responses {
 				s.Logger.Debug(fmt.Sprintf("Sending response header processing instructions to Envoy: %+v", response))
@@ -138,7 +149,8 @@ func (s *ExtProcServer) Process(stream extProcV3.ExternalProcessor_ProcessServer
 			s.Logger.Error("[EXT-PROC] Unexpected response body processing request received",
 				"size", len(r.ResponseBody.GetBody()),
 				"end_of_stream", r.ResponseBody.GetEndOfStream(),
-				"note", "response_body_mode is set to NONE in EnvoyFilter - this should not occur")
+				"note", "response_body_mode is set to NONE in EnvoyFilter - this should not occur",
+				"request-id", requestID)
 			// Return empty response to satisfy the interface
 			response := &extProcV3.ProcessingResponse{
 				Response: &extProcV3.ProcessingResponse_ResponseBody{
