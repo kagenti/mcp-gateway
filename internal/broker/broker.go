@@ -79,13 +79,6 @@ type MCPBroker interface {
 
 	IsRegistered(mcpURL string) bool
 
-	// Call a tool by gatewaying to upstream MCP server.  Note that the upstream connection may be created lazily.
-	CallTool(
-		ctx context.Context,
-		downstreamSession downstreamSessionID,
-		request mcp.CallToolRequest,
-	) (*mcp.CallToolResult, error)
-
 	// Returns tool annotations for a given tool name
 	ToolAnnotations(tool string) (mcp.ToolAnnotation, bool)
 
@@ -360,58 +353,6 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error
 	}
 
 	return nil
-}
-
-func (m *mcpBrokerImpl) CallTool(
-	ctx context.Context,
-	downstreamSession downstreamSessionID,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	// First, identify the upstream MCP server
-	upstreamToolInfo, ok := m.toolMapping[toolName(request.Params.Name)]
-	if !ok {
-		return nil, fmt.Errorf("unknown tool %q", request.Params.Name)
-	}
-
-	upstreamSessionMap, ok := m.serverSessions[upstreamToolInfo.url]
-	if !ok {
-		upstreamSessionMap = make(map[downstreamSessionID]*upstreamSessionState)
-		m.serverSessions[upstreamToolInfo.url] = upstreamSessionMap
-	}
-
-	upstreamSession, ok := upstreamSessionMap[downstreamSession]
-	if !ok {
-		// check for auth
-		upstream, ok := m.mcpServers[upstreamToolInfo.url]
-		if !ok {
-			return nil, fmt.Errorf("upstream server not found: %s", upstreamToolInfo.url)
-		}
-
-		// auth options
-		var options []transport.StreamableHTTPCOption
-		serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
-		if serverAuthHeaderValue != "" {
-			slog.Debug("Creating upstream session with authentication", "url", upstreamToolInfo.url)
-			options = append(options, transport.WithHTTPHeaders(map[string]string{
-				"Authorization": serverAuthHeaderValue,
-			}))
-		}
-
-		var err error
-		upstreamSession, err = m.createUpstreamSession(ctx, upstreamToolInfo.url, options...)
-		if err != nil {
-			return nil, fmt.Errorf("could not open upstream: %w", err)
-		}
-		upstreamSessionMap[downstreamSession] = upstreamSession
-	}
-
-	request.Params.Name = upstreamToolInfo.toolName
-	res, err := upstreamSession.client.CallTool(ctx, request)
-	if err != nil {
-		upstreamSession.lastContact = time.Now()
-	}
-
-	return res, err
 }
 
 func (m *mcpBrokerImpl) ToolAnnotations(tool string) (mcp.ToolAnnotation, bool) {
@@ -817,15 +758,6 @@ func toolToServerTool(newTool mcp.Tool) server.ServerTool {
 		Handler: func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return mcp.NewToolResultError("Kagenti MCP Broker doesn't forward tool calls"), nil
 		},
-		/* UNCOMMENT THIS TO TURN THE BROKER INTO A STAND-ALONE GATEWAY
-		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			result, err := m.CallTool(ctx,
-				downstreamSessionID(request.GetString("Mcp-Session-Id", "")),
-				request,
-			)
-			return result, err
-		}
-		*/
 	}
 }
 
