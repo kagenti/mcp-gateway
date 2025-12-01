@@ -150,6 +150,7 @@ deploy-example: install-crd ## Deploy example MCPServer resource
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-custom-path-server --timeout=60s 2>/dev/null || true
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-oidc-server --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=everything-server --timeout=60s
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=conformance-server --timeout=60s
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-custom-response --timeout=60s
 	@echo "All test servers ready, deploying MCPServer resources..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
@@ -170,7 +171,8 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/custom-path-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 	cd tests/servers/oidc-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-oidc-server:latest .
 	cd tests/servers/everything-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-everything-server:latest .
-	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .	
+	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .
+	cd tests/servers/conformance-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-conformance-server:latest .
 
 
 # Load test server images into Kind cluster
@@ -185,6 +187,7 @@ kind-load-test-servers: kind build-test-servers ## Load test server images into 
 	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-oidc-server:latest)
 	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-everything-server:latest)
 	$(call load-image,ghcr.io/kagenti/mcp-gateway/custom-response-server:latest)
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-conformance-server:latest)
 
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing

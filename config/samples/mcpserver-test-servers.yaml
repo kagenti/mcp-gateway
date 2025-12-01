@@ -116,6 +116,21 @@ spec:
 apiVersion: mcp.kagenti.com/v1alpha1
 kind: MCPServer
 metadata:
+  name: conformance-server
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  # toolPrefix: conformance_ # conformance test suite expects no prefix
+  targetRef:
+    # MCP Conformance Server - Typescript SDK based conformance test server
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: conformance-server-route
+---
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
   name: custom-response
   namespace: mcp-test
   labels:
