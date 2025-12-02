@@ -247,7 +247,7 @@ func VerifyConfigMapExists(ctx context.Context, k8sClient client.Client) {
 	Expect(configMap.Data["config.yaml"]).ToNot(BeEmpty())
 }
 
-// VerifyMCPServerReady checks if the MCPServer has Ready condition
+// VerifyMCPServerReady checks if the MCPServer has Ready condition. Once ready it should be able to be invoked
 func VerifyMCPServerReady(ctx context.Context, k8sClient client.Client, name, namespace string) error {
 	mcpServer := &mcpv1alpha1.MCPServer{}
 
@@ -363,11 +363,6 @@ func CleanupResource(ctx context.Context, k8sClient client.Client, obj client.Ob
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}
-
-	Eventually(func() bool {
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj)
-		return client.IgnoreNotFound(err) != nil
-	}, TestTimeoutMedium, TestRetryInterval).Should(BeFalse())
 }
 
 // DumpComponentLogs dumps logs for mcp-gateway components on test failure

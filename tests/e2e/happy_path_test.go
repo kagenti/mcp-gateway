@@ -264,6 +264,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 })
 
+// verifyMCPServerToolsPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
 func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsResult) bool {
 	if toolsList == nil {
 		return false
