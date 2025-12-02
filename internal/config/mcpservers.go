@@ -81,6 +81,16 @@ func (config *MCPServersConfig) GetServerConfigByName(serverName string) *MCPSer
 	return nil
 }
 
+// GetServerConfigByHostname get the routing config by hostname
+func (config *MCPServersConfig) GetServerConfigByHostname(hostname string) *MCPServer {
+	for _, server := range config.Servers {
+		if server.Hostname == hostname {
+			return server
+		}
+	}
+	return nil
+}
+
 // MCPServer represents a server
 type MCPServer struct {
 	Name             string
