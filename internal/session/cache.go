@@ -86,8 +86,16 @@ func (c *Cache) RemoveServerSession(ctx context.Context, key, mcpServerID string
 	return c.extClient.HDel(ctx, key, mcpServerID).Err()
 }
 
+// Close closes the cache connection
+func (c *Cache) Close() error {
+	if c.inmemory != nil {
+		return nil
+	}
+	return c.extClient.Close()
+}
+
 // NewCache returns a new cache
-func NewCache(opts ...func(*Cache)) (*Cache, error) {
+func NewCache(ctx context.Context, opts ...func(*Cache)) (*Cache, error) {
 	c := &Cache{
 		inmemory: nil,
 	}
@@ -99,10 +107,11 @@ func NewCache(opts ...func(*Cache)) (*Cache, error) {
 		if err != nil {
 			return c, err
 		}
+
 		c.extClient = redis.NewClient(opt)
-	} else {
-		c.inmemory = &sync.Map{}
+		return c, c.extClient.Ping(ctx).Err()
 	}
+	c.inmemory = &sync.Map{}
 	return c, nil
 }
 

@@ -2,7 +2,7 @@
 package credentials
 
 import (
-	"log/slog"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,15 +14,14 @@ const (
 )
 
 // Get reads credential from mounted secret file
-func Get(name string) string {
+func Get(name string) (string, error) {
+	if name == "" {
+		return "", nil
+	}
 	credPath := filepath.Join(MountPath, name)
 	data, err := os.ReadFile(credPath) //nolint:gosec // reading kubernetes mounted secrets
 	if err != nil {
-		if !os.IsNotExist(err) {
-			// log non-enoent errors
-			slog.Debug("Failed to read credential file", "path", credPath, "error", err)
-		}
-		return "" // empty if not found
+		return "", fmt.Errorf("failed to read credential from file %w", err)
 	}
-	return strings.TrimSpace(string(data))
+	return strings.TrimSpace(string(data)), nil
 }

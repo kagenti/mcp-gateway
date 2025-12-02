@@ -76,19 +76,19 @@ func TestOnConfigChange(t *testing.T) {
 		ToolPrefix: "_test1",
 	}
 	b.OnConfigChange(context.TODO(), conf)
-	if b.IsRegistered(server1.URL) {
+	if b.IsRegistered(server1.ID()) {
 		t.Fatalf("server1 should not be registered but is")
 	}
 
 	conf.Servers = append(conf.Servers, server1)
 	b.OnConfigChange(context.TODO(), conf)
-	if !b.IsRegistered(server1.URL) {
+	if !b.IsRegistered(server1.ID()) {
 		t.Fatalf("server1 should be registered but is not")
 	}
 
 	conf.Servers = []*config.MCPServer{}
 	b.OnConfigChange(context.TODO(), conf)
-	if b.IsRegistered(server1.URL) {
+	if b.IsRegistered(server1.ID()) {
 		t.Fatalf("server1 should not be registered but is")
 	}
 
@@ -99,17 +99,19 @@ func TestRegisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestRegisterServer\n")
 
 	broker := NewBroker(logger)
+	brokerImpl := broker.(*mcpBrokerImpl)
 
-	err := broker.RegisterServer(
+	_, err := brokerImpl.RegisterServerWithConfig(
 		context.Background(),
-		MCPAddr,
-		"testprefix-reg",
-		"mcp_add_service_cluster",
+		&config.MCPServer{
+			Name:       "test-server",
+			URL:        MCPAddr,
+			ToolPrefix: "testprefix-reg",
+			Hostname:   "mcp_add_service_cluster",
+			Enabled:    true,
+		},
 	)
 	require.NoError(t, err)
-
-	brokerImpl, ok := broker.(*mcpBrokerImpl)
-	require.True(t, ok)
 	require.NotNil(t, brokerImpl.listeningMCPServer)
 
 	expectedTools := map[string]*server.ServerTool{
@@ -270,25 +272,30 @@ func TestUnregisterServer(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "TestUnregisterServer\n")
 
 	broker := NewBroker(logger)
-	err := broker.RegisterServer(
+	brokerImpl := broker.(*mcpBrokerImpl)
+	serverConfig := &config.MCPServer{
+		Name:       "test-server-unreg",
+		URL:        MCPAddr,
+		ToolPrefix: "testprefix-unreg",
+		Hostname:   "mcp_add_service_cluster",
+		Enabled:    true,
+	}
+	_, err := brokerImpl.RegisterServerWithConfig(
 		context.Background(),
-		MCPAddr,
-		"testprefix-unreg",
-		"mcp_add_service_cluster",
+		serverConfig,
 	)
-	// err := broker.RegisterServer(context.Background(), "http://mcp-add:8000/mcp", "mcp_add_service_cluster")
 	require.NoError(t, err)
 
 	// It is an error to attempt to unregister an unknown server
-	err = broker.UnregisterServer(context.Background(), "http://mcp-time:8000/mcp")
+	err = broker.UnregisterServer(context.Background(), "unknown:unknown:http://mcp-time:8000/mcp")
 	require.Error(t, err)
 
 	// We should be able to unregister a known server
-	err = broker.UnregisterServer(context.Background(), MCPAddr)
+	err = broker.UnregisterServer(context.Background(), serverConfig.ID())
 	require.NoError(t, err)
 
 	// After the first unregister, the server should be unknown, and removing it again should fail
-	err = broker.UnregisterServer(context.Background(), MCPAddr)
+	err = broker.UnregisterServer(context.Background(), serverConfig.ID())
 	require.Error(t, err)
 
 	_ = broker.Shutdown(context.Background())

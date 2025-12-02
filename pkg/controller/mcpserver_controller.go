@@ -61,6 +61,7 @@ func generateCredentialEnvVar(mcpServerName string) string {
 
 // ServerInfo holds server information
 type ServerInfo struct {
+	ID                 string
 	Endpoint           string
 	Hostname           string
 	ToolPrefix         string
@@ -142,7 +143,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 		}
 	}
 
-	serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
+	serverInfo, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)
 	if err != nil {
 		log.Error(err, "Failed to discover servers from HTTPRoutes")
 		// still regenerate config to ensure credentials are aggregated
@@ -164,7 +165,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 		return r.regenerateAggregatedConfig(ctx)
 	}
 
-	ready, message, toolCount := r.evaluateValidationResults(statusResponse, serverInfos)
+	ready, message, toolCount := r.evaluateValidationResults(statusResponse, serverInfo)
 
 	if err := r.updateStatus(ctx, mcpServer, ready, message, toolCount); err != nil {
 		log.Error(err, "Failed to update status")
@@ -178,7 +179,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 	// if server has credentials and isn't ready, retry with exponential backoff
 	// this handles the case where secret volume mounts take time to propagate (60-120s)
 	// retry for any failure, not just "no broker validation data yet", as credentials might not be available initially
-	if mcpServer.Spec.CredentialRef != nil && !ready {
+	if !ready {
 		// calculate exponential backoff based on elapsed time since condition was set
 		baseDelay := 5 * time.Second
 		maxDelay := 60 * time.Second
@@ -300,7 +301,7 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 
 	for _, mcpServer := range mcpServerList.Items {
 
-		serverInfos, err := r.discoverServersFromHTTPRoutes(ctx, &mcpServer)
+		serverInfo, err := r.discoverServersFromHTTPRoutes(ctx, &mcpServer)
 		if err != nil {
 			log.Error(err, "Failed to discover server endpoints",
 				"name", mcpServer.Name,
@@ -308,27 +309,26 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 			continue
 		}
 
-		for _, serverInfo := range serverInfos {
-			serverName := fmt.Sprintf(
-				"%s/%s",
-				serverInfo.HTTPRouteNamespace,
-				serverInfo.HTTPRouteName,
-			)
-			serverConfig := config.ServerConfig{
-				Name:       serverName,
-				URL:        serverInfo.Endpoint,
-				Hostname:   serverInfo.Hostname,
-				ToolPrefix: serverInfo.ToolPrefix,
-				Enabled:    true,
-			}
-
-			// add credential env var if configured
-			if serverInfo.CredentialEnvVar != "" {
-				serverConfig.CredentialEnvVar = serverInfo.CredentialEnvVar
-			}
-
-			brokerConfig.Servers = append(brokerConfig.Servers, serverConfig)
+		serverName := fmt.Sprintf(
+			"%s/%s",
+			serverInfo.HTTPRouteNamespace,
+			serverInfo.HTTPRouteName,
+		)
+		serverConfig := config.ServerConfig{
+			Name:       serverName,
+			URL:        serverInfo.Endpoint,
+			Hostname:   serverInfo.Hostname,
+			ToolPrefix: serverInfo.ToolPrefix,
+			Enabled:    true,
 		}
+
+		// add credential env var if configured
+		if serverInfo.CredentialEnvVar != "" {
+			serverConfig.CredentialEnvVar = serverInfo.CredentialEnvVar
+		}
+
+		brokerConfig.Servers = append(brokerConfig.Servers, serverConfig)
+
 	}
 
 	// Process MCPVirtualServer resources
@@ -374,8 +374,7 @@ func (r *MCPReconciler) writeAggregatedConfig(
 func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
-) ([]ServerInfo, error) {
-	var serverInfos []ServerInfo
+) (*ServerInfo, error) {
 
 	targetRef := mcpServer.Spec.TargetRef
 
@@ -533,6 +532,7 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 	}
 
 	serverInfo := ServerInfo{
+		ID:                 serverID(httpRoute, mcpServer, endpoint),
 		Endpoint:           endpoint,
 		Hostname:           routingHostname,
 		ToolPrefix:         toolPrefix,
@@ -548,9 +548,7 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		serverInfo.CredentialEnvVar = envVarName
 	}
 
-	serverInfos = append(serverInfos, serverInfo)
-
-	return serverInfos, nil
+	return &serverInfo, nil
 }
 
 func (r *MCPReconciler) cleanupOrphanedHTTPRoutes(
@@ -687,44 +685,38 @@ func (r *MCPReconciler) updateHTTPRouteStatus(
 	return nil
 }
 
+func serverID(httpRoute *gatewayv1.HTTPRoute, mcpServer *mcpv1alpha1.MCPServer, endpoint string) string {
+	return fmt.Sprintf("%s:%s:%s", fmt.Sprintf("%s/%s", httpRoute.Namespace, httpRoute.Name), mcpServer.Spec.ToolPrefix, endpoint)
+}
+
 // evaluateValidationResults checks broker validation results for servers related to this MCPServer
 func (r *MCPReconciler) evaluateValidationResults(
 	statusResponse *broker.StatusResponse,
-	serverInfos []ServerInfo,
+	serverInfo *ServerInfo,
 ) (bool, string, int) {
 	if statusResponse == nil {
-		return true, "No validation data available", 0
-	}
-
-	// Create a map of server endpoints for quick lookup
-	serverEndpoints := make(map[string]bool)
-	for _, info := range serverInfos {
-		serverEndpoints[info.Endpoint] = true
+		return false, "No validation data available", 0
 	}
 
 	var errors []string
 	validServers := 0
-	totalRelatedServers := 0
 	totalToolCount := 0
 
 	// Log available endpoints for debugging
 	log := log.FromContext(context.Background())
-	log.V(1).Info("Evaluating validation results",
-		"serverInfoCount", len(serverInfos),
-		"statusServerCount", len(statusResponse.Servers),
-		"serverEndpoints", serverEndpoints)
 
 	// Check each server in the status response
 	for _, server := range statusResponse.Servers {
 		// Only check servers that belong to this MCPServer
-		if !serverEndpoints[server.URL] {
-			log.V(1).Info("Skipping server not in endpoints",
-				"serverURL", server.URL,
-				"serverName", server.Name,
-				"expectedEndpoints", serverEndpoints)
+		if server.ID != serverInfo.ID {
+			log.V(1).Info("NOT validating",
+				"serverID", serverInfo.ID,
+				"statusID", server.ID)
 			continue
 		}
-		totalRelatedServers++
+		log.V(1).Info("validating",
+			"serverID", serverInfo.ID,
+			"statusID", server.ID)
 
 		serverValid := true
 		var serverErrors []string
@@ -762,10 +754,6 @@ func (r *MCPReconciler) evaluateValidationResults(
 
 	if len(errors) > 0 {
 		return false, strings.Join(errors, "; "), totalToolCount
-	}
-
-	if totalRelatedServers == 0 {
-		return true, fmt.Sprintf("MCPServer successfully reconciled with %d servers (no broker validation data yet)", len(serverInfos)), 0
 	}
 
 	return true, fmt.Sprintf("MCPServer successfully reconciled and validated %d servers with %d tools", validServers, totalToolCount), totalToolCount

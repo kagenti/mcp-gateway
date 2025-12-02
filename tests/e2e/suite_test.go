@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	mcpclient "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -25,11 +28,12 @@ import (
 )
 
 var (
-	k8sClient  client.Client
-	testScheme *runtime.Scheme
-	cfg        *rest.Config
-	ctx        context.Context
-	cancel     context.CancelFunc
+	k8sClient        client.Client
+	testScheme       *runtime.Scheme
+	cfg              *rest.Config
+	ctx              context.Context
+	cancel           context.CancelFunc
+	mcpGatewayClient *mcpclient.Client
 )
 
 func TestE2E(t *testing.T) {
@@ -78,10 +82,37 @@ var _ = BeforeSuite(func() {
 	systemNs := &corev1.Namespace{}
 	err = k8sClient.Get(ctx, client.ObjectKey{Name: SystemNamespace}, systemNs)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("System namespace %s must exist", SystemNamespace))
+
+	By("setting up an mcp client for the gateway")
+	mcpGatewayClient, err = mcpclient.NewStreamableHttpClient(gatewayURL, transport.WithHTTPHeaders(map[string]string{"e2e": "client"}))
+	Expect(err).To(BeNil())
+	err = mcpGatewayClient.Start(context.Background())
+	Expect(err).To(BeNil())
+	res, err := mcpGatewayClient.Initialize(ctx, mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			Capabilities:    mcp.ClientCapabilities{},
+			ClientInfo: mcp.Implementation{
+				Name:    "e2e",
+				Version: "0.0.1",
+			},
+		},
+	})
+	Expect(err).Error().NotTo(HaveOccurred())
+	Expect(res.ServerInfo.Name).NotTo(BeEmpty())
+	mcpGatewayClient.OnNotification(func(notification mcp.JSONRPCNotification) {
+		//not sure what to do with these
+	})
+
+	GinkgoWriter.Println(res.ServerInfo)
 })
 
 var _ = AfterSuite(func() {
 	By("Tearing down the test environment")
+	if mcpGatewayClient != nil {
+		GinkgoWriter.Println("closing client")
+		mcpGatewayClient.Close()
+	}
 	if cancel != nil {
 		cancel()
 	}

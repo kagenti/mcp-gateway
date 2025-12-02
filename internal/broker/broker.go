@@ -25,18 +25,16 @@ var _ config.Observer = &mcpBrokerImpl{}
 // downstreamSessionID is for session IDs the gateway uses with its own clients
 type downstreamSessionID string
 
-// upstreamSessionID is for session IDs the gateway uses with upstream MCP servers
-type upstreamSessionID string
-
-// upstreamMCPURL identifies an upstream MCP server
-type upstreamMCPURL string
+// upstreamMCPID identifies an upstream MCP server
+type upstreamMCPID string
 
 // upstreamMCP identifies what we know about an upstream MCP server
 type upstreamMCP struct {
 	config.MCPServer
-	mpcClient        *client.Client        // The MCP client we hold open to listen for tool notifications
+	mcpClient        *client.Client        // The MCP client we hold open to listen for tool notifications
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
 	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
+	CredentialValue  string                `json:"-"` // in memory to allow quick access and comparison
 }
 
 // ClientType defines the type of MCP client being created
@@ -53,10 +51,7 @@ const (
 
 // upstreamSessionState tracks what we manage about a connection an upstream MCP server
 type upstreamSessionState struct {
-	initialized bool
-	client      *client.Client
-	sessionID   upstreamSessionID
-	lastContact time.Time
+	client *client.Client
 }
 
 // An MCP tool name
@@ -64,15 +59,13 @@ type toolName string
 
 // upstreamToolInfo references a single tool on an upstream MCP server
 type upstreamToolInfo struct {
-	url         upstreamMCPURL // An MCP server URL
-	toolName    string         // A tool name
+	id          upstreamMCPID // A deterministic ID
+	toolName    string        // A tool name
 	annotations mcp.ToolAnnotation
 }
 
 // MCPBroker manages a set of MCP servers and their sessions
 type MCPBroker interface {
-	// Implements the https://github.com/kagenti/mcp-gateway/blob/main/docs/design/flows.md#discovery flow
-	RegisterServer(ctx context.Context, mcpURL string, prefix string, name string) error
 
 	// Removes a server
 	UnregisterServer(ctx context.Context, mcpURL string) error
@@ -88,9 +81,6 @@ type MCPBroker interface {
 	// MCPServer gets an MCP server that federates the upstreams known to this MCPBroker
 	MCPServer() *server.MCPServer
 
-	// CreateSession creates a new MCP session for the given authority/host
-	CreateSession(ctx context.Context, authority string) (string, error)
-
 	// ValidateAllServers performs comprehensive validation of all registered servers and returns status
 	ValidateAllServers(ctx context.Context) StatusResponse
 
@@ -103,7 +93,7 @@ type MCPBroker interface {
 	config.Observer
 }
 
-type mcpServers map[upstreamMCPURL]*upstreamMCP
+type mcpServers map[upstreamMCPID]*upstreamMCP
 
 func (mcps mcpServers) findByHost(host string) *upstreamMCP {
 	for _, mcp := range mcps {
@@ -122,9 +112,10 @@ type mcpBrokerImpl struct {
 	// knownSessionIDs map[downstreamSessionID]clientStatus
 
 	// serverSessions tracks the sessions we maintain with upstream MCP servers
-	serverSessions map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState
+	serverSessions map[upstreamMCPID]map[downstreamSessionID]*upstreamSessionState
 
 	// mcpServers tracks the known servers
+	// TODO this should be protected or be a sync map
 	mcpServers mcpServers
 
 	// toolMapping tracks the unique gateway'ed tool name to its upstream MCP server implementation
@@ -163,8 +154,8 @@ func WithTrustedHeadersPublicKey(key string) func(mb *mcpBrokerImpl) {
 func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	mcpBkr := &mcpBrokerImpl{
 		// knownSessionIDs: map[downstreamSessionID]clientStatus{},
-		serverSessions: map[upstreamMCPURL]map[downstreamSessionID]*upstreamSessionState{},
-		mcpServers:     map[upstreamMCPURL]*upstreamMCP{},
+		serverSessions: map[upstreamMCPID]map[downstreamSessionID]*upstreamSessionState{},
+		mcpServers:     map[upstreamMCPID]*upstreamMCP{},
 		toolMapping:    map[toolName]*upstreamToolInfo{},
 		logger:         logger,
 	}
@@ -206,145 +197,143 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	return mcpBkr
 }
 
-func (m *mcpBrokerImpl) IsRegistered(mcpURL string) bool {
-	_, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
+func (m *mcpBrokerImpl) IsRegistered(id string) bool {
+	_, ok := m.mcpServers[upstreamMCPID(id)]
 	return ok
 }
 
 func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServersConfig) {
 	m.logger.Debug("Broker OnConfigChange called")
 	// unregister decommissioned servers
-	for upstreamHost := range m.mcpServers {
+	for serverID := range m.mcpServers {
 		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
-			return upstreamHost == upstreamMCPURL(s.URL)
+			return serverID == upstreamMCPID(s.ID())
 		}) {
-			if err := m.UnregisterServer(ctx, string(upstreamHost)); err != nil {
-				m.logger.Warn("unregister failed ", "server", upstreamHost)
+			if err := m.UnregisterServer(ctx, string(serverID)); err != nil {
+				m.logger.Warn("unregister failed ", "server", serverID)
 			}
 		}
 	}
 	// ensure new servers registered
+	discoveredTools := []mcp.Tool{}
 	for _, mcpServer := range conf.Servers {
-		if err := m.RegisterServerWithConfig(ctx, mcpServer); err != nil {
+		m.logger.Info("Registering Server ", "mcpID", mcpServer.ID())
+		tools, err := m.RegisterServerWithConfig(ctx, mcpServer)
+		if err != nil {
 			slog.Warn("Could not register upstream MCP", "upstream", mcpServer.URL, "name", mcpServer.Name, "error", err)
+			continue
 		}
+		if tools != nil {
+			discoveredTools = append(discoveredTools, tools...)
+		}
+		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID())
+	}
+	m.logger.Debug("OnConfigChange discovered tools ", "total", len(discoveredTools))
+	if len(discoveredTools) > 0 {
+		m.listeningMCPServer.AddTools(toolsToServerTools(discoveredTools)...)
 	}
 }
 
 // RegisterServerWithConfig registers an MCP server with full config
-func (m *mcpBrokerImpl) RegisterServerWithConfig(
-	ctx context.Context,
-	mcpServer *config.MCPServer,
-) error {
-	existingUpstream, isRegistered := m.mcpServers[upstreamMCPURL(mcpServer.URL)]
-
+func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer *config.MCPServer) ([]mcp.Tool, error) {
+	credentialValueChanged := false
+	credential, err := credentials.Get(mcpServer.CredentialEnvVar)
+	if err != nil {
+		// only log this for now and allow it to go in to the back off in register tools
+		m.logger.Error("registration failed", "server", mcpServer.ID(), "error", err)
+		// as we were not able to read the credential assume it has changed. TODO (back off retry registration instead)
+		credentialValueChanged = true
+	}
 	// check if configuration changed for already registered server
-	if isRegistered {
-		configChanged := existingUpstream.Name != mcpServer.Name ||
-			existingUpstream.ToolPrefix != mcpServer.ToolPrefix ||
-			existingUpstream.Hostname != mcpServer.Hostname ||
-			existingUpstream.CredentialEnvVar != mcpServer.CredentialEnvVar
+	if existingUpstream, isRegistered := m.mcpServers[upstreamMCPID(mcpServer.ID())]; isRegistered {
 
-		// also check if credential VALUE changed (not just env var name)
-		credentialValueChanged := false
 		if mcpServer.CredentialEnvVar != "" {
-			oldCred := credentials.Get(existingUpstream.CredentialEnvVar)
-			newCred := credentials.Get(mcpServer.CredentialEnvVar)
-			credentialValueChanged = oldCred != newCred
+			m.logger.Debug("RegisterServerWithConfig: checking credential envvar ", "server", mcpServer.ID())
+			if credential != "" && existingUpstream.CredentialValue != credential {
+				existingUpstream.CredentialValue = credential
+				credentialValueChanged = true
+			}
 		}
-
+		configChanged := mcpServer.ConfigChanged(existingUpstream.MCPServer)
 		if !configChanged && !credentialValueChanged {
-			m.logger.Debug("mcp server is already registered with same config", "mcpURL", mcpServer.URL)
-			return nil
+			m.logger.Debug("mcp server is already registered and upto date", "server ", mcpServer.ID())
+			return nil, nil
 		}
-
 		// config or credentials changed, unregister and re-register
-		m.logger.Info("mcp server config or credentials changed, re-registering",
+		m.logger.Info("RegisterServerWithConfig mcp re-registering",
+			"server", mcpServer.ID(),
 			"mcpURL", mcpServer.URL,
 			"configChanged", configChanged,
 			"credentialValueChanged", credentialValueChanged)
 
-		if err := m.UnregisterServer(ctx, mcpServer.URL); err != nil {
+		if err := m.UnregisterServer(ctx, mcpServer.ID()); err != nil {
 			m.logger.Warn("failed to unregister before re-registration", "error", err)
+			return nil, err
 		}
 	}
 
-	slog.Info("Registering server", "mcpURL", mcpServer.URL, "prefix", mcpServer.ToolPrefix)
-
+	m.logger.Info("Registering server", "mcpURL", mcpServer.Name, "prefix", mcpServer.ToolPrefix)
 	upstream := &upstreamMCP{
-		MCPServer: *mcpServer,
+		MCPServer:       *mcpServer,
+		CredentialValue: credential,
 	}
 
+	m.logger.Debug("Registering server adding upstream", "mcp server", mcpServer.ID())
 	// Add to map BEFORE discovering tools so createMCPClient can find it
-	m.mcpServers[upstreamMCPURL(mcpServer.URL)] = upstream
-
+	m.mcpServers[upstreamMCPID(mcpServer.ID())] = upstream
+	// TODO this will block
 	newTools, err := m.discoverTools(ctx, upstream)
 	if err != nil {
-		slog.Info("Failed to discover tools, will retry with backoff", "mcpURL", mcpServer.URL, "error", err)
+		m.logger.Info("Failed to discover tools, will retry with backoff", "mcpURL", mcpServer.URL, "error", err)
 		// start background retry with exponential backoff
 		go m.retryDiscovery(context.Background(), upstream)
-		return nil // don't return error, allow partial registration
+		return nil, nil // don't return error, allow partial registration
 	}
-	slog.Info("Discovered tools", "mcpURL", mcpServer.URL, "num tools", len(newTools))
-	slog.Info("Server registered", "url", mcpServer.URL, "totalServers", len(m.mcpServers))
-	m.listeningMCPServer.AddTools(toolsToServerTools(mcpServer.URL, newTools)...)
-
-	return nil
+	m.logger.Info("Discovered tools", "serverName", mcpServer.Name, "num tools", len(newTools))
+	if len(newTools) > 0 {
+		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
+	}
+	return newTools, nil
 }
 
-// RegisterServer registers an MCP server
-func (m *mcpBrokerImpl) RegisterServer(
-	ctx context.Context,
-	mcpURL string,
-	prefix string,
-	name string,
-) error {
-	return m.RegisterServerWithConfig(ctx, &config.MCPServer{
-		Name:       name,
-		URL:        mcpURL,
-		ToolPrefix: prefix,
-		Enabled:    true,
-	})
-}
-
-func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, mcpURL string) error {
-	upstream, ok := m.mcpServers[upstreamMCPURL(mcpURL)]
+func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, id string) error {
+	upstream, ok := m.mcpServers[upstreamMCPID(id)]
 	if !ok {
 		return fmt.Errorf("unknown host")
 	}
 
 	// only close client if it exists (might be nil if discovery failed)
-	if upstream.mpcClient != nil {
-		err := upstream.mpcClient.Close()
+	if upstream.mcpClient != nil {
+		err := upstream.mcpClient.Close()
 		if err != nil {
 			m.logger.Info("Failed to close upstream connection while unregistering",
-				"mcpURL", mcpURL,
+				"mcpID", id,
 				"error", err,
 			)
 		}
 	}
 
-	delete(m.mcpServers, upstreamMCPURL(mcpURL))
+	delete(m.mcpServers, upstreamMCPID(id))
 
 	// Find tools registered to this server
 	toolsToDelete := make([]string, 0)
 	for toolName, upstreamToolInfo := range m.toolMapping {
-		if upstreamToolInfo.url == upstreamMCPURL(mcpURL) {
+		if upstreamToolInfo.id == upstreamMCPID(id) {
 			toolsToDelete = append(toolsToDelete, string(toolName))
 		}
 	}
 	m.listeningMCPServer.DeleteTools(toolsToDelete...)
 
 	// Close any connections to the upstream server
-	mapping, ok := m.serverSessions[upstreamMCPURL(mcpURL)]
+	mapping, ok := m.serverSessions[upstreamMCPID(id)]
 	if ok {
 		for downstreamSessionID, upstreamSessionState := range mapping {
 			err := upstreamSessionState.client.Close()
 			if err != nil {
 				slog.Warn(
 					"Could not close upstream session",
-					"mcpURL",
-					mcpURL,
+					"mcpID",
+					id,
 					"sessionID",
 					downstreamSessionID,
 				)
@@ -363,28 +352,27 @@ func (m *mcpBrokerImpl) ToolAnnotations(tool string) (mcp.ToolAnnotation, bool) 
 	return upstreamToolInfo.annotations, true
 }
 
+// TODO(craig) consider if these should actually just be methods om the upstream type
 func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP, options ...transport.StreamableHTTPCOption) ([]mcp.Tool, error) {
-	// Some MCP servers require a bearer token or other Authorization to init and list tools
-	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
-	if serverAuthHeaderValue != "" {
-		options = append(options, transport.WithHTTPHeaders(map[string]string{
-			"Authorization": serverAuthHeaderValue,
-		}))
+
+	if upstream.mcpClient == nil {
+		// TODO (craig) most of the function require an upstremMCP object
+		// Connection mgmt shouldn't be a part of this function
+		// prob functions should just become methods of that object
+		//upstreamMCP.Connect()
+		//upstreamMCP.ListTools()
+		//upstreamMCP.Ping() etc...
+		options = append(options, transport.WithContinuousListening())
+		var resInit *mcp.InitializeResult
+		client, resInit, err := m.createMCPClient(ctx, upstream.URL, upstream.ID(), ClientTypeDiscovery, options...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create streamable client: %w", err)
+		}
+		upstream.mcpClient = client
+		upstream.initializeResult = resInit
 	}
 
-	// Continue listening for future tool updates
-	options = append(options, transport.WithContinuousListening())
-
-	var err error
-	var resInit *mcp.InitializeResult
-	upstream.mpcClient, resInit, err = m.createMCPClient(ctx, upstream.URL, upstream.Name, ClientTypeDiscovery, options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create streamable client: %w", err)
-	}
-
-	upstream.initializeResult = resInit
-
-	resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
+	resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
@@ -395,23 +383,23 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 	// TODO probe resources other than tools
 
 	// Keep the tools probe client open and monitor for tool changes
-	upstream.mpcClient.OnConnectionLost(func(err error) {
+	upstream.mcpClient.OnConnectionLost(func(err error) {
 		m.logger.Info("Broker OnConnectionLost, will retry with backoff",
 			"err", err,
 			"upstream.URL", upstream.URL,
-			"sessionID", upstream.mpcClient.GetSessionId())
+			"sessionID", upstream.mcpClient.GetSessionId())
 		// start background retry when connection is lost
 		go m.retryDiscovery(context.Background(), upstream)
 	})
 
-	upstream.mpcClient.OnNotification(func(notification mcp.JSONRPCNotification) {
+	upstream.mcpClient.OnNotification(func(notification mcp.JSONRPCNotification) {
 		if notification.Method == "notifications/tools/list_changed" {
-			m.logger.Debug("notifications/tools/list_changed received")
-			resTools, err := upstream.mpcClient.ListTools(ctx, mcp.ListToolsRequest{})
+			m.logger.Debug("notifications/tools/list_changed received", "mcpid", upstream.ID())
+			resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 			if err != nil {
 				m.logger.Warn("failed to list tools", "err", err)
 			} else {
-				m.logger.Info("Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+				m.logger.Info("OnNotification Re-Discovered tools  ", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
 			}
 
 			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, resTools.Tools)
@@ -420,13 +408,13 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 
 			// Add any tools added since the last notification
 			if len(newlyAddedTools) > 0 {
-				m.logger.Info("Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
-				m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newlyAddedTools)...)
+				m.logger.Info("OnNotification Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
+				m.listeningMCPServer.AddTools(toolsToServerTools(newlyAddedTools)...)
 			}
 
 			// Delete any tools removed since the last notification
 			if len(newlyRemovedToolNames) > 0 {
-				m.logger.Info("Removing tools", "mcpURL", upstream.URL, "newlyRemovedToolNames", newlyRemovedToolNames)
+				m.logger.Info("OnNotification Removing tools", "mcpURL", upstream.URL, "newlyRemovedToolNames", newlyRemovedToolNames)
 				m.listeningMCPServer.DeleteTools(newlyRemovedToolNames...)
 			}
 
@@ -435,14 +423,13 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 		}
 	})
 
-	m.logger.Info("Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+	m.logger.Info("OnNotification Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
 
 	return newTools, err
 }
 
-// retryDiscovery attempts to discover tools with exponential backoff
-func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMCP) {
-	// configurable via env vars with sensible defaults
+// ConfigureBackOff configures a backoff based on EnvVars
+func ConfigureBackOff() wait.Backoff {
 	baseDelay := 5 * time.Second
 	if v := os.Getenv("MCP_GATEWAY_DISCOVERY_RETRY_BASE_DELAY"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
@@ -464,15 +451,22 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 		}
 	}
 
-	backoff := wait.Backoff{
+	return wait.Backoff{
 		Duration: baseDelay,
 		Factor:   2.0,
 		Steps:    maxRetries,
 		Cap:      maxDelay,
 	}
 
+}
+
+// retryDiscovery attempts to discover tools with exponential backoff
+func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMCP) {
+	// configurable via env vars with sensible defaults
+
 	attempt := 0
-	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+	backOff := ConfigureBackOff()
+	err := wait.ExponentialBackoffWithContext(ctx, backOff, func(ctx context.Context) (bool, error) {
 		attempt++
 		m.logger.Info("attempting discovery",
 			"url", upstream.URL,
@@ -492,14 +486,14 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, upstream *upstreamMC
 			"attempt", attempt,
 			"tools", len(newTools))
 
-		m.listeningMCPServer.AddTools(toolsToServerTools(upstream.URL, newTools)...)
+		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
 		return true, nil
 	})
 	if err != nil {
 		if wait.Interrupted(err) {
 			m.logger.Error("max retries exceeded for discovery",
 				"url", upstream.URL,
-				"maxRetries", maxRetries,
+				"maxRetries", backOff.Steps,
 				"error", err)
 		} else {
 			m.logger.Info("retry discovery cancelled",
@@ -533,74 +527,12 @@ func (m *mcpBrokerImpl) populateToolMapping(upstream *upstreamMCP, addTools []mc
 		retvalAdditions = append(retvalAdditions, gatewayTool)
 
 		m.toolMapping[gatewayToolName] = &upstreamToolInfo{
-			url:         upstreamMCPURL(upstream.URL),
+			id:          upstreamMCPID(upstream.ID()),
 			toolName:    tool.Name,
 			annotations: tool.Annotations,
 		}
 	}
 	return retvalAdditions, retvalRemovals
-}
-
-func (m *mcpBrokerImpl) createUpstreamSession(ctx context.Context, host upstreamMCPURL, options ...transport.StreamableHTTPCOption) (*upstreamSessionState, error) {
-	retval := &upstreamSessionState{}
-
-	// Find the server name for auth - look up in registered servers
-	var serverName string
-	for url, upstream := range m.mcpServers {
-		if url == host {
-			serverName = upstream.Name
-			break
-		}
-	}
-
-	var err error
-	retval.client, _, err = m.createMCPClient(ctx, string(host), serverName, ClientTypeSession, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	retval.initialized = true
-	retval.sessionID = upstreamSessionID(retval.client.GetSessionId())
-	retval.lastContact = time.Now()
-
-	return retval, nil
-}
-
-// CreateSession creates a new MCP session for the given authority - wrapper for createUpstreamSession
-func (m *mcpBrokerImpl) CreateSession(ctx context.Context, authority string) (string, error) {
-	host := upstreamMCPURL(authority)
-
-	slog.Info("CreateSession called", "authority", authority)
-
-	// get the upstream server config to check for auth
-	upstream, ok := m.mcpServers[host]
-	if !ok {
-		// server not registered yet
-		sessionState, err := m.createUpstreamSession(ctx, host)
-		if err != nil {
-			return "", fmt.Errorf("failed to create session: %w", err)
-		}
-		return string(sessionState.sessionID), nil
-	}
-
-	// auth options
-	var options []transport.StreamableHTTPCOption
-	serverAuthHeaderValue := getAuthorizationHeaderForUpstream(upstream)
-	if serverAuthHeaderValue != "" {
-		slog.Info("Creating session with authentication",
-			"authority", authority,
-			"credentialEnvVar", upstream.CredentialEnvVar)
-		options = append(options, transport.WithHTTPHeaders(map[string]string{
-			"Authorization": serverAuthHeaderValue,
-		}))
-	}
-
-	sessionState, err := m.createUpstreamSession(ctx, host, options...)
-	if err != nil {
-		return "", fmt.Errorf("failed to create session: %w", err)
-	}
-
-	return string(sessionState.sessionID), nil
 }
 
 func (m *mcpBrokerImpl) Close(_ context.Context, downstreamSession downstreamSessionID) error {
@@ -634,8 +566,8 @@ func (m *mcpBrokerImpl) Shutdown(_ context.Context) error {
 
 	// Close the long-running notification channel
 	for _, mcpServer := range m.mcpServers {
-		if mcpServer.mpcClient != nil {
-			_ = mcpServer.mpcClient.Close()
+		if mcpServer.mcpClient != nil {
+			_ = mcpServer.mcpClient.Close()
 		}
 	}
 
@@ -654,27 +586,22 @@ func (m *mcpBrokerImpl) HandleStatusRequest(w http.ResponseWriter, r *http.Reque
 }
 
 // createMCPClient creates and initializes an MCP client with the appropriate configuration
-func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string, clientType ClientType, options ...transport.StreamableHTTPCOption) (*client.Client, *mcp.InitializeResult, error) {
+func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, id string, clientType ClientType, options ...transport.StreamableHTTPCOption) (*client.Client, *mcp.InitializeResult, error) {
 	// Look up the actual upstream config to get CredentialEnvVar
-	upstream, found := m.mcpServers[upstreamMCPURL(mcpURL)]
-	if found {
-		// Use the registered upstream with its CredentialEnvVar
-		authHeader := getAuthorizationHeaderForUpstream(upstream)
-		if authHeader != "" {
-			options = append(options, transport.WithHTTPHeaders(map[string]string{
-				"Authorization": authHeader,
-			}))
-		}
-	} else {
-		// fallback for unregistered servers (shouldn't happen normally)
-		authHeader := getAuthorizationHeaderForUpstream(&upstreamMCP{
-			MCPServer: config.MCPServer{Name: name, URL: mcpURL},
-		})
-		if authHeader != "" {
-			options = append(options, transport.WithHTTPHeaders(map[string]string{
-				"Authorization": authHeader,
-			}))
-		}
+	upstream, found := m.mcpServers[upstreamMCPID(id)]
+	if !found {
+		return nil, nil, fmt.Errorf("unable to create client for unknown MCP server %s", id)
+	}
+
+	// Use the registered upstream with its CredentialEnvVar
+	authHeader, err := getAuthorizationHeaderForUpstream(upstream)
+	if err != nil {
+		return nil, nil, err
+	}
+	if authHeader != "" {
+		options = append(options, transport.WithHTTPHeaders(map[string]string{
+			"Authorization": authHeader,
+		}))
 	}
 
 	httpClient, err := client.NewStreamableHttpClient(mcpURL, options...)
@@ -683,7 +610,7 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string
 	}
 
 	// Start the client before initialize to listen for notifications
-	err = httpClient.Start(context.Background())
+	err = httpClient.Start(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start streamable client: %w", err)
 	}
@@ -731,20 +658,19 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, mcpURL, name string
 }
 
 // Get the authorization header needed for a particular MCP upstream
-func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) string {
+func getAuthorizationHeaderForUpstream(upstream *upstreamMCP) (string, error) {
 	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
 	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
 	var credName string
+	if upstream.CredentialValue != "" {
+		return upstream.CredentialValue, nil
+	}
 	if upstream.CredentialEnvVar != "" {
 		credName = upstream.CredentialEnvVar
-	} else {
-		// The format is KAGENTAI_{MCP_NAME}_CRED=xxxxxxxx
-		// e.g. KAGENTAI_test_CRED="Bearer 1234"
-		credName = fmt.Sprintf("KAGENTAI_%s_CRED", upstream.Name)
+		return credentials.Get(credName)
 	}
+	return "", nil
 
-	authValue := credentials.Get(credName)
-	return authValue
 }
 
 // prefixedName returns the name the gateway will advertise the tool as
@@ -761,10 +687,9 @@ func toolToServerTool(newTool mcp.Tool) server.ServerTool {
 	}
 }
 
-func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool {
+func toolsToServerTools(newTools []mcp.Tool) []server.ServerTool {
 	tools := make([]server.ServerTool, 0)
 	for _, newTool := range newTools {
-		slog.Info("Federating tool", "mcpURL", mcpURL, "federated name", newTool.Name)
 		tools = append(tools, toolToServerTool(newTool))
 	}
 
@@ -772,13 +697,14 @@ func toolsToServerTools(mcpURL string, newTools []mcp.Tool) []server.ServerTool 
 }
 
 // validateMCPServer validates a single MCP server using existing session data
-func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolPrefix string) ServerValidationStatus {
+func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpID, name, toolPrefix string) ServerValidationStatus {
 	// Use already-discovered data for registered servers
-	upstream, exists := m.mcpServers[upstreamMCPURL(mcpURL)]
+	m.logger.Debug("validateMCPServer: validating MCPServer ", "servername", name)
+	upstream, exists := m.mcpServers[upstreamMCPID(mcpID)]
 	if !exists {
-		m.logger.Warn("Server validation failed: server not registered", "url", mcpURL, "name", name)
+		m.logger.Warn("Server validation failed: server not registered", "id", mcpID, "name", name)
 		return ServerValidationStatus{
-			URL:        mcpURL,
+			ID:         mcpID,
 			Name:       name,
 			ToolPrefix: toolPrefix,
 			ConnectionStatus: ConnectionStatus{
@@ -787,7 +713,7 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolP
 			},
 		}
 	}
-
+	m.logger.Debug("validateMCPServer: checking MCPServer connection status ", "servername", name)
 	connectionStatus := m.checkSessionHealth(upstream)
 
 	var protocolValidation ProtocolValidation
@@ -796,12 +722,12 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolP
 	if upstream.initializeResult != nil {
 		protocolValidation = validateProtocol(upstream.initializeResult)
 		if !protocolValidation.IsValid {
-			m.logger.Warn("Protocol validation failed", "url", mcpURL,
+			m.logger.Warn("validateMCPServer: Protocol validation failed", "id", mcpID,
 				"expected", protocolValidation.ExpectedVersion,
 				"actual", protocolValidation.SupportedVersion)
 		}
 	} else {
-		m.logger.Warn("No initialization result available for validation", "url", mcpURL)
+		m.logger.Warn("validateMCPServer: No initialization result available for validation", "id", mcpID)
 		protocolValidation = ProtocolValidation{
 			IsValid:         false,
 			ExpectedVersion: mcp.LATEST_PROTOCOL_VERSION,
@@ -811,17 +737,17 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolP
 	if upstream.toolsResult != nil {
 		tools = upstream.toolsResult.Tools
 		if len(tools) == 0 {
-			m.logger.Warn("Server has no tools available", "url", mcpURL)
+			m.logger.Warn("validateMCPServer: Server has no tools available", "id", mcpID)
 		}
 	} else {
-		m.logger.Warn("No tools result available for validation", "url", mcpURL)
+		m.logger.Warn("validateMCPServer: No tools result available for validation", "id", mcpID)
 	}
 
-	status := buildValidationStatus(connectionStatus, protocolValidation, tools, mcpURL, name, toolPrefix)
-	status.ToolConflicts = m.checkToolConflicts(tools, toolPrefix, mcpURL)
+	status := buildValidationStatus(connectionStatus, protocolValidation, tools, mcpID, name, toolPrefix)
+	status.ToolConflicts = m.checkToolConflicts(tools, toolPrefix, mcpID)
 
 	if len(status.ToolConflicts) > 0 {
-		m.logger.Warn("Tool conflicts detected", "url", mcpURL, "conflicts", len(status.ToolConflicts))
+		m.logger.Warn("Tool conflicts detected", "id", mcpID, "conflicts", len(status.ToolConflicts))
 	}
 
 	return status
@@ -829,7 +755,7 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpURL, name, toolP
 
 // checkSessionHealth checks the health of an existing session and reinitializes if needed
 func (m *mcpBrokerImpl) checkSessionHealth(upstream *upstreamMCP) ConnectionStatus {
-	if upstream.mpcClient == nil {
+	if upstream.mcpClient == nil {
 		// Create a temporary validation-only session
 		return m.validateServerConnectivity(upstream)
 	}
@@ -838,7 +764,7 @@ func (m *mcpBrokerImpl) checkSessionHealth(upstream *upstreamMCP) ConnectionStat
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	err := upstream.mpcClient.Ping(ctx)
+	err := upstream.mcpClient.Ping(ctx)
 	if err != nil {
 		m.logger.Debug("Session ping failed during validation", "url", upstream.URL, "error", err)
 		return ConnectionStatus{
@@ -884,7 +810,7 @@ func validateProtocol(initResp *mcp.InitializeResult) ProtocolValidation {
 }
 
 // buildValidationStatus constructs a ServerValidationStatus from validation results
-func buildValidationStatus(connectionStatus ConnectionStatus, protocolValidation ProtocolValidation, tools []mcp.Tool, mcpURL, name, toolPrefix string) ServerValidationStatus {
+func buildValidationStatus(connectionStatus ConnectionStatus, protocolValidation ProtocolValidation, tools []mcp.Tool, ID, name, toolPrefix string) ServerValidationStatus {
 	validation := CapabilitiesValidation{
 		IsValid:             true,
 		HasToolCapabilities: len(tools) > 0,
@@ -898,7 +824,7 @@ func buildValidationStatus(connectionStatus ConnectionStatus, protocolValidation
 	}
 
 	return ServerValidationStatus{
-		URL:                    mcpURL,
+		ID:                     ID,
 		Name:                   name,
 		ToolPrefix:             toolPrefix,
 		ConnectionStatus:       connectionStatus,
@@ -910,7 +836,7 @@ func buildValidationStatus(connectionStatus ConnectionStatus, protocolValidation
 }
 
 // checkToolConflicts identifies tool name conflicts between servers
-func (m *mcpBrokerImpl) checkToolConflicts(tools []mcp.Tool, toolPrefix, currentURL string) []ToolConflict {
+func (m *mcpBrokerImpl) checkToolConflicts(tools []mcp.Tool, toolPrefix, id string) []ToolConflict {
 	var conflicts []ToolConflict
 
 	for _, tool := range tools {
@@ -918,8 +844,8 @@ func (m *mcpBrokerImpl) checkToolConflicts(tools []mcp.Tool, toolPrefix, current
 		var conflictingServers []string
 
 		for existingToolName, existingToolInfo := range m.toolMapping {
-			if string(existingToolName) == prefixedToolName && string(existingToolInfo.url) != currentURL {
-				conflictingServers = append(conflictingServers, string(existingToolInfo.url))
+			if string(existingToolName) == prefixedToolName && string(existingToolInfo.id) != id {
+				conflictingServers = append(conflictingServers, string(existingToolInfo.id))
 			}
 		}
 
@@ -947,8 +873,8 @@ func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
 		Timestamp:        time.Now(),
 	}
 
-	for url, upstream := range m.mcpServers {
-		status := m.validateMCPServer(ctx, string(url), upstream.Name, upstream.ToolPrefix)
+	for id, upstream := range m.mcpServers {
+		status := m.validateMCPServer(ctx, string(id), upstream.Name, upstream.ToolPrefix)
 		response.Servers = append(response.Servers, status)
 
 		response.ToolConflicts += len(status.ToolConflicts)

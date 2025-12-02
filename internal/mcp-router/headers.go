@@ -24,7 +24,7 @@ func getSingleValueHeader(headers *basepb.HeaderMap, name string) string {
 		return ""
 	}
 	for _, hk := range headers.Headers {
-		if hk.Key == name {
+		if hk != nil && hk.Key == name {
 			return string(hk.RawValue)
 		}
 	}

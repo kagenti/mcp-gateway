@@ -12,7 +12,7 @@ import (
 
 // ServerValidationStatus contains the validation status of a single MCP server
 type ServerValidationStatus struct {
-	URL                    string                 `json:"url"`
+	ID                     string                 `json:"id"`
 	Name                   string                 `json:"name"`
 	ToolPrefix             string                 `json:"toolPrefix"`
 	ConnectionStatus       ConnectionStatus       `json:"connectionStatus"`
@@ -97,7 +97,6 @@ func (h *StatusHandler) setResponseHeaders(w http.ResponseWriter, _ *http.Reques
 
 func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
 	// Parse URL path to check for specific server request
 	path := strings.TrimPrefix(r.URL.Path, "/status")
 	if path != "" && path != "/" {
@@ -108,19 +107,12 @@ func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-
-	// Check if requesting specific server status via query parameter (legacy support)
-	serverURL := r.URL.Query().Get("server")
-	if serverURL != "" {
-		h.handleSingleServerStatus(ctx, w, r, serverURL)
-		return
-	}
-
 	response := h.broker.ValidateAllServers(ctx)
 	h.sendJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *StatusHandler) handleSingleServerByName(ctx context.Context, w http.ResponseWriter, serverName string) {
+	//TODO(craig) this should not need to call validate all servers
 	statusResponse := h.broker.ValidateAllServers(ctx)
 
 	var serverStatus *ServerValidationStatus
@@ -140,25 +132,6 @@ func (h *StatusHandler) handleSingleServerByName(ctx context.Context, w http.Res
 
 	h.logger.Info("Retrieved status for specific server", "serverName", serverName)
 	h.sendJSONResponse(w, http.StatusOK, serverStatus)
-}
-
-// handleSingleServerStatus handles requests for a specific server's status
-func (h *StatusHandler) handleSingleServerStatus(ctx context.Context, w http.ResponseWriter, _ *http.Request, serverURL string) {
-	brokerImpl, ok := h.broker.(*mcpBrokerImpl)
-	if !ok {
-		h.sendErrorResponse(w, http.StatusInternalServerError, "Invalid broker implementation")
-		return
-	}
-
-	// Find the server in our registered servers
-	upstream, exists := brokerImpl.mcpServers[upstreamMCPURL(serverURL)]
-	if !exists {
-		h.sendErrorResponse(w, http.StatusNotFound, fmt.Sprintf("Server %s is not registered", serverURL))
-		return
-	}
-
-	status := brokerImpl.validateMCPServer(ctx, serverURL, upstream.Name, upstream.ToolPrefix)
-	h.sendJSONResponse(w, http.StatusOK, status)
 }
 
 func (h *StatusHandler) sendJSONResponse(w http.ResponseWriter, statusCode int, data any) {

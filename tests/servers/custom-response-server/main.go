@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -74,6 +75,13 @@ func main() {
 			"instructions": ""
 		}
 		}`
+	var pingRes = func(id int) []byte {
+		return []byte(fmt.Sprintf(`{
+  "jsonrpc": "2.0",
+  "id": %v,
+  "result": {}
+}`, id))
+	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("custom response %s request to %s", r.Method, r.URL.Path)
@@ -120,6 +128,7 @@ func main() {
 				log.Println("ping")
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(200)
+				w.Write(pingRes(jsonrpcReq.ID))
 				return
 			}
 			if jsonrpcReq.Method == "tools/call" {
