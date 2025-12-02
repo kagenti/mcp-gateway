@@ -50,10 +50,19 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer2 := registration.Register()
 
-		By("Verifying MCPServers become ready and tools are present")
+		By("Verifying MCPServers become ready")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer1.Name, registeredServer1.Namespace)).To(BeNil())
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer2.Name, registeredServer2.Namespace)).To(BeNil())
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer1.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer1.Spec.ToolPrefix))
+			g.Expect(verifyMCPServerToolsPresent(registeredServer2.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer2.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServers tools are present")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
@@ -73,6 +82,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("ensuring the tools are present in the gateway")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
@@ -104,6 +117,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServers tools are present")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
@@ -136,10 +153,14 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("ensuring broker has failed authentication and the mcp server is not registered and the tools dont exist")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(Not(BeNil()))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServers tools are not present")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
-			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalseBecause("%s should not exist", registeredServer.Spec.ToolPrefix))
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalseBecause("%s should NOT exist", registeredServer.Spec.ToolPrefix))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("updating the secret to a valid value the server should be registered and the tools should exist")
@@ -150,11 +171,15 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(k8sClient.Patch(ctx, cred, patch)).To(Succeed())
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(BeNil())
+		}, TestTimeoutConfigSync, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServers tools are present")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
-		}, TestTimeoutConfigSync, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 	})
 
@@ -172,11 +197,15 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+		By("Ensuring the gateway has the tools")
+		Eventually(func(g Gomega) {
 			toolsList, err := mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
-		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
 		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "headers")
 		By("Invoking a tool")
 		res, err := mcpClient.CallTool(ctx, mcp.CallToolRequest{
@@ -185,7 +214,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(err).Error().NotTo(HaveOccurred())
 		Expect(res).NotTo(BeNil())
 		mcpsessionid := ""
-		GinkgoWriter.Println("tool response , len", len(res.Content))
 		for _, cont := range res.Content {
 			textContent, ok := cont.(mcp.TextContent)
 			Expect(ok).To(BeTrue())
