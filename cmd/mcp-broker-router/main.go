@@ -102,12 +102,6 @@ func main() {
 		"this key is used to allow the router to send request through the gateway and be trusted by the router",
 	)
 	flag.StringVar(
-		&mcpConfigAddrFlag,
-		"mcp-broker-config-address",
-		"0.0.0.0:8181",
-		"The internal address for config API",
-	)
-	flag.StringVar(
 		&mcpConfigFile,
 		"mcp-gateway-config",
 		"./config/mcp-system/config.yaml",
@@ -198,7 +192,6 @@ func main() {
 	}
 	jwtSessionMgr = jwtmgr
 
-	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr)
 	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr, sessionCache)
 	mcpConfig.RegisterObserver(router)
@@ -246,13 +239,6 @@ func main() {
 		}
 	}()
 
-	go func() {
-		logger.Info("[http] starting Config API (internal)", "listening", configServer.Addr)
-		if err := configServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[http] Cannot start config server: %v", err)
-		}
-	}()
-
 	<-stop
 	// handle shutdown
 	logger.Info("shutting down MCP Broker and MCP Router")
@@ -265,9 +251,7 @@ func main() {
 	if err := mcpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("MCP shutdown error: %v; ignoring", err)
 	}
-	if err := configServer.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Config server shutdown error: %v", err)
-	}
+
 	routerGRPCServer.GracefulStop()
 }
 
@@ -315,31 +299,6 @@ func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWT
 	mux.Handle("/mcp", virtualServerHandler)
 
 	return httpSrv, mcpBroker, streamableHTTPServer
-}
-
-func setUpConfigServer(address string) *http.Server {
-	mux := http.NewServeMux()
-
-	authToken := os.Getenv("CONFIG_UPDATE_TOKEN")
-	if authToken == "" {
-		logger.Warn("CONFIG_UPDATE_TOKEN not set, config updates will be unauthenticated")
-	}
-
-	configHandler := broker.NewConfigUpdateHandler(mcpConfig, authToken, logger)
-	mux.HandleFunc("POST /config", configHandler.UpdateConfig)
-
-	// health check endpoint for internal API
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	return &http.Server{
-		Addr:         address,
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
 }
 
 func setUpRouter(broker broker.MCPBroker, logger *slog.Logger, jwtManager *session.JWTManager, sessionCache *session.Cache) (*grpc.Server, *mcpRouter.ExtProcServer) {

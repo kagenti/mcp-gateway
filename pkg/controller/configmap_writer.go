@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	internalconfig "github.com/kagenti/mcp-gateway/internal/config"
@@ -23,9 +22,8 @@ import (
 
 // ConfigMapWriter writes ConfigMaps
 type ConfigMapWriter struct {
-	Client       client.Client
-	Scheme       *runtime.Scheme
-	ConfigPusher *ConfigPusher
+	Client client.Client
+	Scheme *runtime.Scheme
 }
 
 // WriteAggregatedConfig writes aggregated config with retry logic for conflicts
@@ -69,13 +67,6 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 					// Someone else created it, retry
 					return false, nil
 				}
-				if err == nil && w.ConfigPusher != nil {
-					servers := convertToInternalFormat(brokerConfig.Servers)
-					if pushErr := w.ConfigPusher.PushConfig(ctx, servers); pushErr != nil {
-						logger := log.FromContext(ctx)
-						logger.Error(pushErr, "Failed to push config to broker")
-					}
-				}
 				return err == nil, err
 			}
 			return false, err
@@ -91,15 +82,6 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 				// Resource conflict, retry
 				return false, nil
 			}
-			if err == nil && w.ConfigPusher != nil {
-				servers := convertToInternalFormat(brokerConfig.Servers)
-				if pushErr := w.ConfigPusher.PushConfig(ctx, servers); pushErr != nil {
-					// log error but don't fail - configmap is still updated
-					// broker will eventually pick it up via file watch
-					logger := log.FromContext(ctx)
-					logger.Error(pushErr, "Failed to push config to broker")
-				}
-			}
 			return err == nil, err
 		}
 
@@ -110,9 +92,8 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 // NewConfigMapWriter creates a ConfigMapWriter
 func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMapWriter {
 	return &ConfigMapWriter{
-		Client:       client,
-		Scheme:       scheme,
-		ConfigPusher: NewConfigPusher(client),
+		Client: client,
+		Scheme: scheme,
 	}
 }
 
