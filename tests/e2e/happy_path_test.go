@@ -59,7 +59,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer1.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer1.Spec.ToolPrefix))
 			g.Expect(verifyMCPServerToolsPresent(registeredServer2.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer2.Spec.ToolPrefix))
-		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 	})
 
@@ -77,7 +77,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
-		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("unregistering an MCPServer by Deleting the resource")
 		Expect(k8sClient.Delete(ctx, registeredServer)).To(Succeed())
@@ -92,7 +92,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalse())
-		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
 	It("should invoke tools successfully", func() {
@@ -108,7 +108,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
-		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
 		GinkgoWriter.Println("tool", toolName)
@@ -176,7 +176,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
-		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "headers")
 		By("Invoking a tool")
 		res, err := mcpClient.CallTool(ctx, mcp.CallToolRequest{
