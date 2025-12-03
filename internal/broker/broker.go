@@ -174,7 +174,11 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		// Note that AddOnRegisterSession is for GET, not POST, for a session.
 		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
-		slog.Info("Gateway client connected with session", "gatewaySessionID", session.SessionID())
+		slog.Info("Gateway client session connected with session", "gatewaySessionID", session.SessionID())
+	})
+
+	hooks.AddOnUnregisterSession(func(ctx context.Context, session server.ClientSession) {
+		slog.Info("Gateway client session unregister ", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
