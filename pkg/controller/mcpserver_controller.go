@@ -119,7 +119,8 @@ func (r *MCPReconciler) Reconcile(
 	}
 
 	// Neither resource found, regenerate config (handles deletions)
-	log.Info("MCP resource not found, regenerating aggregated config")
+	log.Info("MCP resource not found, regenerating aggregated config",
+		"req.NamespacedName", req.NamespacedName)
 	return r.regenerateAggregatedConfig(ctx)
 }
 
@@ -641,7 +642,8 @@ func (r *MCPReconciler) updateHTTPRouteStatus(
 	if affected {
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "InUseByMCPServer"
-		condition.Message = fmt.Sprintf("HTTPRoute is referenced by MCPServer %s/%s", mcpServer.Namespace, mcpServer.Name)
+		// We don't include the MCP Server in the status because >1 MCPServer may reference the same HTTPRoute
+		condition.Message = "HTTPRoute is referenced by at least one MCPServer"
 	} else {
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotInUse"
