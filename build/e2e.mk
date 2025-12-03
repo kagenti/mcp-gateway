@@ -56,4 +56,4 @@ test-e2e-watch: test-e2e-deps ## Run e2e tests in watch mode for development
 # CI-specific target that assumes cluster exists
 .PHONY: test-e2e-ci
 test-e2e-ci: test-e2e-deps ## Run e2e tests in CI (no setup, fail fast)
-	$(GINKGO) -v --tags=e2e --timeout=3m --fail-fast ./tests/e2e
+	$(GINKGO) -v --tags=e2e --timeout=5m --fail-fast ./tests/e2e

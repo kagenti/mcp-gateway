@@ -181,7 +181,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	})
 
-	FIt("should use and re-use a backend MCP session", func() {
+	It("should use and re-use a backend MCP session", func() {
 
 		registration := NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
