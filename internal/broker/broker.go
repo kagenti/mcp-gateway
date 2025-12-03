@@ -297,9 +297,10 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 }
 
 func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, id string) error {
+	m.logger.Info("unregistering mcp server ", "id", id)
 	upstream, ok := m.mcpServers[upstreamMCPID(id)]
 	if !ok {
-		return fmt.Errorf("unknown host")
+		return fmt.Errorf("unknown mcp server %s", id)
 	}
 
 	// only close client if it exists (might be nil if discovery failed)
@@ -409,6 +410,7 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, upstream *upstreamMCP
 			// Add any tools added since the last notification
 			if len(newlyAddedTools) > 0 {
 				m.logger.Info("OnNotification Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
+				//NOTE this sends a notification to connected clients
 				m.listeningMCPServer.AddTools(toolsToServerTools(newlyAddedTools)...)
 			}
 

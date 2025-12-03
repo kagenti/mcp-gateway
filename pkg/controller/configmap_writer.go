@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	internalconfig "github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/pkg/config"
 )
 
@@ -95,20 +94,4 @@ func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMap
 		Client: client,
 		Scheme: scheme,
 	}
-}
-
-// convertToInternalFormat converts from pkg/config to internal/config format
-func convertToInternalFormat(servers []config.ServerConfig) []*internalconfig.MCPServer {
-	result := make([]*internalconfig.MCPServer, len(servers))
-	for i, s := range servers {
-		result[i] = &internalconfig.MCPServer{
-			Name:             s.Name,
-			URL:              s.URL,
-			ToolPrefix:       s.ToolPrefix,
-			Enabled:          s.Enabled,
-			Hostname:         s.Hostname,
-			CredentialEnvVar: s.CredentialEnvVar,
-		}
-	}
-	return result
 }

@@ -74,7 +74,7 @@ func (m *JWTManager) generateSessionJWT() (string, error) {
 
 // Generate returns a session id JWT to fullfil SessionIdManager interface
 func (m *JWTManager) Generate() string {
-	m.logger.Info("gerating session id in jwt session manager")
+	m.logger.Debug("gerating session id in jwt session manager")
 	sessID, err := m.generateSessionJWT()
 	if err != nil {
 		m.logger.Error("failed to generate session id", "error", err)
@@ -85,8 +85,8 @@ func (m *JWTManager) Generate() string {
 
 // Validate validates a JWT token and fullfils SessionIdManager interface. returns IsInValid as a bool
 func (m *JWTManager) Validate(tokenValue string) (bool, error) {
+	m.logger.Debug("validating JWT session")
 	token, err := jwt.ParseWithClaims(tokenValue, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		m.logger.Info("validating JWT session")
 		// verify signing method
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -99,7 +99,7 @@ func (m *JWTManager) Validate(tokenValue string) (bool, error) {
 	}
 
 	if !token.Valid {
-		return true, fmt.Errorf("token is invalid")
+		return true, nil
 	}
 	return false, nil
 }
@@ -107,7 +107,6 @@ func (m *JWTManager) Validate(tokenValue string) (bool, error) {
 // GetExpiresIn returns the time a token will expire
 func (m *JWTManager) GetExpiresIn(tokenValue string) (time.Time, error) {
 	token, err := jwt.ParseWithClaims(tokenValue, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		m.logger.Info("validating JWT session")
 		// verify signing method
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])

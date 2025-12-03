@@ -53,7 +53,6 @@ func init() {
 var (
 	mcpRouterAddrFlag         string
 	mcpBrokerAddrFlag         string
-	mcpConfigAddrFlag         string
 	mcpRoutePublicHost        string
 	mcpRoutePrivateHost       string
 	mcpRouterKey              string

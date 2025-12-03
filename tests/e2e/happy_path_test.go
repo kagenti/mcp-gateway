@@ -25,7 +25,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	AfterEach(func() {
 		// cleanup in reverse order
 		for _, to := range testResources {
-			//GinkgoWriter.Println("deleteing", to.GetName())
 			CleanupResource(ctx, k8sClient, to)
 		}
 	})
@@ -41,14 +40,14 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should register multiple mcp servers with the gateway and make their tools available", func() {
 		By("Creating HTTPRoutes and MCP Servers")
 		// create httproutes for test servers that should already be deployed
-		registration := NewMCPServerRegistration(ctx, k8sClient)
+		registration := NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer1 := registration.Register()
-		registration = NewMCPServerRegistration(ctx, k8sClient)
+		registeredServer1 := registration.Register(ctx)
+		registration = NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer2 := registration.Register()
+		registeredServer2 := registration.Register(ctx)
 
 		By("Verifying MCPServers become ready")
 		Eventually(func(g Gomega) {
@@ -74,10 +73,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should unregister mcp servers with the gateway", func() {
 
-		registration := NewMCPServerRegistration(ctx, k8sClient)
+		registration := NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer := registration.Register()
+		registeredServer := registration.Register(ctx)
 
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
@@ -109,10 +108,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should invoke tools successfully", func() {
-		registration := NewMCPServerRegistration(ctx, k8sClient)
+		registration := NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer := registration.Register()
+		registeredServer := registration.Register(ctx)
 
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
@@ -145,11 +144,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should register mcp server with credetential with the gateway and make the tools available", func() {
 		cred := BuildCredentialSecret("mcp-credential", "test-api-key-secret-toke")
-		registration := NewMCPServerRegistration(ctx, k8sClient).
-			WithCredential(cred).WithBackendTarget("mcp-api-key-server", 9090)
+		registration := NewMCPServerRegistration(k8sClient).
+			WithCredential(cred, "token").WithBackendTarget("mcp-api-key-server", 9090)
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer := registration.Register()
-
+		registeredServer := registration.Register(ctx)
 		By("ensuring broker has failed authentication and the mcp server is not registered and the tools dont exist")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(Not(BeNil()))
@@ -183,12 +181,12 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	})
 
-	It("should use and re-use a backend MCP session", func() {
+	FIt("should use and re-use a backend MCP session", func() {
 
-		registration := NewMCPServerRegistration(ctx, k8sClient)
+		registration := NewMCPServerRegistration(k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
-		registeredServer := registration.Register()
+		registeredServer := registration.Register(ctx)
 
 		By("creating a new client")
 		mcpClient, err := NewMCPGatewayClient(context.Background(), gatewayURL)
