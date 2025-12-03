@@ -28,13 +28,6 @@ spec:
             - --controller
             - --log-level=0
           env:
-            - name: CONFIG_UPDATE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "mcp-gateway.fullname" . }}-config-update-token
-                  key: token
-            - name: BROKER_CONFIG_URL
-              value: "http://{{ include "mcp-gateway.fullname" . }}-config.{{ .Release.Namespace }}.svc.cluster.local:8181/config"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

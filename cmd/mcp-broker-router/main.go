@@ -53,7 +53,6 @@ func init() {
 var (
 	mcpRouterAddrFlag         string
 	mcpBrokerAddrFlag         string
-	mcpConfigAddrFlag         string
 	mcpRoutePublicHost        string
 	mcpRoutePrivateHost       string
 	mcpRouterKey              string
@@ -100,12 +99,6 @@ func main() {
 		"mcp-router-key",
 		goenv.GetDefault("MCP_ROUTER_API_KEY", "secret-api-key"),
 		"this key is used to allow the router to send request through the gateway and be trusted by the router",
-	)
-	flag.StringVar(
-		&mcpConfigAddrFlag,
-		"mcp-broker-config-address",
-		"0.0.0.0:8181",
-		"The internal address for config API",
 	)
 	flag.StringVar(
 		&mcpConfigFile,
@@ -198,7 +191,6 @@ func main() {
 	}
 	jwtSessionMgr = jwtmgr
 
-	configServer := setUpConfigServer(mcpConfigAddrFlag)
 	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr)
 	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr, sessionCache)
 	mcpConfig.RegisterObserver(router)
@@ -212,17 +204,21 @@ func main() {
 	mcpConfig.RouterAPIKey = mcpRouterKey
 
 	// Only load config and run broker/router in standalone mode
+	mutex.Lock()
+	// will panic if fails
 	LoadConfig(mcpConfigFile)
+	mutex.Unlock()
+	mcpConfig.Notify(ctx)
 
-	logger.Info("config: notifying observers of config change")
-	mcpConfig.Notify()
 	viper.WatchConfig()
+	// set up our change event handler
 	viper.OnConfigChange(func(in fsnotify.Event) {
-		logger.Info("mcp servers config changed ", "config file", in.Name)
+		logger.Info("OnConfigChange mcp servers config changed ", "config file", in.Name)
 		mutex.Lock()
 		defer mutex.Unlock()
 		LoadConfig(mcpConfigFile)
-		mcpConfig.Notify()
+		logger.Info("OnConfigChange: notifying observers of config change")
+		mcpConfig.Notify(ctx)
 	})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -246,13 +242,6 @@ func main() {
 		}
 	}()
 
-	go func() {
-		logger.Info("[http] starting Config API (internal)", "listening", configServer.Addr)
-		if err := configServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[http] Cannot start config server: %v", err)
-		}
-	}()
-
 	<-stop
 	// handle shutdown
 	logger.Info("shutting down MCP Broker and MCP Router")
@@ -265,9 +254,7 @@ func main() {
 	if err := mcpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("MCP shutdown error: %v; ignoring", err)
 	}
-	if err := configServer.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Config server shutdown error: %v", err)
-	}
+
 	routerGRPCServer.GracefulStop()
 }
 
@@ -317,31 +304,6 @@ func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWT
 	return httpSrv, mcpBroker, streamableHTTPServer
 }
 
-func setUpConfigServer(address string) *http.Server {
-	mux := http.NewServeMux()
-
-	authToken := os.Getenv("CONFIG_UPDATE_TOKEN")
-	if authToken == "" {
-		logger.Warn("CONFIG_UPDATE_TOKEN not set, config updates will be unauthenticated")
-	}
-
-	configHandler := broker.NewConfigUpdateHandler(mcpConfig, authToken, logger)
-	mux.HandleFunc("POST /config", configHandler.UpdateConfig)
-
-	// health check endpoint for internal API
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	return &http.Server{
-		Addr:         address,
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-}
-
 func setUpRouter(broker broker.MCPBroker, logger *slog.Logger, jwtManager *session.JWTManager, sessionCache *session.Cache) (*grpc.Server, *mcpRouter.ExtProcServer) {
 
 	grpcSrv := grpc.NewServer()
@@ -369,16 +331,18 @@ func LoadConfig(path string) {
 	if err != nil {
 		log.Fatalf("Error reading config file: %s", err)
 	}
+	// reset the servers to avoid old configs being written to
+	mcpConfig.Servers = []*config.MCPServer{}
 	err = viper.UnmarshalKey("servers", &mcpConfig.Servers)
 	if err != nil {
 		log.Fatalf("Unable to decode server config into struct: %s", err)
 	}
-
+	mcpConfig.VirtualServers = []*config.VirtualServer{}
 	// Load virtualServers if present - this is optional
 	if viper.IsSet("virtualServers") {
 		err = viper.UnmarshalKey("virtualServers", &mcpConfig.VirtualServers)
 		if err != nil {
-			logger.Warn("Failed to parse virtualServers configuration", "error", err)
+			log.Fatal("Failed to parse virtualServers configuration", "error", err)
 		}
 	} else {
 		logger.Debug("No virtualServers section found in configuration")
@@ -399,6 +363,8 @@ func LoadConfig(path string) {
 			s.URL,
 			"routable host",
 			s.Hostname,
+			"envvar",
+			s.CredentialEnvVar,
 		)
 	}
 }

@@ -36,16 +36,9 @@ spec:
             - ./mcp_gateway
             - --mcp-gateway-config=/config/config.yaml
             - --mcp-broker-public-address=0.0.0.0:8080
-            - --mcp-broker-config-address=0.0.0.0:8181
             - --mcp-gateway-public-host=mcp.127-0-0-1.sslip.io
             - --mcp-router-address=0.0.0.0:50051
             - --log-level=-4 # info level
-          env:
-            - name: CONFIG_UPDATE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-config-update-token
-                  key: token
           envFrom:
             - secretRef:
                 name: mcp-aggregated-credentials

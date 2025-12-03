@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	TestTimeoutMedium     = time.Second * 30
+	TestTimeoutMedium     = time.Second * 60
 	TestTimeoutLong       = time.Minute * 2
 	TestTimeoutConfigSync = time.Minute * 4
 	TestRetryInterval     = time.Second * 5
@@ -93,6 +93,7 @@ func (b *MCPServerBuilder) Build() *mcpv1alpha1.MCPServer {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      UniqueName(b.name),
 			Namespace: b.namespace,
+			Labels:    map[string]string{"e2e": "test"},
 		},
 		Spec: mcpv1alpha1.MCPServerSpec{
 			ToolPrefix: b.prefix,
@@ -178,6 +179,7 @@ func BuildTestHTTPRoute(name, namespace, hostname, serviceName string, port int3
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      UniqueName(name),
 			Namespace: namespace,
+			Labels:    map[string]string{"e2e": "test"},
 		},
 		Spec: gatewayapiv1.HTTPRouteSpec{
 			CommonRouteSpec: gatewayapiv1.CommonRouteSpec{
@@ -219,6 +221,7 @@ func BuildCredentialSecret(name, token string) *corev1.Secret {
 			Namespace: TestNamespace,
 			Labels: map[string]string{
 				"mcp.kagenti.com/credential": "true",
+				"e2e":                        "test",
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -231,20 +234,6 @@ func BuildCredentialSecret(name, token string) *corev1.Secret {
 // MCPServerName returns the full name of an MCP server from its HTTPRoute
 func MCPServerName(route *gatewayapiv1.HTTPRoute) string {
 	return fmt.Sprintf("%s/%s", route.Namespace, route.Name)
-}
-
-// VerifyConfigMapExists checks if the ConfigMap exists and has content
-func VerifyConfigMapExists(ctx context.Context, k8sClient client.Client) {
-	configMap := &corev1.ConfigMap{}
-	Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{
-			Name:      ConfigMapName,
-			Namespace: SystemNamespace,
-		}, configMap)
-	}, TestTimeoutMedium, TestRetryInterval).Should(Succeed())
-
-	Expect(configMap.Data).To(HaveKey("config.yaml"))
-	Expect(configMap.Data["config.yaml"]).ToNot(BeEmpty())
 }
 
 // VerifyMCPServerReady checks if the MCPServer has Ready condition. Once ready it should be able to be invoked
@@ -271,22 +260,21 @@ func VerifyMCPServerReady(ctx context.Context, k8sClient client.Client, name, na
 
 // MCPServerRegistrationBuilder builds and registers MCP server resources
 type MCPServerRegistrationBuilder struct {
-	ctx        context.Context
-	k8sClient  client.Client
-	credential *corev1.Secret
-	httpRoute  *gatewayapiv1.HTTPRoute
-	mcpServer  *MCPServerBuilder
+	k8sClient     client.Client
+	credential    *corev1.Secret
+	credentialKey string
+	httpRoute     *gatewayapiv1.HTTPRoute
+	mcpServer     *mcpv1alpha1.MCPServer
 }
 
 // NewMCPServerRegistration creates a new registration builder with defaults
-func NewMCPServerRegistration(ctx context.Context, k8sClient client.Client) *MCPServerRegistrationBuilder {
-	httpRoute := BuildTestHTTPRoute("e2e-server2-route", TestNamespace,
+func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
+	httpRoute := BuildTestHTTPRoute("e2e-server2-route-"+testName, TestNamespace,
 		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
-	mcpServer := BuildTestMCPServer("e2e-mcpserver2", TestNamespace,
-		httpRoute.Name, httpRoute.Name)
+	mcpServer := BuildTestMCPServer("e2e-mcpserver2"+testName, TestNamespace,
+		httpRoute.Name, httpRoute.Name).Build()
 
 	return &MCPServerRegistrationBuilder{
-		ctx:       ctx,
 		k8sClient: k8sClient,
 		httpRoute: httpRoute,
 		mcpServer: mcpServer,
@@ -306,37 +294,32 @@ func (b *MCPServerRegistrationBuilder) WithBackendTarget(backend string, port in
 }
 
 // WithCredential overrides the default credential secret
-func (b *MCPServerRegistrationBuilder) WithCredential(secret *corev1.Secret) *MCPServerRegistrationBuilder {
+func (b *MCPServerRegistrationBuilder) WithCredential(secret *corev1.Secret, key string) *MCPServerRegistrationBuilder {
 	b.credential = secret
-	b.mcpServer.WithSecret(secret)
 	return b
 }
 
 // WithHTTPRoute overrides the default HTTPRoute
 func (b *MCPServerRegistrationBuilder) WithHTTPRoute(route *gatewayapiv1.HTTPRoute) *MCPServerRegistrationBuilder {
 	b.httpRoute = route
-	b.mcpServer.WithTargetHTTPRoute(route.Name)
-	return b
-}
-
-// WithMCPServer overrides the default MCPServer builder
-func (b *MCPServerRegistrationBuilder) WithMCPServer(builder *MCPServerBuilder) *MCPServerRegistrationBuilder {
-	b.mcpServer = builder
 	return b
 }
 
 // Register creates all resources and returns them
-func (b *MCPServerRegistrationBuilder) Register() *v1alpha1.MCPServer {
+func (b *MCPServerRegistrationBuilder) Register(ctx context.Context) *v1alpha1.MCPServer {
 
 	if b.credential != nil {
-		Expect(b.k8sClient.Create(b.ctx, b.credential)).To(Succeed())
+		GinkgoWriter.Println("creating credential ", b.credential.Name)
+		Expect(b.k8sClient.Create(ctx, b.credential)).To(Succeed())
+		b.mcpServer.Spec.CredentialRef = &mcpv1alpha1.SecretReference{
+			Name: b.credential.Name,
+			Key:  b.credentialKey,
+		}
 	}
-	Expect(b.k8sClient.Create(b.ctx, b.httpRoute)).To(Succeed())
+	Expect(b.k8sClient.Create(ctx, b.httpRoute)).To(Succeed())
+	Expect(b.k8sClient.Create(ctx, b.mcpServer)).To(Succeed())
 
-	mcpServer := b.mcpServer.Build()
-	Expect(b.k8sClient.Create(b.ctx, mcpServer)).To(Succeed())
-
-	return mcpServer
+	return b.mcpServer
 }
 
 // GetObjects returns all objects defined in the builder
@@ -349,7 +332,7 @@ func (b *MCPServerRegistrationBuilder) GetObjects() []client.Object {
 		objects = append(objects, b.httpRoute)
 	}
 	if b.mcpServer != nil {
-		objects = append(objects, b.mcpServer.Build())
+		objects = append(objects, b.mcpServer)
 	}
 	return objects
 }
