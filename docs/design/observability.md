@@ -80,6 +80,12 @@ The trace flow will be more complex when statefulness comes into play with elici
 - Dashboard visualization (e.g., Grafana)
 - Ability to filter and aggregate by tool name, MCP server, time range
 
+**Metrics Cardinality Considerations**
+
+High cardinality fields like session ids are best left to traces and logs.
+A tool call id, like `mcp.tool_call_id = 12345` can be sufficient.
+If the number of tools is thousands, a label may not be the best idea.
+
 #### Journey 3: Understanding Tool Call Graphs ("Why Did That Happen")
 
 **As an agent or model using the MCP Gateway**, or **as an MCP Gateway admin supporting agent/model users**, I need to understand **"why did that happen"** when:
@@ -89,7 +95,7 @@ The trace flow will be more complex when statefulness comes into play with elici
 - I need to understand the reasoning chain that led to a particular outcome
 - I need to debug why an answer or result wasn't as expected
 
-This is distinct from "what went wrong" (Journey 1) - here we're not looking for technical errors, but rather understanding the **logical flow and context** of tool calls made by an agent or model. This problem cannot be solved entirely within the MCP Gateway, however we should aim to enable as much as possible via standard mechanisms. To that end, this user journey may be satisifed in time by more focused journies as observability requirements become clearer from outside the MCP Gateway. 
+This is distinct from "what went wrong" (Journey 1) - here we're not looking for technical errors, but rather understanding the **logical flow and context** of tool calls made by an agent or model. This problem cannot be solved entirely within the MCP Gateway, however we should aim to enable as much as possible via standard mechanisms. To that end, this user journey may be satisifed in time by more focused journeys as observability requirements become clearer from outside the MCP Gateway. 
 
 **Tool Call Graphs:**
 
@@ -117,13 +123,9 @@ To enable Tool Call Graph construction and analysis, the gateway must surface ob
    - Which backend MCP server handled each tool call
    - Any elicitations or user interactions that occurred
 
-3. **Agent/Model Context**:
-   - The initial request or prompt that triggered the tool call sequence
-   - Any intermediate reasoning or decisions (if available from the agent/model)
-   - The final response or answer produced
-
-4. **Relationships**:
+3. **Relationships**:
    - Links between tool calls (e.g., tool B used output from tool A)
+      - For example: `mcp.session_id: "sess-1234"`, `mcp.tool_call_id: "tc-2"`, `mcp.tool_call_parent_id: "tc-1"` (with session & parent optional)
    - Dependencies and data flow between tool calls
    - Branching or conditional tool call paths
 
@@ -170,7 +172,12 @@ See the "Tool Call Graphs" section under Implementation Considerations for imple
 
 Implementation will leverage OpenTelemetry for consistent instrumentation across all components. Key areas to address include:
 
-- **OpenTelemetry Integration**: SDK selection, OTLP exporter configuration, trace context propagation (W3C Trace Context), resource attributes, and sampling strategies
+- **OpenTelemetry Integration**: SDK selection, OTLP exporter configuration, trace context propagation (W3C Trace Context), resource attributes
+- **Sampling strategies**:
+    - Sampling should be configurable, where 1.0 is all requests traced and 0.0 is none. 
+    - Determine whether or not to sample in the entry span and propagate from there
+    - When we have an error we should **always** sample (could propagate this with a label like: `mcp.error=true`)
+    - We could also add a debug label for temporarily forcing a sample in a prod/staging system via `mcp.debug=true`.
 - **Logging**: Structured log formats with trace correlation, standardized log levels, and MCP-specific context fields
 - **Metrics**: Metric naming conventions, OpenTelemetry metrics API usage, and aggregation configuration
 - **Distributed Tracing**: Trace context propagation through Envoy and ext_proc, span attributes, and elicitation response correlation
@@ -182,15 +189,13 @@ Implementation will leverage OpenTelemetry for consistent instrumentation across
 
 Observability data must be handled securely:
 
-- Sensitive data (tokens, credentials) should not be included in traces/logs
+- Sensitive data (tokens, client credentials, mcp server credentials for the broker) should not be included in traces/logs
 - Tool call parameters should be sanitized in observability data
 
 ### Open Questions
 
-1. **Trace Sampling**: What sampling strategy should be used? Should all requests be traced, or should we sample to reduce overhead? Should sampling be configurable?
+1. **Performance Impact**: What is the acceptable performance overhead for observability instrumentation? Should observability be configurable/optional? Having a per component toggle would be desirable, with different verbosity levels.
 
-2. **Metrics Cardinality**: How should we handle high cardinality metrics (e.g., unique tool names, session IDs) to avoid metric explosion? What labels should be included vs. excluded?
-
-3. **Performance Impact**: What is the acceptable performance overhead for observability instrumentation? Should observability be configurable/optional?
+2. **Kiali**: How does Kiali interact, and what opportunities are there for integration?
 
 TODO: Implementation Details
