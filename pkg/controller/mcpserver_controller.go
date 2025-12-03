@@ -141,6 +141,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 			}
 			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err), 0)
 		}
+		log.V(1).Info("Credential validation success ", "credential ref", mcpServer.Spec.CredentialRef)
 	}
 
 	serverInfo, err := r.discoverServersFromHTTPRoutes(ctx, mcpServer)

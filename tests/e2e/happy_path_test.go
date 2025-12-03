@@ -40,11 +40,11 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should register multiple mcp servers with the gateway and make their tools available", func() {
 		By("Creating HTTPRoutes and MCP Servers")
 		// create httproutes for test servers that should already be deployed
-		registration := NewMCPServerRegistration(k8sClient)
+		registration := NewMCPServerRegistration("basic-registration", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer1 := registration.Register(ctx)
-		registration = NewMCPServerRegistration(k8sClient)
+		registration = NewMCPServerRegistration("basic-registration", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer2 := registration.Register(ctx)
@@ -73,7 +73,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should unregister mcp servers with the gateway", func() {
 
-		registration := NewMCPServerRegistration(k8sClient)
+		registration := NewMCPServerRegistration("basic-unregister", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -108,7 +108,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should invoke tools successfully", func() {
-		registration := NewMCPServerRegistration(k8sClient)
+		registration := NewMCPServerRegistration("tools-invoke", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -144,7 +144,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should register mcp server with credetential with the gateway and make the tools available", func() {
 		cred := BuildCredentialSecret("mcp-credential", "test-api-key-secret-toke")
-		registration := NewMCPServerRegistration(k8sClient).
+		registration := NewMCPServerRegistration("credentials", k8sClient).
 			WithCredential(cred, "token").WithBackendTarget("mcp-api-key-server", 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -183,7 +183,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should use and re-use a backend MCP session", func() {
 
-		registration := NewMCPServerRegistration(k8sClient)
+		registration := NewMCPServerRegistration("sessions", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)

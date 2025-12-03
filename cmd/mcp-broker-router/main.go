@@ -204,17 +204,21 @@ func main() {
 	mcpConfig.RouterAPIKey = mcpRouterKey
 
 	// Only load config and run broker/router in standalone mode
+	mutex.Lock()
+	// will panic if fails
 	LoadConfig(mcpConfigFile)
+	mutex.Unlock()
+	mcpConfig.Notify(ctx)
 
-	logger.Info("config: notifying observers of config change")
-	mcpConfig.Notify()
 	viper.WatchConfig()
+	// set up our change event handler
 	viper.OnConfigChange(func(in fsnotify.Event) {
-		logger.Info("mcp servers config changed ", "config file", in.Name)
+		logger.Info("OnConfigChange mcp servers config changed ", "config file", in.Name)
 		mutex.Lock()
 		defer mutex.Unlock()
 		LoadConfig(mcpConfigFile)
-		mcpConfig.Notify()
+		logger.Info("OnConfigChange: notifying observers of config change")
+		mcpConfig.Notify(ctx)
 	})
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -327,16 +331,18 @@ func LoadConfig(path string) {
 	if err != nil {
 		log.Fatalf("Error reading config file: %s", err)
 	}
+	// reset the servers to avoid old configs being written to
+	mcpConfig.Servers = []*config.MCPServer{}
 	err = viper.UnmarshalKey("servers", &mcpConfig.Servers)
 	if err != nil {
 		log.Fatalf("Unable to decode server config into struct: %s", err)
 	}
-
+	mcpConfig.VirtualServers = []*config.VirtualServer{}
 	// Load virtualServers if present - this is optional
 	if viper.IsSet("virtualServers") {
 		err = viper.UnmarshalKey("virtualServers", &mcpConfig.VirtualServers)
 		if err != nil {
-			logger.Warn("Failed to parse virtualServers configuration", "error", err)
+			log.Fatal("Failed to parse virtualServers configuration", "error", err)
 		}
 	} else {
 		logger.Debug("No virtualServers section found in configuration")
@@ -357,6 +363,8 @@ func LoadConfig(path string) {
 			s.URL,
 			"routable host",
 			s.Hostname,
+			"envvar",
+			s.CredentialEnvVar,
 		)
 	}
 }

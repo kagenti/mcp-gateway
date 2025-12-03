@@ -179,6 +179,7 @@ func BuildTestHTTPRoute(name, namespace, hostname, serviceName string, port int3
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      UniqueName(name),
 			Namespace: namespace,
+			Labels:    map[string]string{"e2e": "test"},
 		},
 		Spec: gatewayapiv1.HTTPRouteSpec{
 			CommonRouteSpec: gatewayapiv1.CommonRouteSpec{
@@ -220,6 +221,7 @@ func BuildCredentialSecret(name, token string) *corev1.Secret {
 			Namespace: TestNamespace,
 			Labels: map[string]string{
 				"mcp.kagenti.com/credential": "true",
+				"e2e":                        "test",
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -232,20 +234,6 @@ func BuildCredentialSecret(name, token string) *corev1.Secret {
 // MCPServerName returns the full name of an MCP server from its HTTPRoute
 func MCPServerName(route *gatewayapiv1.HTTPRoute) string {
 	return fmt.Sprintf("%s/%s", route.Namespace, route.Name)
-}
-
-// VerifyConfigMapExists checks if the ConfigMap exists and has content
-func VerifyConfigMapExists(ctx context.Context, k8sClient client.Client) {
-	configMap := &corev1.ConfigMap{}
-	Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{
-			Name:      ConfigMapName,
-			Namespace: SystemNamespace,
-		}, configMap)
-	}, TestTimeoutMedium, TestRetryInterval).Should(Succeed())
-
-	Expect(configMap.Data).To(HaveKey("config.yaml"))
-	Expect(configMap.Data["config.yaml"]).ToNot(BeEmpty())
 }
 
 // VerifyMCPServerReady checks if the MCPServer has Ready condition. Once ready it should be able to be invoked
@@ -280,10 +268,10 @@ type MCPServerRegistrationBuilder struct {
 }
 
 // NewMCPServerRegistration creates a new registration builder with defaults
-func NewMCPServerRegistration(k8sClient client.Client) *MCPServerRegistrationBuilder {
-	httpRoute := BuildTestHTTPRoute("e2e-server2-route", TestNamespace,
+func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
+	httpRoute := BuildTestHTTPRoute("e2e-server2-route-"+testName, TestNamespace,
 		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
-	mcpServer := BuildTestMCPServer("e2e-mcpserver2", TestNamespace,
+	mcpServer := BuildTestMCPServer("e2e-mcpserver2"+testName, TestNamespace,
 		httpRoute.Name, httpRoute.Name).Build()
 
 	return &MCPServerRegistrationBuilder{

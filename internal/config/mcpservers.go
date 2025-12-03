@@ -27,10 +27,7 @@ func (config *MCPServersConfig) RegisterObserver(obs Observer) {
 }
 
 // Notify notifies registered observers of config changes
-func (config *MCPServersConfig) Notify() {
-	//TODO figure out this context as it can't be a request context that gets cancelled before it has finished its work
-	// currently it is never cancelled
-	ctx := context.Background()
+func (config *MCPServersConfig) Notify(ctx context.Context) {
 	for _, observer := range config.observers {
 		go observer.OnConfigChange(ctx, config)
 	}

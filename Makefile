@@ -94,10 +94,6 @@ install-crd: ## Install MCPServer and MCPVirtualServer CRDs
 # Deploy mcp-gateway components
 deploy: install-crd ## Deploy broker/router and controller to mcp-system namespace
 	@kubectl create namespace mcp-system --dry-run=client -o yaml | kubectl apply -f -
-	@kubectl get secret mcp-config-update-token -n mcp-system &>/dev/null || \
-		kubectl create secret generic mcp-config-update-token \
-		-n mcp-system \
-		--from-literal=token="$$(openssl rand -base64 32)"
 	kubectl apply -k config/mcp-system/
 
 # Deploy only the broker/router
