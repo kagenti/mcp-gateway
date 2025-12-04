@@ -57,23 +57,25 @@ Run the MCP server on port 9999:
 Add a dedicated gateway listener for the MCP server:
 
 ```sh
-kubectl patch gateway mcp-gateway -n gateway-system --type json -p='[
+export CONTAINERS_HOSTNAME=$(which podman &>/dev/null && echo "host.containers.internal" || echo "host.docker.internal")
+
+kubectl patch gateway mcp-gateway -n gateway-system --type json -p="[
   {
-    "op": "add",
-    "path": "/spec/listeners/-",
-    "value": {
-      "name": "kubernetes-mcp",
-      "hostname": "host.containers.internal",
-      "port": 8080,
-      "protocol": "HTTP",
-      "allowedRoutes": {
-        "namespaces": {
-          "from": "All"
+    \"op\": \"add\",
+    \"path\": \"/spec/listeners/-\",
+    \"value\": {
+      \"name\": \"kubernetes-mcp\",
+      \"hostname\": \"$CONTAINERS_HOSTNAME\",
+      \"port\": 8080,
+      \"protocol\": \"HTTP\",
+      \"allowedRoutes\": {
+        \"namespaces\": {
+          \"from\": \"All\"
         }
       }
     }
   }
-]'
+]"
 ```
 
 Create a route, external service and `MCPServer` custom resource:
@@ -91,7 +93,7 @@ spec:
     name: mcp-gateway
     namespace: gateway-system
   hostnames:
-  - host.containers.internal
+  - $CONTAINERS_HOSTNAME
   rules:
   - matches:
     - path:
@@ -109,7 +111,7 @@ metadata:
   name: kubernetes-mcp-external
 spec:
   type: ExternalName
-  externalName: host.containers.internal
+  externalName: $CONTAINERS_HOSTNAME
   ports:
   - name: http
     port: 9999
@@ -124,7 +126,7 @@ metadata:
   namespace: mcp-test
 spec:
   hosts:
-  - host.containers.internal
+  - $CONTAINERS_HOSTNAME
   ports:
   - number: 9999
     name: https
