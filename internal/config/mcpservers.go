@@ -93,7 +93,8 @@ func (mcpServer *MCPServer) ID() string {
 	return fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL)
 }
 
-// ConfigChanged checks if a servers config has changed
+// ConfigChanged checks if a server's config has changed in a way that will affect the gateway.
+// This means having a different name, prefix, hostname, or credential variable.
 func (mcpServer *MCPServer) ConfigChanged(existingConfig MCPServer) bool {
 	return existingConfig.Name != mcpServer.Name ||
 		existingConfig.ToolPrefix != mcpServer.ToolPrefix ||

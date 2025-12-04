@@ -219,6 +219,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 	discoveredTools := []mcp.Tool{}
 	for _, mcpServer := range conf.Servers {
 		m.logger.Info("Registering Server ", "mcpID", mcpServer.ID())
+
 		tools, err := m.RegisterServerWithConfig(ctx, mcpServer)
 		if err != nil {
 			slog.Warn("Could not register upstream MCP", "upstream", mcpServer.URL, "name", mcpServer.Name, "error", err)
@@ -258,7 +259,7 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 		}
 		configChanged := mcpServer.ConfigChanged(existingUpstream.MCPServer)
 		if !configChanged && !credentialValueChanged {
-			m.logger.Debug("mcp server is already registered and upto date", "server ", mcpServer.ID())
+			m.logger.Debug("mcp server is already registered and up to date", "server ", mcpServer.ID())
 			return nil, nil
 		}
 		// config or credentials changed, unregister and re-register
@@ -365,7 +366,7 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 	}
 
 	if upstream.mcpClient == nil {
-		// TODO (craig) most of the function require an upstremMCP object
+		// TODO (craig) most of the function require an upstreamMCP object
 		// Connection mgmt shouldn't be a part of this function
 		// prob functions should just become methods of that object
 		//upstreamMCP.Connect()
@@ -719,7 +720,7 @@ func toolsToServerTools(newTools []mcp.Tool) []server.ServerTool {
 // validateMCPServer validates a single MCP server using existing session data
 func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpID, name, toolPrefix string) ServerValidationStatus {
 	// Use already-discovered data for registered servers
-	m.logger.Debug("validateMCPServer: validating MCPServer ", "servername", name)
+	m.logger.Debug("validateMCPServer: validating MCPServer", "servername", name)
 	upstream, exists := m.mcpServers[upstreamMCPID(mcpID)]
 	if !exists {
 		m.logger.Warn("Server validation failed: server not registered", "id", mcpID, "name", name)
@@ -733,7 +734,7 @@ func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpID, name, toolPr
 			},
 		}
 	}
-	m.logger.Debug("validateMCPServer: checking MCPServer connection status ", "servername", name)
+	m.logger.Debug("validateMCPServer: checking MCPServer connection status", "servername", name)
 	connectionStatus := m.checkSessionHealth(upstream)
 
 	var protocolValidation ProtocolValidation
