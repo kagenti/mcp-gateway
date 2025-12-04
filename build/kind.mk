@@ -4,6 +4,7 @@ KIND_CLUSTER_NAME ?= mcp-gateway
 
 .PHONY: kind-create-cluster
 kind-create-cluster: kind # Create the "mcp-gateway" kind cluster.
+	@./utils/generate-placeholder-ca.sh
 	@# Set KIND provider for podman
 	@if echo "$(CONTAINER_ENGINE)" | grep -q "podman"; then \
 		export KIND_EXPERIMENTAL_PROVIDER=podman; \

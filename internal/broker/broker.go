@@ -96,9 +96,9 @@ type MCPBroker interface {
 // TODO this probably should move to a sync.Map
 type mcpServers map[upstreamMCPID]*upstreamMCP
 
-func (mcps mcpServers) findByHost(host string) *upstreamMCP {
+func (mcps mcpServers) findByName(name string) *upstreamMCP {
 	for _, mcp := range mcps {
-		if mcp.Hostname == host {
+		if mcp.Name == name {
 			return mcp
 		}
 	}

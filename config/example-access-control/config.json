@@ -1,7 +1,7 @@
 {
     "acls": [
         {
-            "id": "server1.mcp.local",
+            "id": "mcp-test/mcp-server1-route",
             "access": {
                 "accounting": [
                     "test_headers"
@@ -12,7 +12,7 @@
             }
         },
         {
-            "id": "server2.mcp.local",
+            "id": "mcp-test/mcp-server2-route",
             "access": {
                 "accounting": [
                     "test2_headers"

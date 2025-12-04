@@ -13,12 +13,12 @@ spec:
     authentication: #validates the token
       'keycloak':
         jwt:
-          issuerUrl: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
+          issuerUrl: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
     metadata:
       vault:
         http:
           urlExpression: |
-            "http://vault.vault.svc.cluster.local:8200/v1/secret/data/" + auth.identity.preferred_username + "/" + request.host
+            "http://vault.vault.svc.cluster.local:8200/v1/secret/data/" + auth.identity.preferred_username + "/" + request.headers['x-mcp-servername'].replace("/", ".")
           method: GET
           credentials:
             customHeader:
@@ -30,9 +30,9 @@ spec:
       oauth-token-exchange:
         when:
           - predicate: "!has(auth.metadata.vault.data) || !has(auth.metadata.vault.data.data) || !has(auth.metadata.vault.data.data.token) || type(auth.metadata.vault.data.data.token) != string"
-          - predicate: type(auth.identity.aud) != string || auth.identity.aud != request.host
+          - predicate: type(auth.identity.aud) != string || auth.identity.aud != request.headers['x-mcp-servername']
         http:
-          url: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp/protocol/openid-connect/token
+          url: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp/protocol/openid-connect/token
           method: POST
           credentials:
             authorizationHeader:
@@ -48,7 +48,7 @@ spec:
             subject_token_type:
               value: urn:ietf:params:oauth:token-type:access_token
             audience:
-              expression: request.host
+              expression: request.headers['x-mcp-servername']
             scope:
               value: openid
         priority: 1
@@ -68,13 +68,13 @@ spec:
           - predicate: "!has(auth.metadata.vault.data) || !has(auth.metadata.vault.data.data) || !has(auth.metadata.vault.data.data.token) || type(auth.metadata.vault.data.data.token) != string"
         patternMatching:
           patterns:
-            - predicate: has(auth.authorization.token.claims.aud) && type(auth.authorization.token.claims.aud) == string && auth.authorization.token.claims.aud == request.host
+            - predicate: has(auth.authorization.token.claims.aud) && type(auth.authorization.token.claims.aud) == string && auth.authorization.token.claims.aud == request.headers['x-mcp-servername']
         priority: 1
       'tool-access-check':
         patternMatching:
           patterns:
             - predicate: |
-                request.headers['x-mcp-toolname'] in (has(auth.authorization.token.claims.resource_access) && auth.authorization.token.claims.resource_access.exists(p, p == request.host) ? auth.authorization.token.claims.resource_access[request.host].roles : [])
+                request.headers['x-mcp-toolname'] in (has(auth.authorization.token.claims.resource_access) && auth.authorization.token.claims.resource_access.exists(p, p == request.headers['x-mcp-servername']) ? auth.authorization.token.claims.resource_access[request.headers['x-mcp-servername']].roles : [])
         priority: 1
     response:
       success:

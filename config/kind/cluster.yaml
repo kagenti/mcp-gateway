@@ -1,21 +1,34 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
-  - role: control-plane
-    kubeadmConfigPatches:
-      - |
-        kind: InitConfiguration
-        nodeRegistration:
-          kubeletExtraArgs:
-            node-labels: "ingress-ready=true"
-      - |
-        apiVersion: kubelet.config.k8s.io/v1beta1
-        kind: KubeletConfiguration
-        syncFrequency: "10s"
-    extraPortMappings:
-      - containerPort: 30080 # MCP Gateway port
-        hostPort: 8001
-        protocol: TCP
-      - containerPort: 30089 # keycloak port
-        hostPort: 8002
-        protocol: TCP
+- role: control-plane
+  extraMounts:
+  - hostPath: ./out/certs/ca.crt
+    containerPath: /etc/kubernetes/pki/keycloak-ca.crt
+    readOnly: true
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  - |
+    apiVersion: kubelet.config.k8s.io/v1beta1
+    kind: KubeletConfiguration
+    syncFrequency: "10s"
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      extraArgs:
+        oidc-issuer-url: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
+        oidc-client-id: mcp-test/kubernetes-mcp
+        oidc-username-claim: preferred_username
+        oidc-groups-claim: groups
+        oidc-ca-file: /etc/kubernetes/pki/keycloak-ca.crt
+  extraPortMappings:
+  - containerPort: 30080 # MCP Gateway port
+    hostPort: 8001
+    protocol: TCP
+  - containerPort: 30089 # keycloak port
+    hostPort: 8002
+    protocol: TCP

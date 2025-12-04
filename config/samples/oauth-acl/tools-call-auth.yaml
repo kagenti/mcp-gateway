@@ -14,11 +14,11 @@ spec:
       metadata:
         rbac: #fetches hard coded acl currrently
           http:
-            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers[":authority"]'
+            urlExpression: '"http://acl-config.mcp-system.svc.cluster.local:8181/config/"+request.headers["x-mcp-servername"]'
       authentication: #validates the token
         'keycloak':
           jwt:
-            issuerUrl: http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
+            issuerUrl: https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp
       authorization: #authorizes the tool call
         'allow-tool-call':
           patternMatching:

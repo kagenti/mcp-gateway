@@ -1,0 +1,14 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/template/spec/hostAliases",
+    "value": [
+      {
+        "ip": "${GATEWAY_IP}",
+        "hostnames": [
+          "keycloak.127-0-0-1.sslip.io"
+        ]
+      }
+    ]
+  }
+]

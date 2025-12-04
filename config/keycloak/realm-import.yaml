@@ -23,29 +23,36 @@ data:
             "roles"
           ],
           "optionalClientScopes": [
-            "groups"
+            "groups",
+            "profile"
           ]
         },
         {
-          "clientId": "server1.mcp.local",
+          "clientId": "mcp-test/mcp-server1-route",
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
         },
         {
-          "clientId": "server2.mcp.local",
+          "clientId": "mcp-test/mcp-server2-route",
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
         },
         {
-          "clientId": "server3.mcp.local",
+          "clientId": "mcp-test/mcp-server3-route",
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
         },
         {
-          "clientId": "oidc-server.mcp.local",
+          "clientId": "mcp-test/mcp-oidc-server-route",
+          "publicClient": true,
+          "standardFlowEnabled": false,
+          "fullScopeAllowed": false
+        },
+        {
+          "clientId": "mcp-test/kubernetes-mcp",
           "publicClient": true,
           "standardFlowEnabled": false,
           "fullScopeAllowed": false
@@ -58,7 +65,7 @@ data:
               "name": "impersonator"
             }
           ],
-          "server1.mcp.local": [
+          "mcp-test/mcp-server1-route": [
             {
               "name": "greet"
             },
@@ -72,7 +79,7 @@ data:
               "name": "time"
             }
           ],
-          "server2.mcp.local": [
+          "mcp-test/mcp-server2-route": [
             {
               "name": "auth1234"
             },
@@ -89,7 +96,7 @@ data:
               "name": "time"
             }
           ],
-          "server3.mcp.local": [
+          "mcp-test/mcp-server3-route": [
             {
               "name": "time"
             },
@@ -103,9 +110,77 @@ data:
               "name": "pi"
             }
           ],
-          "oidc-server.mcp.local": [
+          "mcp-test/mcp-oidc-server-route": [
             {
               "name": "hello_world"
+            }
+          ],
+          "mcp-test/kubernetes-mcp": [
+            {
+              "name": "configuration_contexts_list"
+            },
+            {
+              "name": "configuration_view"
+            },
+            {
+              "name": "events_list"
+            },
+            {
+              "name": "helm_install"
+            },
+            {
+              "name": "helm_list"
+            },
+            {
+              "name": "helm_uninstall"
+            },
+            {
+              "name": "namespaces_list"
+            },
+            {
+              "name": "nodes_log"
+            },
+            {
+              "name": "nodes_stats_summary"
+            },
+            {
+              "name": "nodes_top"
+            },
+            {
+              "name": "pods_delete"
+            },
+            {
+              "name": "pods_exec"
+            },
+            {
+              "name": "pods_get"
+            },
+            {
+              "name": "pods_list"
+            },
+            {
+              "name": "pods_list_in_namespace"
+            },
+            {
+              "name": "pods_log"
+            },
+            {
+              "name": "pods_run"
+            },
+            {
+              "name": "pods_top"
+            },
+            {
+              "name": "resources_create_or_update"
+            },
+            {
+              "name": "resources_delete"
+            },
+            {
+              "name": "resources_get"
+            },
+            {
+              "name": "resources_list"
             }
           ]
         }
@@ -122,14 +197,43 @@ data:
         {
           "name": "accounting",
           "clientRoles": {
-            "server1.mcp.local": [
+            "mcp-test/mcp-server1-route": [
               "greet"
             ],
-            "server3.mcp.local": [
+            "mcp-test/mcp-server3-route": [
               "add"
             ],
-            "oidc-server.mcp.local": [
+            "mcp-test/mcp-oidc-server-route": [
               "hello_world"
+            ]
+          }
+        },
+        {
+          "name": "engineering",
+          "clientRoles": {
+            "mcp-test/kubernetes-mcp": [
+              "configuration_contexts_list",
+              "configuration_view",
+              "events_list",
+              "helm_install",
+              "helm_list",
+              "helm_uninstall",
+              "namespaces_list",
+              "nodes_log",
+              "nodes_stats_summary",
+              "nodes_top",
+              "pods_delete",
+              "pods_exec",
+              "pods_get",
+              "pods_list",
+              "pods_list_in_namespace",
+              "pods_log",
+              "pods_run",
+              "pods_top",
+              "resources_create_or_update",
+              "resources_delete",
+              "resources_get",
+              "resources_list"
             ]
           }
         }
@@ -151,7 +255,8 @@ data:
           ],
           "groups": [
             "mcp-users",
-            "accounting"
+            "accounting",
+            "engineering"
           ]
         }
       ],

@@ -4,6 +4,7 @@
 .PHONY: ci-setup
 ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed)
 	@echo "Setting up CI environment..."
+	@./utils/generate-placeholder-ca.sh
 	# Create Kind cluster if it doesn't exist
 	@if ! $(KIND) get clusters | grep -q mcp-gateway; then \
 		echo "Creating Kind cluster..."; \

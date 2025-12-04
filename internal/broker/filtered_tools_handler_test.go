@@ -59,7 +59,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			RegisteredMCPServers: mcpServers{
 				"http://upstream.mcp.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp1.server.local",
+						Name:       "mcp-test/test-server1",
 						ToolPrefix: "test_",
 					},
 					toolsResult: &mcp.ListToolsResult{
@@ -75,7 +75,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				},
 			},
 			AllowedToolsList: map[string][]string{
-				"mcp1.server.local": {"tool"},
+				"mcp-test/test-server1": {"tool"},
 			},
 			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
@@ -98,7 +98,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			RegisteredMCPServers: mcpServers{
 				"http://upstream.mcp1.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp1.server.local",
+						Name:       "mcp-test/test-server1",
 						ToolPrefix: "test1_",
 					},
 					toolsResult: &mcp.ListToolsResult{
@@ -114,7 +114,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				},
 				"http://upstream.mcp2.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp2.server.local",
+						Name:       "mcp-test/test-server2",
 						ToolPrefix: "test2_",
 					},
 					toolsResult: &mcp.ListToolsResult{
@@ -130,8 +130,8 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				},
 			},
 			AllowedToolsList: map[string][]string{
-				"mcp1.server.local": {"tool"},
-				"mcp2.server.local": {"tool"},
+				"mcp-test/test-server1": {"tool"},
+				"mcp-test/test-server2": {"tool"},
 			},
 			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
@@ -157,7 +157,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			RegisteredMCPServers: mcpServers{
 				"http://upstream.mcp1.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp1.server.local",
+						Name:       "mcp-test/test-server1",
 						ToolPrefix: "test1_",
 					},
 					toolsResult: &mcp.ListToolsResult{
@@ -173,7 +173,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 				},
 				"http://upstream.mcp2.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp2.server.local",
+						Name:       "mcp-test/test-server2",
 						ToolPrefix: "test2_",
 					},
 					toolsResult: &mcp.ListToolsResult{
@@ -206,7 +206,7 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 			RegisteredMCPServers: mcpServers{
 				"http://upstream.mcp1.cluster.local": &upstreamMCP{
 					MCPServer: config.MCPServer{
-						Hostname:   "mcp1.server.local",
+						Name:       "mcp-test/test-server1",
 						ToolPrefix: "test1_",
 					},
 					toolsResult: &mcp.ListToolsResult{

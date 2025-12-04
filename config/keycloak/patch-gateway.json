@@ -1,0 +1,31 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/listeners/-",
+    "value": {
+      "name": "keycloak",
+      "hostname": "keycloak.127-0-0-1.sslip.io",
+      "port": 8002,
+      "protocol": "HTTPS",
+      "tls": {
+        "mode": "Terminate",
+        "certificateRefs": [
+          {
+            "kind": "Secret",
+            "name": "mcp-gateway-keycloak-cert"
+          }
+        ]
+      },
+      "allowedRoutes": {
+        "namespaces": {
+          "from": "Selector",
+          "selector": {
+            "matchLabels": {
+              "kubernetes.io/metadata.name": "keycloak"
+            }
+          }
+        }
+      }
+    }
+  }
+]

@@ -11,7 +11,7 @@ oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions man
 	@kubectl set env deployment/mcp-broker-router \
 		OAUTH_RESOURCE_NAME="MCP Server" \
 		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8001/mcp" \
-		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
+		OAUTH_AUTHORIZATION_SERVERS="https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
 		OAUTH_BEARER_METHODS_SUPPORTED="header" \
 		OAUTH_SCOPES_SUPPORTED="basic,groups" \
 		-n mcp-system
@@ -27,8 +27,8 @@ oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions man
 	@kubectl -n mcp-system apply -k ./config/example-access-control/
 	@echo "✅ CORS configured"
 	@echo ""
-	@echo "Step 4/4: Patch Authorino deployment to resolve external Keycloak host name..."
-	@./utils/patch-authorino-keycloak-hostname.sh
+	@echo "Step 4/4: Patch Authorino deployment to be able to connect to Keycloak..."
+	@./utils/patch-authorino-to-keycloak.sh
 	@echo "✅ Authorino deployment patched"
 	@echo ""
 	@echo "🎉 OAuth example setup complete!"
@@ -50,7 +50,7 @@ oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 aut
 	@kubectl set env deployment/mcp-broker-router \
 		OAUTH_RESOURCE_NAME="MCP Server" \
 		OAUTH_RESOURCE="http://mcp.127-0-0-1.sslip.io:8001/mcp" \
-		OAUTH_AUTHORIZATION_SERVERS="http://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
+		OAUTH_AUTHORIZATION_SERVERS="https://keycloak.127-0-0-1.sslip.io:8002/realms/mcp" \
 		OAUTH_BEARER_METHODS_SUPPORTED="header" \
 		OAUTH_SCOPES_SUPPORTED="basic,groups,roles,profile" \
 		-n mcp-system
@@ -71,8 +71,8 @@ oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 aut
 	@kubectl apply -f ./config/keycloak/preflight_envoyfilter.yaml
 	@echo "✅ CORS configured"
 	@echo ""
-	@echo "Step 5/5: Patch Authorino deployment to resolve external Keycloak host name..."
-	@./utils/patch-authorino-keycloak-hostname.sh
+	@echo "Step 5/5: Patch Authorino deployment to be able to connect to Keycloak..."
+	@./utils/patch-authorino-to-keycloak.sh
 	@echo "✅ Authorino deployment patched"
 	@echo ""
 	@echo "🎉 OAuth example setup complete!"
