@@ -363,8 +363,6 @@ func LoadConfig(path string) {
 			s.URL,
 			"routable host",
 			s.Hostname,
-			"envvar",
-			s.CredentialEnvVar,
 		)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -80,12 +79,12 @@ func (config *MCPServersConfig) GetServerConfigByName(serverName string) *MCPSer
 
 // MCPServer represents a server
 type MCPServer struct {
-	Name             string
-	URL              string
-	ToolPrefix       string
-	Enabled          bool
-	Hostname         string
-	CredentialEnvVar string // env var name for auth
+	Name       string
+	URL        string
+	ToolPrefix string
+	Enabled    bool
+	Hostname   string
+	Credential string // env var name for auth
 }
 
 // ID returns a unique id for the a registered server
@@ -99,7 +98,7 @@ func (mcpServer *MCPServer) ConfigChanged(existingConfig MCPServer) bool {
 	return existingConfig.Name != mcpServer.Name ||
 		existingConfig.ToolPrefix != mcpServer.ToolPrefix ||
 		existingConfig.Hostname != mcpServer.Hostname ||
-		existingConfig.CredentialEnvVar != mcpServer.CredentialEnvVar
+		existingConfig.Credential != mcpServer.Credential
 }
 
 // Path returns the path part of the mcp url
@@ -109,14 +108,6 @@ func (mcpServer *MCPServer) Path() (string, error) {
 		return "", err
 	}
 	return parsedURL.Path, nil
-}
-
-// Credential returns the configured credential for a backend MCP server
-func (mcpServer *MCPServer) Credential() string {
-	if mcpServer.CredentialEnvVar != "" {
-		return os.Getenv(mcpServer.CredentialEnvVar)
-	}
-	return ""
 }
 
 // VirtualServer represents a virtual server configuration

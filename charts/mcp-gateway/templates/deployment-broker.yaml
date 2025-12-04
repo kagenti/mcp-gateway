@@ -21,13 +21,8 @@ spec:
       serviceAccountName: {{ include "mcp-gateway.brokerServiceAccountName" . }}
       volumes:
         - name: config-volume
-          configMap:
-            name: mcp-gateway-config
-            optional: true
-        - name: mcp-credentials
           secret:
-            secretName: mcp-aggregated-credentials
-            defaultMode: 0400
+            name: mcp-gateway-config
             optional: true
       containers:
         - name: mcp-broker-router
@@ -45,16 +40,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          envFrom:
-            - secretRef:
-                name: mcp-aggregated-credentials
-                optional: true
           volumeMounts:
             - name: config-volume
               mountPath: /config
-            - name: mcp-credentials
-              mountPath: /etc/mcp-credentials
-              readOnly: true
           ports:
             - name: http
               containerPort: 8080

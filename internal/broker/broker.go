@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
-	"github.com/kagenti/mcp-gateway/pkg/credentials"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -34,7 +33,6 @@ type upstreamMCP struct {
 	mcpClient        *client.Client        // The MCP client we hold open to listen for tool notifications
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
 	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
-	CredentialValue  string                `json:"-"` // in memory to allow quick access and comparison
 }
 
 // ClientType defines the type of MCP client being created
@@ -238,27 +236,12 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 
 // RegisterServerWithConfig registers an MCP server with full config
 func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer *config.MCPServer) ([]mcp.Tool, error) {
-	credentialValueChanged := false
-	m.logger.Debug("registering server ", "mcpID", mcpServer.ID(), "credential env", mcpServer.CredentialEnvVar)
-	credential, err := credentials.Get(mcpServer.CredentialEnvVar)
-	if err != nil {
-		// only log this for now and allow it to go in to the back off in register tools
-		m.logger.Error("registration failed", "server", mcpServer.ID(), "error", err)
-		// as we were not able to read the credential assume it has changed. TODO (back off retry registration instead)
-		credentialValueChanged = true
-	}
+	m.logger.Debug("registering server ", "mcpID", mcpServer.ID())
 	// check if configuration changed for already registered server
 	if existingUpstream, isRegistered := m.mcpServers[upstreamMCPID(mcpServer.ID())]; isRegistered {
 
-		if mcpServer.CredentialEnvVar != "" {
-			m.logger.Debug("RegisterServerWithConfig: checking credential envvar ", "server", mcpServer.ID())
-			if credential != "" && existingUpstream.CredentialValue != credential {
-				existingUpstream.CredentialValue = credential
-				credentialValueChanged = true
-			}
-		}
 		configChanged := mcpServer.ConfigChanged(existingUpstream.MCPServer)
-		if !configChanged && !credentialValueChanged {
+		if !configChanged {
 			m.logger.Debug("mcp server is already registered and up to date", "server ", mcpServer.ID())
 			return nil, nil
 		}
@@ -266,8 +249,7 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 		m.logger.Info("RegisterServerWithConfig mcp re-registering",
 			"server", mcpServer.ID(),
 			"mcpURL", mcpServer.URL,
-			"configChanged", configChanged,
-			"credentialValueChanged", credentialValueChanged)
+			"configChanged", configChanged)
 
 		if err := m.UnregisterServer(ctx, mcpServer.ID()); err != nil {
 			m.logger.Warn("failed to unregister before re-registration", "error", err)
@@ -277,8 +259,7 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 
 	m.logger.Info("Registering server", "mcpURL", mcpServer.Name, "prefix", mcpServer.ToolPrefix)
 	upstream := &upstreamMCP{
-		MCPServer:       *mcpServer,
-		CredentialValue: credential,
+		MCPServer: *mcpServer,
 	}
 
 	m.logger.Debug("Registering server adding upstream", "mcp server", mcpServer.ID())
@@ -607,20 +588,14 @@ func (m *mcpBrokerImpl) HandleStatusRequest(w http.ResponseWriter, r *http.Reque
 
 // createMCPClient creates and initializes an MCP client with the appropriate configuration
 func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, id string, clientType ClientType, options ...transport.StreamableHTTPCOption) (*client.Client, *mcp.InitializeResult, error) {
-	// Look up the actual upstream config to get CredentialEnvVar
 	upstream, found := m.mcpServers[upstreamMCPID(id)]
 	if !found {
 		return nil, nil, fmt.Errorf("unable to create client for unknown MCP server %s", id)
 	}
 
-	// Use the registered upstream with its CredentialEnvVar
-	authHeader, err := m.getAuthorizationHeaderForUpstream(upstream)
-	if err != nil {
-		return nil, nil, err
-	}
-	if authHeader != "" {
+	if upstream.Credential != "" {
 		options = append(options, transport.WithHTTPHeaders(map[string]string{
-			"Authorization": authHeader,
+			"Authorization": upstream.Credential,
 		}))
 	}
 
@@ -677,23 +652,6 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, id string, clientTy
 	return httpClient, initResp, nil
 }
 
-// Get the authorization header needed for a particular MCP upstream
-func (m *mcpBrokerImpl) getAuthorizationHeaderForUpstream(upstream *upstreamMCP) (string, error) {
-	// We don't store the authorization in the config.yaml, which comes from a ConfigMap.
-	// Instead it is passed to the Broker pod through env vars (typically from Secrets)
-	m.logger.Debug("getAuthorizationHeaderForUpstream", "upstream", upstream.ID(), "credential env", upstream.CredentialEnvVar)
-	var credName string
-	if upstream.CredentialValue != "" {
-		return upstream.CredentialValue, nil
-	}
-	if upstream.CredentialEnvVar != "" {
-		credName = upstream.CredentialEnvVar
-		return credentials.Get(credName)
-	}
-	return "", nil
-
-}
-
 // prefixedName returns the name the gateway will advertise the tool as
 func (upstream *upstreamMCP) prefixedName(tool string) toolName {
 	return toolName(fmt.Sprintf("%s%s", upstream.ToolPrefix, tool))
@@ -720,7 +678,6 @@ func toolsToServerTools(newTools []mcp.Tool) []server.ServerTool {
 // validateMCPServer validates a single MCP server using existing session data
 func (m *mcpBrokerImpl) validateMCPServer(_ context.Context, mcpID, name, toolPrefix string) ServerValidationStatus {
 	// Use already-discovered data for registered servers
-	m.logger.Debug("validateMCPServer: validating MCPServer", "servername", name)
 	upstream, exists := m.mcpServers[upstreamMCPID(mcpID)]
 	if !exists {
 		m.logger.Warn("Server validation failed: server not registered", "id", mcpID, "name", name)

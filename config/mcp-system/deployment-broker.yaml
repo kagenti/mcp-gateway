@@ -21,13 +21,8 @@ spec:
       serviceAccountName: mcp-broker-router
       volumes:
         - name: config-volume
-          configMap:
-            name: mcp-gateway-config
-        - name: mcp-credentials # credentials for the broker to user to access MCP backends
           secret:
-            secretName: mcp-aggregated-credentials
-            defaultMode: 0400
-            optional: true # broker can still work without credentials
+            secretName: mcp-gateway-config
       containers:
         - name: mcp-broker-router
           image: ghcr.io/kagenti/mcp-gateway:latest
@@ -39,16 +34,9 @@ spec:
             - --mcp-gateway-public-host=mcp.127-0-0-1.sslip.io
             - --mcp-router-address=0.0.0.0:50051
             - --log-level=-4 # info level
-          envFrom:
-            - secretRef:
-                name: mcp-aggregated-credentials
-                optional: true # broker can still work without credentials
           volumeMounts:
             - name: config-volume
               mountPath: /config
-            - name: mcp-credentials
-              mountPath: /etc/mcp-credentials
-              readOnly: true
           ports:
             - name: http
               containerPort: 8080
