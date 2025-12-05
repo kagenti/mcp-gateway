@@ -60,6 +60,7 @@ var (
 	mcpConfigFile             string
 	jwtSigningKeyFlag         string
 	sessionDurationInMins     int64
+	brokerWriteTimeoutSecs    int64
 	loglevel                  int
 	logFormat                 string
 	controllerMode            bool
@@ -126,6 +127,7 @@ func main() {
 	flag.StringVar(&logFormat, "log-format", "txt", "switch to json logs with --log-format=json")
 
 	flag.Int64Var(&sessionDurationInMins, "session-length", 60*24, "default session length with the gateway in minutes. Default 24h")
+	flag.Int64Var(&brokerWriteTimeoutSecs, "mcp-broker-write-timeout", 0, "HTTP write timeout in seconds for the broker. Default 0 (disabled) for SSE notification support. Set > 0 to enable timeout.")
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
@@ -191,7 +193,7 @@ func main() {
 	}
 	jwtSessionMgr = jwtmgr
 
-	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr)
+	brokerServer, mcpBroker, mcpServer := setUpBroker(mcpBrokerAddrFlag, enforceToolFilteringFlag, jwtSessionMgr, brokerWriteTimeoutSecs)
 	routerGRPCServer, router := setUpRouter(mcpBroker, logger, jwtSessionMgr, sessionCache)
 	mcpConfig.RegisterObserver(router)
 	mcpConfig.RegisterObserver(mcpBroker)
@@ -258,7 +260,7 @@ func main() {
 	routerGRPCServer.GracefulStop()
 }
 
-func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWTManager) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
+func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWTManager, writeTimeoutSecs int64) (*http.Server, broker.MCPBroker, *server.StreamableHTTPServer) {
 
 	mux := http.NewServeMux()
 
@@ -270,11 +272,16 @@ func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWT
 	oauthHandler := broker.ProtectedResourceHandler{Logger: logger}
 	mux.HandleFunc("/.well-known/oauth-protected-resource", oauthHandler.Handle)
 
+	// WriteTimeout of 0 (disabled) is important for SSE connections (GET /mcp).
+	// SSE streams notifications indefinitely - any write timeout would kill the connection.
+	// Connection lifecycle is managed by the application (client disconnect, session expiry, etc.)
+	writeTimeout := time.Duration(writeTimeoutSecs) * time.Second
+
 	httpSrv := &http.Server{
 		Addr:         address,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: writeTimeout,
 	}
 
 	mcpBroker := broker.NewBroker(logger,
