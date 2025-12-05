@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os/exec"
 	"strings"
 	"time"
@@ -438,8 +439,15 @@ func UniqueName(prefix string) string {
 
 // NewMCPGatewayClient creates a new MCP client connected to the gateway
 func NewMCPGatewayClient(ctx context.Context, gatewayHost string) (*mcpclient.Client, error) {
+	return NewMCPGatewayClientWithHeaders(ctx, gatewayHost, nil)
+}
+
+// NewMCPGatewayClientWithHeaders creates a new MCP client with custom headers
+func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, headers map[string]string) (*mcpclient.Client, error) {
+	allHeaders := map[string]string{"e2e": "client"}
+	maps.Copy(allHeaders, headers)
 	mcpGatewayClient, err := mcpclient.NewStreamableHttpClient(gatewayHost, transport.
-		WithHTTPHeaders(map[string]string{"e2e": "client"}))
+		WithHTTPHeaders(allHeaders))
 	if err != nil {
 		return nil, err
 	}
@@ -460,5 +468,4 @@ func NewMCPGatewayClient(ctx context.Context, gatewayHost string) (*mcpclient.Cl
 		return nil, err
 	}
 	return mcpGatewayClient, nil
-
 }
