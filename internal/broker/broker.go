@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -113,6 +114,9 @@ type mcpBrokerImpl struct {
 	// serverSessions tracks the sessions we maintain with upstream MCP servers
 	serverSessions map[upstreamMCPID]map[downstreamSessionID]*upstreamSessionState
 
+	virtualServers map[string]*config.VirtualServer
+	vsLock         sync.Mutex
+
 	// mcpServers tracks the known servers
 	// TODO this should be protected or be a sync map
 	mcpServers mcpServers
@@ -157,6 +161,7 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		mcpServers:     map[upstreamMCPID]*upstreamMCP{},
 		toolMapping:    map[toolName]*upstreamToolInfo{},
 		logger:         logger,
+		virtualServers: map[string]*config.VirtualServer{},
 	}
 
 	for _, option := range opts {
@@ -184,7 +189,7 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
-	hooks.AddAfterListTools(mcpBkr.FilteredTools)
+	hooks.AddAfterListTools(mcpBkr.FilterTools)
 
 	mcpBkr.listeningMCPServer = server.NewMCPServer(
 		"Kagenti MCP Broker",
@@ -232,6 +237,22 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 	if len(discoveredTools) > 0 {
 		m.listeningMCPServer.AddTools(toolsToServerTools(discoveredTools)...)
 	}
+	m.vsLock.Lock()
+	for _, vs := range conf.VirtualServers {
+		m.virtualServers[vs.Name] = vs
+	}
+	m.vsLock.Unlock()
+}
+
+func (m *mcpBrokerImpl) GetVirtualSeverByHeader(namespaceName string) (config.VirtualServer, error) {
+	m.vsLock.Lock()
+	defer m.vsLock.Unlock()
+	for _, vs := range m.virtualServers {
+		if vs.Name == namespaceName {
+			return *vs, nil
+		}
+	}
+	return config.VirtualServer{}, fmt.Errorf("virtual server %s not found", namespaceName)
 }
 
 // RegisterServerWithConfig registers an MCP server with full config

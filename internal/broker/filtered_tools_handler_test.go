@@ -254,7 +254,7 @@ VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 				}
 			}
 			mcpBroker.mcpServers = tc.RegisteredMCPServers
-			mcpBroker.FilteredTools(context.TODO(), 1, request, tc.FullToolList)
+			mcpBroker.FilterTools(context.TODO(), 1, request, tc.FullToolList)
 
 			for _, exp := range tc.ExpectedTools {
 				found := false
