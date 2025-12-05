@@ -7,21 +7,21 @@ This is a simple example for defining simple access control to your MCP tools ex
 
 You can change the `config.json` in this directory. Note the id specified is currently defined as the server prefix. 
 
-Example adding another group: here we have added the developers group to the test_ mcp server.
+Example adding another group: here we have added the developers group to the test1_ mcp server.
 
 
 ```json
 {
     "acls": [
         {
-            "id": "test_",
+            "id": "test1_",
             "access": {
                 "accounting": [
-                    "test_headers",
-                    "test_echo"
+                    "test1_headers",
+                    "test1_echo"
                 ],
                 "developers":[
-                    "test_hello_world"
+                    "test1_hello_world"
                 ]
             }
         },

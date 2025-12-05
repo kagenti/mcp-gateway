@@ -8,7 +8,7 @@ metadata:
     'kagenti/mcp': 'true'
 spec:
   # Tool prefix applied to all servers in this MCPServer
-  toolPrefix: test_
+  toolPrefix: test1_
   targetRef:
     # Server 1 - Go SDK based (hi, time, slow, headers tools)
     group: gateway.networking.k8s.io

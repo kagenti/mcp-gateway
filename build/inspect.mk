@@ -49,10 +49,6 @@ inspect-oidc-server: ## Open MCP Inspector for OpenID Connect test server (requi
 inspect-everything-server: ## Open MCP Inspector for test everything server
 	$(call inspect-server-template,test everything server,everything-server,9095,echo add longRunningOperation printEnv sampleLLM getTinyImage annotatedMessage getResourceReference startElicitation structuredContent listRoots)
 
-.PHONY: inspect-conformance-server
-inspect-conformance-server: ## Open MCP Inspector for test conformance server
-	$(call inspect-server-template,test conformance server,conformance-server,9096,test_simple_text)
-
 # Legacy alias for compatibility
 inspect-mock-impl: inspect-server1
 
