@@ -50,15 +50,6 @@ func getConfigNamespace() string {
 	return namespace
 }
 
-// generates credential env var name: KAGENTAI_{MCP_NAME}_CRED
-func generateCredentialEnvVar(mcpServerName string) string {
-	// convert to uppercase and replace hyphens with underscores
-	// e.g., "weather-service" -> "WEATHER_SERVICE"
-	name := strings.ToUpper(mcpServerName)
-	name = strings.ReplaceAll(name, "-", "_")
-	return fmt.Sprintf("KAGENTAI_%s_CRED", name)
-}
-
 // ServerInfo holds server information
 type ServerInfo struct {
 	ID                 string
@@ -67,7 +58,7 @@ type ServerInfo struct {
 	ToolPrefix         string
 	HTTPRouteName      string
 	HTTPRouteNamespace string
-	CredentialEnvVar   string // env var name if auth configured
+	Credential         string
 }
 
 // MCPReconciler reconciles both MCPServer and MCPVirtualServer resources
@@ -325,8 +316,24 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 		}
 
 		// add credential env var if configured
-		if serverInfo.CredentialEnvVar != "" {
-			serverConfig.CredentialEnvVar = serverInfo.CredentialEnvVar
+		if mcpServer.Spec.CredentialRef != nil {
+			secret := &corev1.Secret{}
+			err = r.Get(ctx, types.NamespacedName{
+				Name:      mcpServer.Spec.CredentialRef.Name,
+				Namespace: mcpServer.Namespace,
+			}, secret)
+			if err != nil {
+				log.Error(err, "failed to read credential secret")
+				continue
+			}
+			val, ok := secret.Data[mcpServer.Spec.CredentialRef.Key]
+			if !ok {
+				// no key log and continue
+				log.V(1).Info("the secret had no key ", "specified key", mcpServer.Spec.CredentialRef.Key)
+				continue
+			}
+			serverConfig.Credential = string(val)
+
 		}
 
 		brokerConfig.Servers = append(brokerConfig.Servers, serverConfig)
@@ -347,13 +354,6 @@ func (r *MCPReconciler) regenerateAggregatedConfig(
 		return reconcile.Result{}, err
 	}
 
-	// aggregate credentials from all MCPServers into a single secret
-	if err := r.aggregateCredentials(ctx, mcpServerList.Items); err != nil {
-		log.Error(err, "Failed to aggregate credentials")
-		// don't fail reconciliation on credential errors
-		// the broker can still work without credentials
-	}
-
 	log.V(1).Info("Successfully regenerated aggregated configuration",
 		"serverCount", len(brokerConfig.Servers),
 		"virtualServerCount", len(brokerConfig.VirtualServers))
@@ -369,7 +369,7 @@ func (r *MCPReconciler) writeAggregatedConfig(
 	ctx context.Context,
 	brokerConfig *config.BrokerConfig,
 ) error {
-	writer := NewConfigMapWriter(r.Client, r.Scheme)
+	writer := NewSecretWriter(r.Client, r.Scheme)
 	return writer.WriteAggregatedConfig(ctx, getConfigNamespace(), ConfigName, brokerConfig)
 }
 
@@ -540,16 +540,8 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		ToolPrefix:         toolPrefix,
 		HTTPRouteName:      targetRef.Name,
 		HTTPRouteNamespace: namespace,
+		Credential:         "",
 	}
-
-	// generate credential env var name if credentialRef is set
-	if mcpServer.Spec.CredentialRef != nil {
-		// convert mcp server name to env var format
-		// e.g., "weather-service" -> "KAGENTI_WEATHER_SERVICE_CRED"
-		envVarName := generateCredentialEnvVar(mcpServer.Name)
-		serverInfo.CredentialEnvVar = envVarName
-	}
-
 	return &serverInfo, nil
 }
 
@@ -992,142 +984,5 @@ func (s *startupReconciler) Start(ctx context.Context) error {
 	}
 
 	log.Info("Startup reconciliation completed successfully")
-	return nil
-}
-
-// aggregateCredentials collects credentials from all MCPServers and creates/updates
-// a single aggregated secret for the broker to use with envFrom
-func (r *MCPReconciler) aggregateCredentials(ctx context.Context, mcpServers []mcpv1alpha1.MCPServer) error {
-	log := log.FromContext(ctx)
-
-	// collect all credentials
-	aggregatedData := make(map[string][]byte)
-
-	for _, mcpServer := range mcpServers {
-		if mcpServer.Spec.CredentialRef == nil {
-			continue // skip if no credentials configured
-		}
-
-		// fetch the referenced secret - use APIReader to bypass cache for credentials
-		// this ensures we always get the latest credential values when secrets change
-		secret := &corev1.Secret{}
-		var err error
-		if r.APIReader != nil {
-			log.V(1).Info("Using APIReader to bypass cache for credential secret read",
-				"mcpserver", mcpServer.Name,
-				"secret", mcpServer.Spec.CredentialRef.Name)
-			err = r.APIReader.Get(ctx, types.NamespacedName{
-				Name:      mcpServer.Spec.CredentialRef.Name,
-				Namespace: mcpServer.Namespace,
-			}, secret)
-		} else {
-			log.Info("WARNING: APIReader is nil, using cached client for credential secret read",
-				"mcpserver", mcpServer.Name,
-				"secret", mcpServer.Spec.CredentialRef.Name)
-			err = r.Get(ctx, types.NamespacedName{
-				Name:      mcpServer.Spec.CredentialRef.Name,
-				Namespace: mcpServer.Namespace,
-			}, secret)
-		}
-		if err != nil {
-			if errors.IsNotFound(err) {
-				log.Error(err, "Referenced secret not found",
-					"mcpserver", mcpServer.Name,
-					"secret", mcpServer.Spec.CredentialRef.Name)
-				continue // skip this one but continue with others
-			}
-			return fmt.Errorf("failed to get secret %s: %w", mcpServer.Spec.CredentialRef.Name, err)
-		}
-
-		// validate label
-		if secret.Labels == nil || secret.Labels[CredentialSecretLabel] != CredentialSecretValue {
-			log.Error(nil, "Credential secret missing required label",
-				"mcpserver", mcpServer.Name,
-				"secret", mcpServer.Spec.CredentialRef.Name,
-				"requiredLabel", fmt.Sprintf("%s=%s", CredentialSecretLabel, CredentialSecretValue))
-			continue // skip this one but continue with others
-		}
-
-		// determine which key to use
-		key := mcpServer.Spec.CredentialRef.Key
-		if key == "" {
-			key = "token" // default
-		}
-
-		// get the credential value
-		credValue, exists := secret.Data[key]
-		if !exists {
-			log.Error(nil, "Secret key not found",
-				"secret", mcpServer.Spec.CredentialRef.Name,
-				"key", key)
-			continue
-		}
-
-		// add to aggregated data with standardized env var name
-		envVarName := generateCredentialEnvVar(mcpServer.Name)
-		aggregatedData[envVarName] = credValue
-	}
-
-	// create or update the aggregated secret
-	aggregatedSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "mcp-aggregated-credentials",
-			Namespace: getConfigNamespace(),
-			Labels: map[string]string{
-				"app":                        "mcp-gateway",
-				"mcp.kagenti.com/aggregated": "true",
-				SecretManagedByLabel:         SecretManagedByValue,
-			},
-		},
-		Data: aggregatedData,
-	}
-
-	// check if secret exists
-	existing := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      aggregatedSecret.Name,
-		Namespace: aggregatedSecret.Namespace,
-	}, existing)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// create new secret
-			if err := r.Create(ctx, aggregatedSecret); err != nil {
-				return fmt.Errorf("failed to create aggregated secret: %w", err)
-			}
-			log.V(1).Info("Created aggregated credentials secret",
-				"credentialCount", len(aggregatedData))
-		} else {
-			return fmt.Errorf("failed to get aggregated secret: %w", err)
-		}
-	} else {
-		// check if update is needed by comparing data
-		dataChanged := false
-		if len(existing.Data) != len(aggregatedData) {
-			dataChanged = true
-		} else {
-			for key, newValue := range aggregatedData {
-				if existingValue, exists := existing.Data[key]; !exists || string(existingValue) != string(newValue) {
-					dataChanged = true
-					break
-				}
-			}
-		}
-
-		if !dataChanged {
-			log.V(1).Info("Aggregated credentials unchanged, skipping update",
-				"credentialCount", len(aggregatedData))
-			return nil
-		}
-
-		// update existing secret
-		existing.Data = aggregatedData
-		if err := r.Update(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update aggregated secret: %w", err)
-		}
-		log.V(1).Info("Updated aggregated credentials secret",
-			"credentialCount", len(aggregatedData))
-	}
-
 	return nil
 }

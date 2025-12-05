@@ -36,7 +36,7 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 		return fmt.Errorf("failed to marshal config to YAML: %w", err)
 	}
 
-	configMap := &corev1.ConfigMap{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -45,7 +45,7 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 				"mcp.kagenti.com/aggregated": "true",
 			},
 		},
-		Data: map[string]string{
+		StringData: map[string]string{
 			"config.yaml": string(yamlData),
 		},
 	}
@@ -57,11 +57,11 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 		Jitter:   0.1,
 		Steps:    5,
 	}, func() (bool, error) {
-		existing := &corev1.ConfigMap{}
+		existing := &corev1.Secret{}
 		err := w.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, existing)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				err = w.Client.Create(ctx, configMap)
+				err = w.Client.Create(ctx, secret)
 				if errors.IsAlreadyExists(err) {
 					// Someone else created it, retry
 					return false, nil
@@ -72,10 +72,10 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 		}
 
 		// Only update if data or labels have changed
-		if !equality.Semantic.DeepEqual(existing.Data, configMap.Data) ||
-			!equality.Semantic.DeepEqual(existing.Labels, configMap.Labels) {
-			existing.Data = configMap.Data
-			existing.Labels = configMap.Labels
+		if !equality.Semantic.DeepEqual(existing.StringData, secret.StringData) ||
+			!equality.Semantic.DeepEqual(existing.Labels, secret.Labels) {
+			existing.StringData = secret.StringData
+			existing.Labels = secret.Labels
 			err = w.Client.Update(ctx, existing)
 			if errors.IsConflict(err) {
 				// Resource conflict, retry
@@ -88,8 +88,8 @@ func (w *ConfigMapWriter) WriteAggregatedConfig(
 	})
 }
 
-// NewConfigMapWriter creates a ConfigMapWriter
-func NewConfigMapWriter(client client.Client, scheme *runtime.Scheme) *ConfigMapWriter {
+// NewSecretWriter creates a SecretConfigWriter
+func NewSecretWriter(client client.Client, scheme *runtime.Scheme) *ConfigMapWriter {
 	return &ConfigMapWriter{
 		Client: client,
 		Scheme: scheme,
