@@ -39,6 +39,7 @@ spec:
             - --mcp-broker-public-address=0.0.0.0:8080
             - --mcp-router-address=0.0.0.0:50051
             - --mcp-gateway-public-host={{ .Values.gateway.publicHost }}
+            - --mcp-broker-write-timeout={{ .Values.broker.writeTimeoutSeconds | default 0 }}
             - --log-level=-4
           env:
             - name: NAMESPACE
