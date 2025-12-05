@@ -64,15 +64,15 @@ Once the script completes, you'll have:
 
 ### Available Test Tools
 The setup includes example MCP servers with tools like:
-- `test_hello_world` - Simple greeting tool
-- `test_headers` - HTTP header inspection
+- `test1_hello_world` - Simple greeting tool
+- `test1_headers` - HTTP header inspection
 - `test2_headers` - Additional header tool
 
 ### Try It Out
 1. **Connect**: MCP Inspector should open automatically
 2. **Initialize**: Click "Connect" to initialize the MCP session
 3. **Explore Tools**: Browse available tools in the left panel
-4. **Test Tools**: Try calling `test_hello_world` or `test_headers`
+4. **Test Tools**: Try calling `test1_hello_world` or `test1_headers`
 5. **View Logs**: Check the request/response flow
 
 ## Cleanup
