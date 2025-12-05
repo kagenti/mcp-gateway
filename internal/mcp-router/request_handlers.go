@@ -257,6 +257,18 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 	headers.WithMCPSession(remoteMCPSeverSession)
 	// reset the host name now we have identifed the correct tool and backend
 	headers.WithAuthority(serverInfo.Hostname)
+
+	// add authorization headers for backends that require auth
+	mcpServerConfig := s.RoutingConfig.GetServerConfigByName(serverInfo.Name)
+	if mcpServerConfig != nil {
+		credential := mcpServerConfig.Credential()
+		if credential != "" {
+			s.Logger.Debug("Adding authorization headers for tool call", "server", mcpServerConfig.Name)
+			headers.WithCustomHeader("x-mcp-api-key", credential)
+			headers.WithCustomHeader("authorization", credential)
+		}
+	}
+
 	// prepare request body for MCP Backend
 	body, err := mcpReq.ToBytes()
 	if err != nil {
@@ -362,6 +374,20 @@ func (s *ExtProcServer) HandleNoneToolCall(mcpReq *MCPRequest) []*eppb.Processin
 
 			s.Logger.Debug("HandleMCPBrokerRequest initialize request", "target", remoteInitializeTarget, "call", mcpReq.Method)
 			headers.WithAuthority(remoteInitializeTarget)
+
+			// add authorization header if the server has credentials configured
+			serverConfig := s.RoutingConfig.GetServerConfigByHostname(remoteInitializeTarget)
+			if serverConfig != nil {
+				credential := serverConfig.Credential()
+				if credential != "" {
+					s.Logger.Debug("Adding authorization header for initialize request", "server", serverConfig.Name)
+					// use x-mcp-api-key to avoid conflicts with OAuth (Issue #201)
+					headers.WithCustomHeader("x-mcp-api-key", credential)
+					// always set authorization header for backend server (replaces OAuth token if present)
+					headers.WithCustomHeader("authorization", credential)
+				}
+			}
+
 			// ensure we unset the router specific headers so they are not sent to the backend
 			return response.WithRequestBodySetUnsetHeadersResponse(headers.Build(), []string{"mcp-init-host", RoutingKey}).Build()
 		}
