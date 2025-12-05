@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"slices"
 
@@ -15,121 +14,170 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// authorizedToolsHeader is a header expected to be set by a trused external source.
 var authorizedToolsHeader = http.CanonicalHeaderKey("x-authorized-tools")
+var virtualMCPHeader = http.CanonicalHeaderKey("x-mcp-virtualserver")
 
-const (
-	allowedToolsClaimKey = "allowed-tools"
-)
+const allowedToolsClaimKey = "allowed-tools"
 
-// FilterTools will reduce the tool set down to those passed based the authorization lay via the x-authorized-tools header
-// The header is expected to be signed as a JWT if we cannot verify the JWT then nothing will be returned
-func (broker *mcpBrokerImpl) FilteredTools(_ context.Context, _ any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
-	originalTools := make([]mcp.Tool, len(mcpRes.Tools))
-	copy(originalTools, mcpRes.Tools)
-	// set to empty by default
-	mcpRes.Tools = []mcp.Tool{}
+// FilterTools reduces the tool set based on authorization headers.
+// Priority: x-authorized-tools JWT filtering, then x-mcp-virtualserver filtering.
+func (broker *mcpBrokerImpl) FilterTools(_ context.Context, _ any, mcpReq *mcp.ListToolsRequest, mcpRes *mcp.ListToolsResult) {
+	tools := mcpRes.Tools
 
-	var allowedToolsValue string
-	if _, ok := mcpReq.Header[authorizedToolsHeader]; !ok {
-		broker.logger.Debug("FilteredTools: no tool filtering header sent ", "key", authorizedToolsHeader, "enforced filtering", broker.enforceToolFilter)
+	// step 1: apply x-authorized-tools filtering (JWT-based)
+	tools = broker.applyAuthorizedToolsFilter(mcpReq.Header, tools)
+
+	// step 2: apply virtual server filtering
+	tools = broker.applyVirtualServerFilter(mcpReq.Header, tools)
+
+	mcpRes.Tools = tools
+}
+
+// applyAuthorizedToolsFilter filters tools based on x-authorized-tools JWT header.
+// Returns original tools if header not present and enforcement is off.
+// Returns empty slice if header validation fails or enforcement is on without header.
+func (broker *mcpBrokerImpl) applyAuthorizedToolsFilter(headers http.Header, tools []mcp.Tool) []mcp.Tool {
+	headerValues, present := headers[authorizedToolsHeader]
+
+	if !present {
+		broker.logger.Debug("no x-authorized-tools header", "enforced", broker.enforceToolFilter)
 		if broker.enforceToolFilter {
-			return
+			return []mcp.Tool{}
 		}
-		mcpRes.Tools = originalTools
-		return
-	}
-	if len(mcpReq.Header[authorizedToolsHeader]) != 1 {
-		broker.logger.Debug("FilteredTools: expected exactly 1 value", "header ", authorizedToolsHeader)
-		return
+		return tools
 	}
 
-	allowedToolsValue = mcpReq.Header[authorizedToolsHeader][0]
-
-	if allowedToolsValue == "" {
-		broker.logger.Debug("FilteredTools: returning no tools", "Header present", authorizedToolsHeader, "empty value specified", allowedToolsValue)
-		return
-	}
-	if broker.trustedHeadersPublicKey == "" {
-		broker.logger.Error("no public key provided to validate", "header", authorizedToolsHeader, "header is set and has value", allowedToolsValue)
-		return
-	}
-
-	// validate the JWT that contains the tools claim
-	parsedToken, err := validateJWTHeader(allowedToolsValue, broker.trustedHeadersPublicKey)
+	allowedTools, err := broker.parseAuthorizedToolsJWT(headerValues)
 	if err != nil {
-		broker.logger.Error("did not validate trusted header value ", "header", authorizedToolsHeader, "value", allowedToolsValue, "err", err)
-		return
-	}
-	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
-		if toolsValue, ok := claims[allowedToolsClaimKey]; ok {
-			allowedToolsValue, ok = toolsValue.(string)
-			if !ok {
-				broker.logger.Error("failed to retrieve allowed-tools claims from jwt it is not a string")
-				return
-			}
-		} else {
-			broker.logger.Error("failed to retrieve allowed-tools claims from jwt")
-			return
-		}
-	} else {
-		broker.logger.Error("failed to retrieve claims from jwt")
-		return
+		broker.logger.Error("failed to parse x-authorized-tools header", "error", err)
+		return []mcp.Tool{}
 	}
 
-	broker.logger.Debug("filtering tools based on header", "value", allowedToolsValue)
-	authorizedTools := map[string][]string{}
-	if err := json.Unmarshal([]byte(allowedToolsValue), &authorizedTools); err != nil {
-		broker.logger.Error("failed to unmarshal authorized tools json header returning empty tool set", "error", err)
-		return
-	}
-	mcpRes.Tools = broker.filterTools(authorizedTools)
+	return broker.filterToolsByServerMap(allowedTools)
 }
 
-func (broker *mcpBrokerImpl) filterTools(authorizedTools map[string][]string) []mcp.Tool {
-	var filteredTools []mcp.Tool
-	for server, allowedToolNames := range authorizedTools {
-		slog.Debug("checking tools for server ", "server", server, "allowed tools for server", allowedToolNames, "mcpServers", broker.mcpServers)
-		// we key off the name of the mcp server so have to iterate for now
-		upstreamServer := broker.mcpServers.findByName(server)
-		if upstreamServer == nil {
-			broker.logger.Debug("failed to find registered upstream ", "server", server)
+// parseAuthorizedToolsJWT validates and extracts allowed tools from the JWT header.
+func (broker *mcpBrokerImpl) parseAuthorizedToolsJWT(headerValues []string) (map[string][]string, error) {
+	if len(headerValues) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 header value, got %d", len(headerValues))
+	}
+
+	jwtValue := headerValues[0]
+	if jwtValue == "" {
+		return nil, fmt.Errorf("empty header value")
+	}
+
+	if broker.trustedHeadersPublicKey == "" {
+		return nil, fmt.Errorf("no public key configured to validate JWT")
+	}
+
+	token, err := validateJWTHeader(jwtValue, broker.trustedHeadersPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("JWT validation failed: %w", err)
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("failed to extract claims from JWT")
+	}
+
+	toolsClaim, ok := claims[allowedToolsClaimKey]
+	if !ok {
+		return nil, fmt.Errorf("missing %s claim in JWT", allowedToolsClaimKey)
+	}
+
+	toolsJSON, ok := toolsClaim.(string)
+	if !ok {
+		return nil, fmt.Errorf("%s claim is not a string", allowedToolsClaimKey)
+	}
+
+	var allowedTools map[string][]string
+	if err := json.Unmarshal([]byte(toolsJSON), &allowedTools); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal allowed-tools JSON: %w", err)
+	}
+
+	broker.logger.Debug("parsed authorized tools", "tools", allowedTools)
+	return allowedTools, nil
+}
+
+// filterToolsByServerMap filters tools based on a map of server name to allowed tool names.
+func (broker *mcpBrokerImpl) filterToolsByServerMap(allowedTools map[string][]string) []mcp.Tool {
+	var filtered []mcp.Tool
+
+	for serverName, toolNames := range allowedTools {
+		broker.logger.Debug("checking tools for server", "server", serverName, "allowedTools", toolNames)
+		upstream := broker.mcpServers.findByName(serverName)
+		if upstream == nil {
+			broker.logger.Debug("upstream not found", "server", serverName)
 			continue
 		}
-		if upstreamServer.Name != server {
+		if upstream.toolsResult == nil {
+			broker.logger.Debug("no tools registered for upstream server", "server", upstream.Name)
 			continue
 		}
 
-		if upstreamServer.toolsResult == nil {
-			broker.logger.Debug("no tools registered for upstream server", "server", upstreamServer.Name)
-			continue
-		}
-		broker.logger.Debug("upstream server found ", "upstream ", upstreamServer, "tools", upstreamServer.toolsResult.Tools)
-		for _, upstreamTool := range upstreamServer.toolsResult.Tools {
-			broker.logger.Debug("checking access ", "tool", upstreamTool.Name, "against", allowedToolNames)
-			if slices.Contains(allowedToolNames, upstreamTool.Name) {
-				broker.logger.Debug("access granted to", "tool", upstreamTool)
-				upstreamTool.Name = string(upstreamServer.prefixedName(upstreamTool.Name))
-				filteredTools = append(filteredTools, upstreamTool)
+		broker.logger.Debug("upstream server found", "upstream", upstream, "tools", upstream.toolsResult.Tools)
+		for _, tool := range upstream.toolsResult.Tools {
+			broker.logger.Debug("checking access", "tool", tool.Name, "against", toolNames)
+			if slices.Contains(toolNames, tool.Name) {
+				broker.logger.Debug("access granted", "tool", tool.Name)
+				tool.Name = string(upstream.prefixedName(tool.Name))
+				filtered = append(filtered, tool)
 			}
 		}
 	}
-	return filteredTools
+
+	return filtered
 }
 
-// validateJWTHeader validates the JWT header expects ES256 alg.
+// applyVirtualServerFilter filters tools to only those specified in the virtual server.
+func (broker *mcpBrokerImpl) applyVirtualServerFilter(headers http.Header, tools []mcp.Tool) []mcp.Tool {
+	headerValues, ok := headers[virtualMCPHeader]
+	if !ok || len(headerValues) != 1 {
+		return tools
+	}
+
+	virtualServerID := headerValues[0]
+	broker.logger.Debug("applying virtual server filter", "virtualServer", virtualServerID)
+
+	vs, err := broker.GetVirtualSeverByHeader(virtualServerID)
+	if err != nil {
+		broker.logger.Error("failed to get virtual server", "error", err)
+		return []mcp.Tool{}
+	}
+
+	// build a set of allowed tool names for O(1) lookup
+	allowedSet := make(map[string]struct{}, len(vs.Tools))
+	for _, name := range vs.Tools {
+		allowedSet[name] = struct{}{}
+	}
+
+	var filtered []mcp.Tool
+	for _, tool := range tools {
+		if _, allowed := allowedSet[tool.Name]; allowed {
+			filtered = append(filtered, tool)
+		}
+	}
+
+	return filtered
+}
+
+// validateJWTHeader validates the JWT header using ES256 algorithm.
 func validateJWTHeader(token string, publicKey string) (*jwt.Token, error) {
+	block, _ := pem.Decode([]byte(publicKey))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+
 	return jwt.Parse(token, func(_ *jwt.Token) (any, error) {
-		block, _ := pem.Decode([]byte(publicKey))
 		pubkey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
 			return nil, err
 		}
 		key, ok := pubkey.(*ecdsa.PublicKey)
 		if !ok {
-			return nil, fmt.Errorf("expected a *ecdsa.PublicKey %v", key)
+			return nil, fmt.Errorf("expected *ecdsa.PublicKey, got %T", pubkey)
 		}
 		return key, nil
-
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodES256.Alg()}))
 }

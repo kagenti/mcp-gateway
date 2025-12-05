@@ -262,6 +262,10 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}
 	})
 
+	It("should deploy redis and scale up the broker and see sessions shared", func() {
+		Skip("not implemented")
+	})
+
 	It("should only return tools specified by MCPVirtualServer when using X-Mcp-Virtualserver header", func() {
 		By("Creating an MCPServer with tools")
 		registration := NewMCPServerRegistration("virtualserver-test", k8sClient)
@@ -292,11 +296,8 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		virtualServerClient, err := NewMCPGatewayClientWithHeaders(ctx, gatewayURL, map[string]string{
 			"X-Mcp-Virtualserver": virtualServerHeader,
 		})
-
 		Expect(err).NotTo(HaveOccurred())
-		virtualServerClient.OnNotification(func(notification mcp.JSONRPCNotification) {
-			GinkgoWriter.Println("recieved notification vs")
-		})
+		defer virtualServerClient.Close()
 
 		By("Verifying only the tools from MCPVirtualServer are returned")
 		Eventually(func(g Gomega) {
@@ -313,16 +314,56 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(len(allToolsAgain.Tools)).To(BeNumerically(">", 1), "expected more than 1 tool without virtual server header")
 	})
 
-	It("clients should receive a notification when a server is added or removed", func() {
-		Skip("not implemented")
-		// register server
-		//connect with 2 client
-		// register notification handler
-		// assert that notifications recieved
-	})
+	It("should filter tools based on x-authorized-tools JWT header", func() {
+		if !IsTrustedHeadersEnabled() {
+			Skip("trusted headers public key not configured - skipping x-authorized-tools test")
+		}
 
-	It("should deploy redis and scale up the broker and see sessions shared", func() {
-		Skip("not implemented")
+		By("Creating an MCPServer with tools")
+		registration := NewMCPServerRegistration("authorized-tools-test", k8sClient)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServer tools are present without filtering")
+		var allTools *mcp.ListToolsResult
+		Eventually(func(g Gomega) {
+			var err error
+			allTools, err = mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(allTools).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, allTools)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating a JWT with allowed tools for the server")
+		// the x-authorized-tools header uses the server hostname as key
+		serverHostname := "e2e-server2.mcp.local"
+		allowedTools := map[string][]string{
+			serverHostname: {"hello_world"},
+		}
+		jwtToken, err := CreateAuthorizedToolsJWT(allowedTools)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a client with x-authorized-tools header")
+		authorizedClient, err := NewMCPGatewayClientWithHeaders(ctx, gatewayURL, map[string]string{
+			"X-Authorized-Tools": jwtToken,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer authorizedClient.Close()
+
+		By("Verifying only the tools from the JWT are returned")
+		Eventually(func(g Gomega) {
+			filteredTools, err := authorizedClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(filteredTools).NotTo(BeNil())
+			g.Expect(len(filteredTools.Tools)).To(Equal(1), "expected exactly 1 tool from authorized tools header")
+			expectedToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
+			g.Expect(filteredTools.Tools[0].Name).To(Equal(expectedToolName))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
 })

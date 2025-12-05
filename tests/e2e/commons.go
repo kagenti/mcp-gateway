@@ -5,13 +5,17 @@ package e2e
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"maps"
 	"os/exec"
 	"strings"
 	"time"
 
+	jwt "github.com/golang-jwt/jwt/v5"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -280,6 +284,50 @@ func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServ
 		httpRoute: httpRoute,
 		mcpServer: mcpServer,
 	}
+}
+
+// GetTestHeaderSigningKey will return a key to sign a header with to be trusted by the gateway
+func GetTestHeaderSigningKey() string {
+	return `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
+AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
+95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+-----END EC PRIVATE KEY-----`
+}
+
+// CreateAuthorizedToolsJWT creates a signed JWT for the x-authorized-tools header
+// allowedTools is a map of server hostname to list of tool names
+func CreateAuthorizedToolsJWT(allowedTools map[string][]string) (string, error) {
+	keyBytes := []byte(GetTestHeaderSigningKey())
+	claimPayload, err := json.Marshal(allowedTools)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal allowed tools: %w", err)
+	}
+	block, _ := pem.Decode(keyBytes)
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block")
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{"allowed-tools": string(claimPayload)})
+	parsedKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse EC private key: %w", err)
+	}
+	jwtToken, err := token.SignedString(parsedKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign JWT: %w", err)
+	}
+	return jwtToken, nil
+}
+
+// IsTrustedHeadersEnabled checks if the gateway has trusted headers public key configured
+func IsTrustedHeadersEnabled() bool {
+	cmd := exec.Command("kubectl", "get", "deployment", "-n", SystemNamespace,
+		"mcp-broker-router", "-o", "jsonpath={.spec.template.spec.containers[0].env[?(@.name=='TRUSTED_HEADER_PUBLIC_KEY')].valueFrom.secretKeyRef.name}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) != ""
 }
 
 // WithBackendTarget sets the backend service and port for the HTTPRoute
