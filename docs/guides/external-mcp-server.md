@@ -5,7 +5,7 @@ This guide demonstrates how to connect MCP Gateway to external MCP servers using
 ## Prerequisites
 
 - MCP Gateway installed and configured
-- Gateway and HTTPRoute configured for MCP Gateway  
+- Gateway and HTTPRoute configured for MCP Gateway
 - Gateway API Provider (Istio) with ServiceEntry and DestinationRule support
 - Network egress access to external MCP server
 - Authentication credentials for the external server (if required)
@@ -20,15 +20,36 @@ For this example, you'll need a GitHub Personal Access Token with `read:user` pe
 export GITHUB_PAT="ghp_YOUR_GITHUB_TOKEN_HERE"
 ```
 
+## Quick Start
+
+The fastest way to set up the GitHub MCP server is using the provided script:
+
+```bash
+# Set your GitHub PAT
+export GITHUB_PAT="ghp_YOUR_GITHUB_TOKEN_HERE"
+
+# Run the setup script
+./config/samples/remote-github/create_resources.sh
+```
+
+The script will:
+- Validate your GITHUB_PAT environment variable and token format
+- Create all required Kubernetes resources from the sample YAML files
+- Patch the Gateway with the external listener
+- Apply the AuthPolicy for OAuth + API key handling
+
+All the sample YAML files are available in `config/samples/remote-github/` for reference or customization. For a detailed explanation of each component, continue reading the manual setup steps below.
+
 ## Overview
 
 To connect to an external MCP server, you need:
 1. Gateway listener for the external hostname
-2. HTTPRoute that routes to an ExternalName Service  
+2. HTTPRoute that routes to an ExternalName Service
 3. ServiceEntry to define the external service in Istio
 4. DestinationRule for connection policies
 5. MCPServer resource to register with MCP Gateway
 6. Secret with authentication credentials
+7. AuthPolicy to handle authentication headers
 
 ## Step 1: Add External Hostname to Gateway
 
@@ -208,7 +229,40 @@ spec:
 EOF
 ```
 
-## Step 8: Wait for Configuration Sync
+## Step 8: Create AuthPolicy
+
+If you're using Kuadrant/Authorino for authentication, create an `AuthPolicy` to handle authorization headers:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: mcps-auth-policy
+  namespace: mcp-test
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: github-mcp-external
+  rules:
+    response:
+      success:
+        headers:
+          authorization:
+            plain:
+              expression: 'request.headers["authorization"]'
+          x-mcp-api-key:
+            plain:
+              expression: 'request.headers["authorization"].split(" ")[1]'
+EOF
+```
+
+This AuthPolicy extracts the API key from the OAuth token and sets it as the `x-mcp-api-key` header, resolving the OAuth + API Key conflict described in Issue #201.
+
+**Note:** This step is only required if you're using AuthPolicy for OAuth authentication. For simple bearer token auth, the router will handle the Authorization header automatically.
+
+## Step 9: Wait for Configuration Sync
 
 Wait for the configuration to sync to the broker (this typically takes 10-15 seconds with volume-mounted credentials):
 
@@ -250,20 +304,32 @@ curl -X POST http://mcp.127-0-0-1.sslip.io:8080/mcp \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 
+To test tool calls, open the MCP Inspector:
+
+```bash
+make inspect-gateway
+```
+
+In the `Authentication` section, add a HTTP header called `Authorization` with value `Bearer $GITHUB_PAT`.
+After connecting to the Gateway, under `Tools->List Tools`, you should see a list of Github tools with
+prefix `github_`. If everything works, when you run the tool `github_get_me`, you should see the information
+associated with your access token.
+
 You should see GitHub tools prefixed with `github_` in the response, along with any other configured MCP servers.
 
 ## Cleanup
 
-When done, cleanup things:
+When done, cleanup resources:
 
 ```bash
-# Delete the MCPServer and Istio resources
+# Delete the MCPServer and related resources
 kubectl delete mcpserver github -n mcp-test
 kubectl delete httproute github-mcp-external -n mcp-test
 kubectl delete service api-githubcopilot-com -n mcp-test
 kubectl delete serviceentry github-mcp-external -n mcp-test
 kubectl delete destinationrule github-mcp-external -n mcp-test
 kubectl delete secret github-token -n mcp-test
+kubectl delete authpolicy mcps-auth-policy -n mcp-test
 
 # Remove the listener from the Gateway
 kubectl get gateway mcp-gateway -n gateway-system -o json | \

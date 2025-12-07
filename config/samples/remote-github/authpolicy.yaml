@@ -1,0 +1,20 @@
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: mcps-auth-policy
+  namespace: mcp-test
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: github-mcp-external
+  rules:
+    response:
+      success:
+        headers:
+          authorization:
+            plain:
+              expression: 'request.headers["authorization"]'
+          x-mcp-api-key:
+            plain:
+              expression: 'request.headers["authorization"].split(" ")[1]'
