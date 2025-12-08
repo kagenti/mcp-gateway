@@ -78,16 +78,16 @@ keycloak-status-impl:
 		echo "Status: Installed"; \
 		echo ""; \
 		echo "Admin Console:"; \
-		echo "  URL: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"; \
+		echo "  URL: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"; \
 		echo "  Username: $(KEYCLOAK_ADMIN_USER)"; \
 		echo "  Password: $(KEYCLOAK_ADMIN_PASSWORD)"; \
 		echo ""; \
 		echo "OIDC Endpoints:"; \
-		echo "  Discovery: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/.well-known/openid-configuration"; \
-		echo "  Token:     http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/token"; \
-		echo "  Authorize: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/auth"; \
-		echo "  UserInfo:  http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/userinfo"; \
-		echo "  JWKS:      http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/certs"; \
+		echo "  Discovery: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/.well-known/openid-configuration"; \
+		echo "  Token:     https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/token"; \
+		echo "  Authorize: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/auth"; \
+		echo "  UserInfo:  https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/userinfo"; \
+		echo "  JWKS:      https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/protocol/openid-connect/certs"; \
 		echo ""; \
 		echo "Test Client Configuration:"; \
 		echo "  Client ID: mcp-gateway"; \
@@ -103,7 +103,7 @@ keycloak-status-impl:
 .PHONY: keycloak-url
 keycloak-url: # Get Keycloak URLs
 	@echo "=== Keycloak URLs ==="
-	@echo "Admin Console: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
-	@echo "OIDC Discovery: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/.well-known/openid-configuration"
+	@echo "Admin Console: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
+	@echo "OIDC Discovery: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)/realms/master/.well-known/openid-configuration"
 	@echo ""
 	@echo "Credentials: $(KEYCLOAK_ADMIN_USER) / $(KEYCLOAK_ADMIN_PASSWORD)"
