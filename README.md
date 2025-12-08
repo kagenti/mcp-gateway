@@ -2,23 +2,13 @@
 
 An Envoy-based gateway for Model Context Protocol (MCP) servers, enabling aggregation and routing of multiple MCP servers behind a single endpoint.
 
+## Vision
+
+See [VISION.md](./VISION.md) for project vision and design principles.
+
 ## Architecture
 
-See [./docs/design/overview.md](./docs/design/overview.md)
-
-## Design Principles
-
-### Envoy First
-The core router and broker work directly with Envoy. No Kubernetes required - you can run this with plain Envoy config if you want.
-
-### Kubernetes Adds Convenience
-Running in Kubernetes gets you:
-- **MCPServer CRD** - manage servers declaratively
-- **HTTPRoute integration** - automatic backend discovery
-- **Controller** - watches for changes and updates config in the broker & router
-
-### Bring Your Own Policies
-The router sets metadata on requests that any Envoy filter can use. We use Kuadrant in our examples for auth and rate limiting, but you can plug in whatever you want - custom ext_authz, WASM modules, or any other Envoy-compatible policy engine.
+See [docs/design/overview.md](./docs/design/overview.md) for technical architecture.
 
 ## Quick Install
 
