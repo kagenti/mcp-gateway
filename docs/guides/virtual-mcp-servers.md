@@ -46,8 +46,8 @@ metadata:
 spec:
   description: "Development and debugging tools"
   tools:
-  - test_hello_world      # Example: replace with your actual tool names
-  - test_headers
+  - test1_hello_world      # Example: replace with your actual tool names
+  - test1_headers
   - github_get_me
   - github_list_repos
 EOF

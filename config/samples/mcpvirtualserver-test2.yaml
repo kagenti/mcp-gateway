@@ -6,5 +6,5 @@ metadata:
 spec:
   description: "test2 virtual server"
   tools:
-  - test_greet
-  - test_time
+  - test1_greet
+  - test1_time
