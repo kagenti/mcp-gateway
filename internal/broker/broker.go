@@ -34,6 +34,35 @@ type upstreamMCP struct {
 	mcpClient        *client.Client        // The MCP client we hold open to listen for tool notifications
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
 	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
+	toolsLock        sync.Mutex
+}
+
+// GetCachedTools will return the currently cached listed of tools
+func (up *upstreamMCP) GetCachedTools() *mcp.ListToolsResult {
+	up.toolsLock.Lock()
+	defer up.toolsLock.Unlock()
+	return up.toolsResult
+}
+
+// FetchAndCacheTools will fetch the tools list from the mcp before caching in memory
+func (up *upstreamMCP) FetchAndCacheTools(ctx context.Context) ([]mcp.Tool, error) {
+	// this lock may not be strictly needed but given it is shared memory being careful with access as a precaution
+	up.toolsLock.Lock()
+	defer up.toolsLock.Unlock()
+	if up.mcpClient == nil {
+		return nil, fmt.Errorf("no client configured")
+	}
+	resTools, err := up.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tools: %w", err)
+	}
+	up.toolsResult = resTools
+	return resTools.Tools, nil
+}
+
+// prefixedName returns the name the gateway will advertise the tool as
+func (up *upstreamMCP) prefixedName(tool string) toolName {
+	return toolName(fmt.Sprintf("%s%s", up.ToolPrefix, tool))
 }
 
 // ClientType defines the type of MCP client being created
@@ -384,13 +413,11 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 		upstream.initializeResult = resInit
 	}
 
-	resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+	tools, err := upstream.FetchAndCacheTools(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tools: %w", err)
+		return nil, err
 	}
-	upstream.toolsResult = resTools
-
-	newTools, _ := m.populateToolMapping(upstream, resTools.Tools, nil)
+	newTools, _ := m.populateToolMapping(upstream, tools, nil)
 
 	// TODO probe resources other than tools
 
@@ -407,14 +434,12 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 	upstream.mcpClient.OnNotification(func(notification mcp.JSONRPCNotification) {
 		if notification.Method == "notifications/tools/list_changed" {
 			m.logger.Debug("notifications/tools/list_changed received", "mcpid", upstream.ID())
-			resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+			tools, err := upstream.FetchAndCacheTools(ctx)
 			if err != nil {
-				m.logger.Warn("failed to list tools", "err", err)
-			} else {
-				m.logger.Info("OnNotification Re-Discovered tools  ", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+				m.logger.Error("failed to get tools ", "server", upstream.ID())
+				return
 			}
-
-			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, resTools.Tools)
+			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, tools)
 
 			newlyAddedTools, newlyRemovedToolNames := m.populateToolMapping(upstream, addedTools, removedTools)
 
@@ -430,13 +455,10 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 				m.logger.Info("OnNotification Removing tools", "mcpURL", upstream.URL, "newlyRemovedToolNames", newlyRemovedToolNames)
 				m.listeningMCPServer.DeleteTools(newlyRemovedToolNames...)
 			}
-
-			// Track the current state of tools
-			upstream.toolsResult = resTools
 		}
 	})
 
-	m.logger.Info("OnNotification Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+	m.logger.Info("OnNotification Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(tools))
 
 	return newTools, err
 }
@@ -671,11 +693,6 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, id string, clientTy
 	}
 
 	return httpClient, initResp, nil
-}
-
-// prefixedName returns the name the gateway will advertise the tool as
-func (upstream *upstreamMCP) prefixedName(tool string) toolName {
-	return toolName(fmt.Sprintf("%s%s", upstream.ToolPrefix, tool))
 }
 
 func toolToServerTool(newTool mcp.Tool) server.ServerTool {

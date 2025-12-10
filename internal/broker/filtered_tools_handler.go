@@ -111,13 +111,13 @@ func (broker *mcpBrokerImpl) filterToolsByServerMap(allowedTools map[string][]st
 			broker.logger.Debug("upstream not found", "server", serverName)
 			continue
 		}
-		if upstream.toolsResult == nil {
+		tools := upstream.GetCachedTools()
+		if tools == nil {
 			broker.logger.Debug("no tools registered for upstream server", "server", upstream.Name)
 			continue
 		}
 
-		broker.logger.Debug("upstream server found", "upstream", upstream, "tools", upstream.toolsResult.Tools)
-		for _, tool := range upstream.toolsResult.Tools {
+		for _, tool := range tools.Tools {
 			broker.logger.Debug("checking access", "tool", tool.Name, "against", toolNames)
 			if slices.Contains(toolNames, tool.Name) {
 				broker.logger.Debug("access granted", "tool", tool.Name)
@@ -143,18 +143,18 @@ func (broker *mcpBrokerImpl) applyVirtualServerFilter(headers http.Header, tools
 	vs, err := broker.GetVirtualSeverByHeader(virtualServerID)
 	if err != nil {
 		broker.logger.Error("failed to get virtual server", "error", err)
-		return []mcp.Tool{}
+		return tools
 	}
 
 	// build a set of allowed tool names for O(1) lookup
-	allowedSet := make(map[string]struct{}, len(vs.Tools))
+	filteredSet := make(map[string]struct{}, len(vs.Tools))
 	for _, name := range vs.Tools {
-		allowedSet[name] = struct{}{}
+		filteredSet[name] = struct{}{}
 	}
 
 	var filtered []mcp.Tool
 	for _, tool := range tools {
-		if _, allowed := allowedSet[tool.Name]; allowed {
+		if _, inFilter := filteredSet[tool.Name]; inFilter {
 			filtered = append(filtered, tool)
 		}
 	}
