@@ -1,0 +1,24 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: github-mcp-external
+  namespace: mcp-test
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mcp-gateway
+    namespace: gateway-system
+  hostnames:
+  - api.githubcopilot.com  # must match the Gateway listener hostname
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /mcp
+    backendRefs:
+    - group: ""
+      kind: Service
+      name: api-githubcopilot-com
+      namespace: mcp-test
+      port: 443

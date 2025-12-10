@@ -1,0 +1,14 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: github
+  namespace: mcp-test
+spec:
+  toolPrefix: github_
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: github-mcp-external
+  credentialRef:
+    name: github-token
+    key: token
