@@ -15,12 +15,6 @@ import (
 )
 
 const (
-	testPrivateKey = `-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
-AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
-95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
------END EC PRIVATE KEY-----`
-
 	testPublicKey = `-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVO
 VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
@@ -30,7 +24,11 @@ VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 func createTestJWT(t *testing.T, allowedTools map[string][]string) string {
 	t.Helper()
 	claimPayload, _ := json.Marshal(allowedTools)
-	block, _ := pem.Decode([]byte(testPrivateKey))
+	block, _ := pem.Decode([]byte(`-----BEGIN EC PRIVATE KEY----- 
+MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
+AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
+95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+-----END EC PRIVATE KEY-----`))
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{"allowed-tools": string(claimPayload)})
 	parsedKey, err := x509.ParseECPrivateKey(block.Bytes)
 	if err != nil {
