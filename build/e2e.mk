@@ -15,16 +15,16 @@ test-e2e-deps: ginkgo ## Install e2e test dependencies
 test-e2e-setup: ## Setup cluster for e2e tests (if not already setup)
 	@if ! kubectl get namespace mcp-system >/dev/null 2>&1; then \
 		echo "Setting up cluster for e2e tests..."; \
-		$(MAKE) tools; \
-		$(MAKE) kind-create-cluster; \
-		$(MAKE) build-and-load-image; \
-		$(MAKE) gateway-api-install; \
-		$(MAKE) istio-install; \
-		$(MAKE) metallb-install; \
-		$(MAKE) deploy-namespaces; \
-		$(MAKE) deploy-gateway; \
-		$(MAKE) deploy; \
-		$(MAKE) deploy-test-servers; \
+		"$(MAKE)" tools; \
+		"$(MAKE)" kind-create-cluster; \
+		"$(MAKE)" build-and-load-image; \
+		"$(MAKE)" gateway-api-install; \
+		"$(MAKE)" istio-install; \
+		"$(MAKE)" metallb-install; \
+		"$(MAKE)" deploy-namespaces; \
+		"$(MAKE)" deploy-gateway; \
+		"$(MAKE)" deploy; \
+		"$(MAKE)" deploy-test-servers; \
 	else \
 		echo "Cluster already setup, skipping..."; \
 	fi
