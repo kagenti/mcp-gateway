@@ -16,20 +16,20 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
 	$(KUBECTL) wait --for condition=Established --timeout=60s crd/gateways.gateway.networking.k8s.io
 	# Build and load image
-	$(MAKE) docker-build
+	"$(MAKE)" docker-build
 	docker tag mcp-gateway:local ghcr.io/kagenti/mcp-gateway:latest
 	$(call load-image,ghcr.io/kagenti/mcp-gateway:latest)
 	# Install CRDs and deploy
-	$(MAKE) install-crd
-	$(MAKE) istio-install
-	$(MAKE) metallb-install
-	$(MAKE) deploy-gateway	
-	$(MAKE) deploy
+	"$(MAKE)" install-crd
+	"$(MAKE)" istio-install
+	"$(MAKE)" metallb-install
+	"$(MAKE)" deploy-gateway	
+	"$(MAKE)" deploy
 	# Wait for deployments
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-controller -n mcp-system
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-broker-router -n mcp-system
 	# Deploy test servers
-	$(MAKE) deploy-test-servers
+	"$(MAKE)" deploy-test-servers
 	# Wait for all test server deployments to be available
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-server1 -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-test-server2 -n mcp-test

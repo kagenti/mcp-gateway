@@ -259,7 +259,7 @@ golangci-lint:
 	elif [ -f bin/golangci-lint ]; then \
 		bin/golangci-lint run ./...; \
 	else \
-		$(MAKE) golangci-lint-bin && bin/golangci-lint run ./...; \
+		"$(MAKE)" golangci-lint-bin && bin/golangci-lint run ./...; \
 	fi
 
 .PHONY: lint
@@ -337,11 +337,11 @@ test-unit:
 .PHONY: tools
 tools: ## Install all required tools (kind, helm, kustomize, yq, istioctl) to ./bin/
 	@echo "Checking and installing required tools to ./bin/ ..."
-	@if [ -f bin/kind ]; then echo "[OK] kind already installed"; else echo "Installing kind..."; $(MAKE) -s kind; fi
-	@if [ -f bin/helm ]; then echo "[OK] helm already installed"; else echo "Installing helm..."; $(MAKE) -s helm; fi
-	@if [ -f bin/kustomize ]; then echo "[OK] kustomize already installed"; else echo "Installing kustomize..."; $(MAKE) -s kustomize; fi
-	@if [ -f bin/yq ]; then echo "[OK] yq already installed"; else echo "Installing yq..."; $(MAKE) -s yq; fi
-	@if [ -f bin/istioctl ]; then echo "[OK] istioctl already installed"; else echo "Installing istioctl..."; $(MAKE) -s istioctl; fi
+	@if [ -f bin/kind ]; then echo "[OK] kind already installed"; else echo "Installing kind..."; "$(MAKE)" -s kind; fi
+	@if [ -f bin/helm ]; then echo "[OK] helm already installed"; else echo "Installing helm..."; "$(MAKE)" -s helm; fi
+	@if [ -f bin/kustomize ]; then echo "[OK] kustomize already installed"; else echo "Installing kustomize..."; "$(MAKE)" -s kustomize; fi
+	@if [ -f bin/yq ]; then echo "[OK] yq already installed"; else echo "Installing yq..."; "$(MAKE)" -s yq; fi
+	@if [ -f bin/istioctl ]; then echo "[OK] istioctl already installed"; else echo "Installing istioctl..."; "$(MAKE)" -s istioctl; fi
 	@echo "All tools ready!"
 
 .PHONY: local-env-setup
@@ -349,28 +349,28 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	@echo "========================================="
 	@echo "Starting MCP Gateway Environment Setup"
 	@echo "========================================="
-	$(MAKE) tools
-	$(MAKE) kind-create-cluster
-	$(MAKE) build-and-load-image
-	$(MAKE) gateway-api-install
-	$(MAKE) istio-install
-	$(MAKE) metallb-install
-	$(MAKE) deploy-namespaces
-	$(MAKE) deploy-gateway
-	$(MAKE) cert-manager-install
-	$(MAKE) kuadrant-install
-	$(MAKE) keycloak-install
-	$(MAKE) deploy
-	$(MAKE) deploy-test-servers
-	$(MAKE) deploy-example
+	"$(MAKE)" tools
+	"$(MAKE)" kind-create-cluster
+	"$(MAKE)" build-and-load-image
+	"$(MAKE)" gateway-api-install
+	"$(MAKE)" istio-install
+	"$(MAKE)" metallb-install
+	"$(MAKE)" deploy-namespaces
+	"$(MAKE)" deploy-gateway
+	"$(MAKE)" cert-manager-install
+	"$(MAKE)" kuadrant-install
+	"$(MAKE)" keycloak-install
+	"$(MAKE)" deploy
+	"$(MAKE)" deploy-test-servers
+	"$(MAKE)" deploy-example
 
 .PHONY: local-env-teardown
 local-env-teardown: ## Tear down the local Kind cluster
-	$(MAKE) kind-delete-cluster
+	"$(MAKE)" kind-delete-cluster
 
 .PHONY: dev
 dev: ## Setup cluster for local development (binaries run on host)
-	$(MAKE) dev-setup
+	"$(MAKE)" dev-setup
 	@echo ""
 	@echo "Ready for local development! Run these in separate terminals:"
 	@echo "  1. make run-mcp-broker-router"
@@ -382,72 +382,72 @@ dev: ## Setup cluster for local development (binaries run on host)
 
 .PHONY: info
 info: ## Show quick setup info and useful commands
-	@$(MAKE) -s -f build/info.mk info-impl
+	@"$(MAKE)" -s -f build/info.mk info-impl
 
 ##@ Inspection
 
 .PHONY: urls
 urls: ## Show all available service URLs
-	@$(MAKE) -s -f build/inspect.mk urls-impl
+	@"$(MAKE)" -s -f build/inspect.mk urls-impl
 
 .PHONY: status
 status: ## Show status of all MCP components
-	@$(MAKE) -s -f build/inspect.mk status-impl
+	@"$(MAKE)" -s -f build/inspect.mk status-impl
 
 
 ##@ Tools
 
 .PHONY: istioctl
 istioctl: ## Download and install istioctl
-	@$(MAKE) -s -f build/istio.mk istioctl-impl
+	@"$(MAKE)" -s -f build/istio.mk istioctl-impl
 
 .PHONY: cert-manager-install
 cert-manager-install: ## Install cert-manager for TLS certificate management
 	@echo "Installing Cert-manager"
-	@$(MAKE) -s -f build/cert-manager.mk cert-manager-install-impl
+	@"$(MAKE)" -s -f build/cert-manager.mk cert-manager-install-impl
 
 .PHONY: keycloak-install
 keycloak-install: ## Install Keycloak IdP for development
 	@echo "Installing Keycloak - using official image with dev-file database"
-	@$(MAKE) -s -f build/keycloak.mk keycloak-install-impl
+	@"$(MAKE)" -s -f build/keycloak.mk keycloak-install-impl
 
 .PHONY: keycloak-status
 keycloak-status: ## Show Keycloak URLs, credentials, and OIDC endpoints
-	@$(MAKE) -s -f build/keycloak.mk keycloak-status-impl
+	@"$(MAKE)" -s -f build/keycloak.mk keycloak-status-impl
 
 .PHONY: kuadrant-install
 kuadrant-install: ## Install Kuadrant operator for API gateway policies
-	@$(MAKE) -s -f build/kuadrant.mk kuadrant-install-impl
+	@"$(MAKE)" -s -f build/kuadrant.mk kuadrant-install-impl
 
 .PHONY: kuadrant-status
 kuadrant-status: ## Show Kuadrant operator status and available CRDs
-	@$(MAKE) -s -f build/kuadrant.mk kuadrant-status-impl
+	@"$(MAKE)" -s -f build/kuadrant.mk kuadrant-status-impl
 
 .PHONY: kuadrant-configure
 kuadrant-configure: ## Apply Kuadrant configuration from config/kuadrant
-	@$(MAKE) -s -f build/kuadrant.mk kuadrant-configure-impl
+	@"$(MAKE)" -s -f build/kuadrant.mk kuadrant-configure-impl
 
 ##@ Debug
 
 .PHONY: debug-envoy
 debug-envoy: ## Enable debug logging for Istio gateway
-	@$(MAKE) -s -f build/debug.mk debug-envoy-impl
+	@"$(MAKE)" -s -f build/debug.mk debug-envoy-impl
 
 .PHONY: istio-clusters
 istio-clusters: ## Show all registered clusters in the gateway
-	@$(MAKE) -s -f build/istio-debug.mk istio-clusters-impl
+	@"$(MAKE)" -s -f build/istio-debug.mk istio-clusters-impl
 
 .PHONY: istio-config
 istio-config: ## Show all proxy configurations
-	@$(MAKE) -s -f build/istio-debug.mk istio-config-impl
+	@"$(MAKE)" -s -f build/istio-debug.mk istio-config-impl
 
 .PHONY: debug-envoy-off
 debug-envoy-off: ## Disable debug logging for Istio gateway
-	@$(MAKE) -s -f build/debug.mk debug-envoy-off-impl
+	@"$(MAKE)" -s -f build/debug.mk debug-envoy-off-impl
 
 .PHONY: logs
 logs: ## Tail Istio gateway logs
-	@$(MAKE) -s -f build/debug.mk debug-logs-gateway-impl
+	@"$(MAKE)" -s -f build/debug.mk debug-logs-gateway-impl
 
 -include build/*.mk
 
