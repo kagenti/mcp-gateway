@@ -105,10 +105,9 @@ func (broker *mcpBrokerImpl) filterToolsByServerMap(allowedTools map[string][]st
 	var filtered []mcp.Tool
 
 	for serverName, toolNames := range allowedTools {
-		broker.logger.Debug("checking tools for server", "server", serverName, "allowedTools", toolNames)
 		upstream := broker.mcpServers.findByName(serverName)
 		if upstream == nil {
-			broker.logger.Debug("upstream not found", "server", serverName)
+			broker.logger.Error("upstream not found", "server", serverName)
 			continue
 		}
 		tools := upstream.GetCachedTools()

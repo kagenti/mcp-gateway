@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	mcpclient "github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,7 +31,7 @@ var (
 	cfg              *rest.Config
 	ctx              context.Context
 	cancel           context.CancelFunc
-	mcpGatewayClient *mcpclient.Client
+	mcpGatewayClient *NotifyingMCPClient
 )
 
 func TestE2E(t *testing.T) {
@@ -84,27 +82,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("System namespace %s must exist", SystemNamespace))
 
 	By("setting up an mcp client for the gateway")
-	mcpGatewayClient, err = mcpclient.NewStreamableHttpClient(gatewayURL, transport.WithHTTPHeaders(map[string]string{"e2e": "client"}))
 	Expect(err).To(BeNil())
-	err = mcpGatewayClient.Start(context.Background())
-	Expect(err).To(BeNil())
-	res, err := mcpGatewayClient.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			Capabilities:    mcp.ClientCapabilities{},
-			ClientInfo: mcp.Implementation{
-				Name:    "e2e",
-				Version: "0.0.1",
-			},
-		},
-	})
+	mcpGatewayClient, err = NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {})
 	Expect(err).Error().NotTo(HaveOccurred())
-	Expect(res.ServerInfo.Name).NotTo(BeEmpty())
-	mcpGatewayClient.OnNotification(func(notification mcp.JSONRPCNotification) {
-		//not sure what to do with these
-	})
-
-	GinkgoWriter.Println(res.ServerInfo)
 })
 
 var _ = AfterSuite(func() {

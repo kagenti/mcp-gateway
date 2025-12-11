@@ -203,11 +203,11 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		// Note that AddOnRegisterSession is for GET, not POST, for a session.
 		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
-		slog.Info("Gateway client session connected with session", "gatewaySessionID", session.SessionID())
+		slog.Info("Broker: Gateway client session connected with session", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
-		slog.Info("Gateway client session unregister ", "gatewaySessionID", session.SessionID())
+		slog.Info("Broker: Gateway client session unregister ", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
@@ -226,7 +226,6 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		server.WithHooks(hooks),
 		server.WithToolCapabilities(true),
 	)
-
 	return mcpBkr
 }
 
@@ -260,7 +259,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		if tools != nil {
 			discoveredTools = append(discoveredTools, tools...)
 		}
-		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID())
+		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID(), "total tools", len(tools))
 	}
 	m.logger.Debug("OnConfigChange discovered tools ", "total", len(discoveredTools))
 	if len(discoveredTools) > 0 {
@@ -323,10 +322,6 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 		go m.retryDiscovery(context.Background(), upstreamMCPID(mcpServer.ID()))
 		return nil, nil // don't return error, allow partial registration
 	}
-	m.logger.Info("Discovered tools", "serverName", mcpServer.Name, "num tools", len(newTools))
-	if len(newTools) > 0 {
-		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
-	}
 	return newTools, nil
 }
 
@@ -363,6 +358,7 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, id string) error {
 	mapping, ok := m.serverSessions[upstreamMCPID(id)]
 	if ok {
 		for downstreamSessionID, upstreamSessionState := range mapping {
+			// TODO why do we need another client
 			err := upstreamSessionState.client.Close()
 			if err != nil {
 				slog.Warn(
@@ -445,8 +441,7 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 
 			// Add any tools added since the last notification
 			if len(newlyAddedTools) > 0 {
-				m.logger.Info("OnNotification Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
-				//NOTE this sends a notification to connected clients
+				m.logger.Info("discovery: OnNotification Adding tools", "mcpID", upstream.ID(), "#tools", len(newlyAddedTools))
 				m.listeningMCPServer.AddTools(toolsToServerTools(newlyAddedTools)...)
 			}
 
@@ -458,7 +453,7 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 		}
 	})
 
-	m.logger.Info("OnNotification Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(tools))
+	m.logger.Info("discovered tools", "mcpURL", upstream.URL, "#tools", len(tools))
 
 	return newTools, err
 }
@@ -528,7 +523,9 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, mcpID upstreamMCPID)
 			"attempt", attempt,
 			"tools", len(newTools))
 
-		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
+		if len(newTools) > 0 {
+			m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
+		}
 		return true, nil
 	})
 	if err != nil {

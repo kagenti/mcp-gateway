@@ -274,7 +274,7 @@ func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWT
 		Addr:         address,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 0 * time.Second, // WriteTimeout is set to 0 as we have long running connection for notifications
 	}
 
 	mcpBroker := broker.NewBroker(logger,

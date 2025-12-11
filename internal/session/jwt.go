@@ -8,6 +8,7 @@ import (
 	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -65,6 +66,7 @@ func (m *JWTManager) generateSessionJWT() (string, error) {
 			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    issuer,
 			Audience:  jwt.ClaimStrings{issuer},
+			ID:        uuid.NewString(),
 		},
 	}
 
@@ -74,7 +76,7 @@ func (m *JWTManager) generateSessionJWT() (string, error) {
 
 // Generate returns a session id JWT to fullfil SessionIdManager interface
 func (m *JWTManager) Generate() string {
-	m.logger.Debug("gerating session id in jwt session manager")
+	m.logger.Debug("generating session id in jwt session manager")
 	sessID, err := m.generateSessionJWT()
 	if err != nil {
 		m.logger.Error("failed to generate session id", "error", err)

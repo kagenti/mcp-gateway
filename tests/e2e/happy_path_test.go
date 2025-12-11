@@ -53,11 +53,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer1.Name, registeredServer1.Namespace)).To(BeNil())
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer2.Name, registeredServer2.Namespace)).To(BeNil())
-			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
-			g.Expect(err).Error().NotTo(HaveOccurred())
-			g.Expect(toolsList).NotTo(BeNil())
-			g.Expect(verifyMCPServerToolsPresent(registeredServer1.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer1.Spec.ToolPrefix))
-			g.Expect(verifyMCPServerToolsPresent(registeredServer2.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer2.Spec.ToolPrefix))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("Verifying MCPServers tools are present")
@@ -72,7 +67,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should unregister mcp servers with the gateway", func() {
-
 		registration := NewMCPServerRegistration("basic-unregister", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
@@ -314,6 +308,53 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(len(allToolsAgain.Tools)).To(BeNumerically(">", 1), "expected more than 1 tool without virtual server header")
 	})
 
+	It("should send notifications/tools/list_changed to connected clients when MCPServer is registered", func() {
+
+		By("Creating clients with notification handlers and different sessions")
+		client1Notification := false
+		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			client1Notification = true
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client1.Close()
+
+		client2Notification := false
+		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			client2Notification = true
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client2.Close()
+		Expect(mcpGatewayClient.sessionID).NotTo(BeEmpty())
+		Expect(client2.sessionID).NotTo(BeEmpty())
+		Expect(client1.sessionID).NotTo(Equal(client2.sessionID))
+
+		By("registering a new MCPServer")
+		registration := NewMCPServerRegistration("notification-test", k8sClient)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Waiting for the server to become ready")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		// We do this to wait for the tools to show up as we know then that the gateway has done its work
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying both clients received notifications/tools/list_changed within 1 minutes")
+		Eventually(func(g Gomega) {
+			_, err := client1.ListTools(ctx, mcp.ListToolsRequest{})
+			Expect(err).NotTo(HaveOccurred())
+			g.Expect(client1Notification).To(BeTrueBecause("client1 should have received a notification within 1 minutes"))
+			Expect(client2Notification).To(BeTrueBecause("client2 should have received a notification within 1 minutes"))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+	})
+
 	It("should filter tools based on x-authorized-tools JWT header", func() {
 		if !IsTrustedHeadersEnabled() {
 			Skip("trusted headers public key not configured - skipping x-authorized-tools test")
@@ -340,10 +381,11 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("Creating a JWT with allowed tools for the server")
-		// the x-authorized-tools header uses the server hostname as key
-		serverHostname := "e2e-server2.mcp.local"
+
+		GinkgoWriter.Println("server name ", registeredServer.Name)
+
 		allowedTools := map[string][]string{
-			serverHostname: {"hello_world"},
+			fmt.Sprintf("%s/%s", registeredServer.Namespace, registeredServer.Name): {"hello_world"},
 		}
 		jwtToken, err := CreateAuthorizedToolsJWT(allowedTools)
 		Expect(err).NotTo(HaveOccurred())
