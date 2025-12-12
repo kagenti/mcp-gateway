@@ -5,12 +5,17 @@ package e2e
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"maps"
 	"os/exec"
 	"strings"
 	"time"
 
+	jwt "github.com/golang-jwt/jwt/v5"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -91,7 +96,7 @@ func (b *MCPServerBuilder) WithCredentialKey(key string) *MCPServerBuilder {
 func (b *MCPServerBuilder) Build() *mcpv1alpha1.MCPServer {
 	mcpServ := &mcpv1alpha1.MCPServer{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      UniqueName(b.name),
+			Name:      b.name,
 			Namespace: b.namespace,
 			Labels:    map[string]string{"e2e": "test"},
 		},
@@ -271,7 +276,7 @@ type MCPServerRegistrationBuilder struct {
 func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
 	httpRoute := BuildTestHTTPRoute("e2e-server2-route-"+testName, TestNamespace,
 		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
-	mcpServer := BuildTestMCPServer("e2e-mcpserver2"+testName, TestNamespace,
+	mcpServer := BuildTestMCPServer(httpRoute.Name, TestNamespace,
 		httpRoute.Name, httpRoute.Name).Build()
 
 	return &MCPServerRegistrationBuilder{
@@ -279,6 +284,50 @@ func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServ
 		httpRoute: httpRoute,
 		mcpServer: mcpServer,
 	}
+}
+
+// GetTestHeaderSigningKey will return a key to sign a header with to be trusted by the gateway
+func GetTestHeaderSigningKey() string {
+	return `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
+AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
+95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
+-----END EC PRIVATE KEY-----`
+}
+
+// CreateAuthorizedToolsJWT creates a signed JWT for the x-authorized-tools header
+// allowedTools is a map of server hostname to list of tool names
+func CreateAuthorizedToolsJWT(allowedTools map[string][]string) (string, error) {
+	keyBytes := []byte(GetTestHeaderSigningKey())
+	claimPayload, err := json.Marshal(allowedTools)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal allowed tools: %w", err)
+	}
+	block, _ := pem.Decode(keyBytes)
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block")
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{"allowed-tools": string(claimPayload)})
+	parsedKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse EC private key: %w", err)
+	}
+	jwtToken, err := token.SignedString(parsedKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign JWT: %w", err)
+	}
+	return jwtToken, nil
+}
+
+// IsTrustedHeadersEnabled checks if the gateway has trusted headers public key configured
+func IsTrustedHeadersEnabled() bool {
+	cmd := exec.Command("kubectl", "get", "deployment", "-n", SystemNamespace,
+		"mcp-broker-router", "-o", "jsonpath={.spec.template.spec.containers[0].env[?(@.name=='TRUSTED_HEADER_PUBLIC_KEY')].valueFrom.secretKeyRef.name}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) != ""
 }
 
 // WithBackendTarget sets the backend service and port for the HTTPRoute
@@ -436,18 +485,65 @@ func UniqueName(prefix string) string {
 	return prefix + hex.EncodeToString(b)
 }
 
+// NotifyingMCPClient wraps an MCP client with notification handling
+type NotifyingMCPClient struct {
+	*mcpclient.Client
+	notifications chan mcp.JSONRPCNotification
+	sessionID     string
+}
+
+// GetNotifications returns the notification channel
+func (c *NotifyingMCPClient) GetNotifications() <-chan mcp.JSONRPCNotification {
+	return c.notifications
+}
+
 // NewMCPGatewayClient creates a new MCP client connected to the gateway
 func NewMCPGatewayClient(ctx context.Context, gatewayHost string) (*mcpclient.Client, error) {
-	mcpGatewayClient, err := mcpclient.NewStreamableHttpClient(gatewayHost, transport.
-		WithHTTPHeaders(map[string]string{"e2e": "client"}))
+	return NewMCPGatewayClientWithHeaders(ctx, gatewayHost, nil)
+}
+
+// NewMCPGatewayClientWithNotifications creates an MCP client that captures notifications
+func NewMCPGatewayClientWithNotifications(ctx context.Context, gatewayHost string, notificationFunc func(mcp.JSONRPCNotification)) (*NotifyingMCPClient, error) {
+	client, err := NewMCPGatewayClientWithHeaders(ctx, gatewayHost, nil)
 	if err != nil {
 		return nil, err
 	}
-	err = mcpGatewayClient.Start(ctx)
+
+	notifications := make(chan mcp.JSONRPCNotification, 10)
+	client.OnNotification(func(notification mcp.JSONRPCNotification) {
+		if notificationFunc != nil {
+			notificationFunc(notification)
+			return
+		}
+		GinkgoWriter.Println("default on notification handler", notification)
+	})
+
+	client.OnConnectionLost(func(err error) {
+		GinkgoWriter.Println("connection LOST ", err)
+	})
+
+	return &NotifyingMCPClient{
+		Client:        client,
+		notifications: notifications,
+		sessionID:     client.GetSessionId(),
+	}, nil
+}
+
+// NewMCPGatewayClientWithHeaders creates a new MCP client with custom headers
+func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, headers map[string]string) (*mcpclient.Client, error) {
+	allHeaders := map[string]string{"e2e": "client"}
+	maps.Copy(allHeaders, headers)
+
+	gatewayClient, err := mcpclient.NewStreamableHttpClient(gatewayHost, transport.
+		WithHTTPHeaders(allHeaders), transport.WithContinuousListening())
 	if err != nil {
 		return nil, err
 	}
-	if _, err := mcpGatewayClient.Initialize(ctx, mcp.InitializeRequest{
+	err = gatewayClient.Start(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := gatewayClient.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			Capabilities:    mcp.ClientCapabilities{},
@@ -456,9 +552,10 @@ func NewMCPGatewayClient(ctx context.Context, gatewayHost string) (*mcpclient.Cl
 				Version: "0.0.1",
 			},
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
-	return mcpGatewayClient, nil
-
+	GinkgoWriter.Println("init response ", res.ServerInfo)
+	return gatewayClient, nil
 }

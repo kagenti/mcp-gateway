@@ -347,7 +347,7 @@ func (s *ExtProcServer) initializeMCPSeverSession(ctx context.Context, mcpReq *M
 
 // HandleNoneToolCall handles none tools calls such as initialize. The majority of these requests will be forwarded to the broker
 func (s *ExtProcServer) HandleNoneToolCall(mcpReq *MCPRequest) []*eppb.ProcessingResponse {
-	s.Logger.Debug("HandleMCPBrokerRequest", "HTTP Method", mcpReq.GetSingleHeaderValue(":method"), "mcp method", mcpReq.Method)
+	s.Logger.Debug("HandleMCPBrokerRequest", "HTTP Method", mcpReq.GetSingleHeaderValue(":method"), "mcp method", mcpReq.Method, "session", mcpReq.sessionID)
 	headers := NewHeaders().WithMCPMethod(mcpReq.Method)
 	response := NewResponse()
 	if mcpReq.isInitializeRequest() {

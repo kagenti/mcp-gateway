@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
@@ -33,6 +34,35 @@ type upstreamMCP struct {
 	mcpClient        *client.Client        // The MCP client we hold open to listen for tool notifications
 	initializeResult *mcp.InitializeResult // The init result when we probed at discovery time
 	toolsResult      *mcp.ListToolsResult  // The tools when we probed at discovery time (or updated on toolsChanged notification)
+	toolsLock        sync.Mutex
+}
+
+// GetCachedTools will return the currently cached listed of tools
+func (up *upstreamMCP) GetCachedTools() *mcp.ListToolsResult {
+	up.toolsLock.Lock()
+	defer up.toolsLock.Unlock()
+	return up.toolsResult
+}
+
+// FetchAndCacheTools will fetch the tools list from the mcp before caching in memory
+func (up *upstreamMCP) FetchAndCacheTools(ctx context.Context) ([]mcp.Tool, error) {
+	// this lock may not be strictly needed but given it is shared memory being careful with access as a precaution
+	up.toolsLock.Lock()
+	defer up.toolsLock.Unlock()
+	if up.mcpClient == nil {
+		return nil, fmt.Errorf("no client configured")
+	}
+	resTools, err := up.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tools: %w", err)
+	}
+	up.toolsResult = resTools
+	return resTools.Tools, nil
+}
+
+// prefixedName returns the name the gateway will advertise the tool as
+func (up *upstreamMCP) prefixedName(tool string) toolName {
+	return toolName(fmt.Sprintf("%s%s", up.ToolPrefix, tool))
 }
 
 // ClientType defines the type of MCP client being created
@@ -113,6 +143,9 @@ type mcpBrokerImpl struct {
 	// serverSessions tracks the sessions we maintain with upstream MCP servers
 	serverSessions map[upstreamMCPID]map[downstreamSessionID]*upstreamSessionState
 
+	virtualServers map[string]*config.VirtualServer
+	vsLock         sync.Mutex
+
 	// mcpServers tracks the known servers
 	// TODO this should be protected or be a sync map
 	mcpServers mcpServers
@@ -157,6 +190,7 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		mcpServers:     map[upstreamMCPID]*upstreamMCP{},
 		toolMapping:    map[toolName]*upstreamToolInfo{},
 		logger:         logger,
+		virtualServers: map[string]*config.VirtualServer{},
 	}
 
 	for _, option := range opts {
@@ -169,11 +203,11 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	hooks.AddOnRegisterSession(func(_ context.Context, session server.ClientSession) {
 		// Note that AddOnRegisterSession is for GET, not POST, for a session.
 		// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#listening-for-messages-from-the-server
-		slog.Info("Gateway client session connected with session", "gatewaySessionID", session.SessionID())
+		slog.Info("Broker: Gateway client session connected with session", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddOnUnregisterSession(func(_ context.Context, session server.ClientSession) {
-		slog.Info("Gateway client session unregister ", "gatewaySessionID", session.SessionID())
+		slog.Info("Broker: Gateway client session unregister ", "gatewaySessionID", session.SessionID())
 	})
 
 	hooks.AddBeforeAny(func(_ context.Context, _ any, method mcp.MCPMethod, _ any) {
@@ -184,7 +218,7 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
-	hooks.AddAfterListTools(mcpBkr.FilteredTools)
+	hooks.AddAfterListTools(mcpBkr.FilterTools)
 
 	mcpBkr.listeningMCPServer = server.NewMCPServer(
 		"Kagenti MCP Broker",
@@ -192,7 +226,6 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		server.WithHooks(hooks),
 		server.WithToolCapabilities(true),
 	)
-
 	return mcpBkr
 }
 
@@ -226,12 +259,28 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		if tools != nil {
 			discoveredTools = append(discoveredTools, tools...)
 		}
-		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID())
+		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID(), "total tools", len(tools))
 	}
 	m.logger.Debug("OnConfigChange discovered tools ", "total", len(discoveredTools))
 	if len(discoveredTools) > 0 {
 		m.listeningMCPServer.AddTools(toolsToServerTools(discoveredTools)...)
 	}
+	m.vsLock.Lock()
+	for _, vs := range conf.VirtualServers {
+		m.virtualServers[vs.Name] = vs
+	}
+	m.vsLock.Unlock()
+}
+
+func (m *mcpBrokerImpl) GetVirtualSeverByHeader(namespaceName string) (config.VirtualServer, error) {
+	m.vsLock.Lock()
+	defer m.vsLock.Unlock()
+	for _, vs := range m.virtualServers {
+		if vs.Name == namespaceName {
+			return *vs, nil
+		}
+	}
+	return config.VirtualServer{}, fmt.Errorf("virtual server %s not found", namespaceName)
 }
 
 // RegisterServerWithConfig registers an MCP server with full config
@@ -273,10 +322,6 @@ func (m *mcpBrokerImpl) RegisterServerWithConfig(ctx context.Context, mcpServer 
 		go m.retryDiscovery(context.Background(), upstreamMCPID(mcpServer.ID()))
 		return nil, nil // don't return error, allow partial registration
 	}
-	m.logger.Info("Discovered tools", "serverName", mcpServer.Name, "num tools", len(newTools))
-	if len(newTools) > 0 {
-		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
-	}
 	return newTools, nil
 }
 
@@ -313,6 +358,7 @@ func (m *mcpBrokerImpl) UnregisterServer(_ context.Context, id string) error {
 	mapping, ok := m.serverSessions[upstreamMCPID(id)]
 	if ok {
 		for downstreamSessionID, upstreamSessionState := range mapping {
+			// TODO why do we need another client
 			err := upstreamSessionState.client.Close()
 			if err != nil {
 				slog.Warn(
@@ -363,13 +409,11 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 		upstream.initializeResult = resInit
 	}
 
-	resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+	tools, err := upstream.FetchAndCacheTools(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tools: %w", err)
+		return nil, err
 	}
-	upstream.toolsResult = resTools
-
-	newTools, _ := m.populateToolMapping(upstream, resTools.Tools, nil)
+	newTools, _ := m.populateToolMapping(upstream, tools, nil)
 
 	// TODO probe resources other than tools
 
@@ -386,21 +430,18 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 	upstream.mcpClient.OnNotification(func(notification mcp.JSONRPCNotification) {
 		if notification.Method == "notifications/tools/list_changed" {
 			m.logger.Debug("notifications/tools/list_changed received", "mcpid", upstream.ID())
-			resTools, err := upstream.mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
+			tools, err := upstream.FetchAndCacheTools(ctx)
 			if err != nil {
-				m.logger.Warn("failed to list tools", "err", err)
-			} else {
-				m.logger.Info("OnNotification Re-Discovered tools  ", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+				m.logger.Error("failed to get tools ", "server", upstream.ID())
+				return
 			}
-
-			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, resTools.Tools)
+			addedTools, removedTools := diffTools(upstream.toolsResult.Tools, tools)
 
 			newlyAddedTools, newlyRemovedToolNames := m.populateToolMapping(upstream, addedTools, removedTools)
 
 			// Add any tools added since the last notification
 			if len(newlyAddedTools) > 0 {
-				m.logger.Info("OnNotification Adding tools", "mcpURL", upstream.URL, "#tools", len(newlyAddedTools))
-				//NOTE this sends a notification to connected clients
+				m.logger.Info("discovery: OnNotification Adding tools", "mcpID", upstream.ID(), "#tools", len(newlyAddedTools))
 				m.listeningMCPServer.AddTools(toolsToServerTools(newlyAddedTools)...)
 			}
 
@@ -409,13 +450,10 @@ func (m *mcpBrokerImpl) discoverTools(ctx context.Context, mcpID upstreamMCPID, 
 				m.logger.Info("OnNotification Removing tools", "mcpURL", upstream.URL, "newlyRemovedToolNames", newlyRemovedToolNames)
 				m.listeningMCPServer.DeleteTools(newlyRemovedToolNames...)
 			}
-
-			// Track the current state of tools
-			upstream.toolsResult = resTools
 		}
 	})
 
-	m.logger.Info("OnNotification Re-Discovered tools", "mcpURL", upstream.URL, "#tools", len(resTools.Tools))
+	m.logger.Info("discovered tools", "mcpURL", upstream.URL, "#tools", len(tools))
 
 	return newTools, err
 }
@@ -485,7 +523,9 @@ func (m *mcpBrokerImpl) retryDiscovery(ctx context.Context, mcpID upstreamMCPID)
 			"attempt", attempt,
 			"tools", len(newTools))
 
-		m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
+		if len(newTools) > 0 {
+			m.listeningMCPServer.AddTools(toolsToServerTools(newTools)...)
+		}
 		return true, nil
 	})
 	if err != nil {
@@ -650,11 +690,6 @@ func (m *mcpBrokerImpl) createMCPClient(ctx context.Context, id string, clientTy
 	}
 
 	return httpClient, initResp, nil
-}
-
-// prefixedName returns the name the gateway will advertise the tool as
-func (upstream *upstreamMCP) prefixedName(tool string) toolName {
-	return toolName(fmt.Sprintf("%s%s", upstream.ToolPrefix, tool))
 }
 
 func toolToServerTool(newTool mcp.Tool) server.ServerTool {

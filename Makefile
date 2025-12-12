@@ -361,12 +361,20 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	"$(MAKE)" kuadrant-install
 	"$(MAKE)" keycloak-install
 	"$(MAKE)" deploy
+	"$(MAKE)" add-jwt-key	
 	"$(MAKE)" deploy-test-servers
 	"$(MAKE)" deploy-example
 
 .PHONY: local-env-teardown
 local-env-teardown: ## Tear down the local Kind cluster
 	"$(MAKE)" kind-delete-cluster
+
+
+.PHONY: add-jwt-key
+add-jwt-key: #add the public key needed to validate any incoming jwt based headers such as x-allowed-tools
+	@kubectl get deployment/mcp-broker-router -n mcp-system -o yaml | \
+		bin/yq '.spec.template.spec.containers[0].env += [{"name":"TRUSTED_HEADER_PUBLIC_KEY","valueFrom":{"secretKeyRef":{"name":"trusted-headers-public-key","key":"key"}}}] | .spec.template.spec.containers[0].env |= unique_by(.name)' | \
+		kubectl apply -f -
 
 .PHONY: dev
 dev: ## Setup cluster for local development (binaries run on host)

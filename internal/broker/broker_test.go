@@ -101,7 +101,7 @@ func TestRegisterServer(t *testing.T) {
 	broker := NewBroker(logger)
 	brokerImpl := broker.(*mcpBrokerImpl)
 
-	_, err := brokerImpl.RegisterServerWithConfig(
+	tools, err := brokerImpl.RegisterServerWithConfig(
 		context.Background(),
 		&config.MCPServer{
 			Name:       "test-server",
@@ -113,6 +113,9 @@ func TestRegisterServer(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, brokerImpl.listeningMCPServer)
+	// RegisterServerWithConfig returns tools but doesn't add them to listeningMCPServer
+	// (that's done by OnConfigChange), so we add them here to test the tool content
+	brokerImpl.listeningMCPServer.AddTools(toolsToServerTools(tools)...)
 
 	expectedTools := map[string]*server.ServerTool{
 		"testprefix-regheaders": {

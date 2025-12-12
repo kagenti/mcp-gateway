@@ -53,11 +53,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer1.Name, registeredServer1.Namespace)).To(BeNil())
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer2.Name, registeredServer2.Namespace)).To(BeNil())
-			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
-			g.Expect(err).Error().NotTo(HaveOccurred())
-			g.Expect(toolsList).NotTo(BeNil())
-			g.Expect(verifyMCPServerToolsPresent(registeredServer1.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer1.Spec.ToolPrefix))
-			g.Expect(verifyMCPServerToolsPresent(registeredServer2.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer2.Spec.ToolPrefix))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("Verifying MCPServers tools are present")
@@ -72,7 +67,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should unregister mcp servers with the gateway", func() {
-
 		registration := NewMCPServerRegistration("basic-unregister", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
@@ -262,30 +256,197 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}
 	})
 
-	It("when a client uses an MCPVirtualServer the tools response should be limited to that specified by the MCPVirtual server", func() {
-		Skip("not implemented")
-		// register server
-		// register virtual mcp
-		// get tools list
-		// pick a tool
-		// validate only those specified by virtual mcp
-
-	})
-
-	It("clients should receive a notification when a server is added or removed", func() {
-		Skip("not implemented")
-		// register server
-		//connect with 2 client
-		// register notification handler
-		// assert that notifications recieved
-	})
-
-	It("should only see tools specified by the x-filter-tools header", func() {
-		Skip("not implemented")
-	})
-
 	It("should deploy redis and scale up the broker and see sessions shared", func() {
 		Skip("not implemented")
+	})
+
+	It("should assign unique mcp-session-ids to concurrent clients and new session on reconnect", func() {
+		By("Creating multiple clients concurrently")
+		client1, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client1.Close()
+
+		client2, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client2.Close()
+
+		client3, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client3.Close()
+
+		By("Verifying all clients have unique session IDs")
+		session1 := client1.GetSessionId()
+		session2 := client2.GetSessionId()
+		session3 := client3.GetSessionId()
+
+		Expect(session1).NotTo(BeEmpty(), "client1 should have a session ID")
+		Expect(session2).NotTo(BeEmpty(), "client2 should have a session ID")
+		Expect(session3).NotTo(BeEmpty(), "client3 should have a session ID")
+
+		Expect(session1).NotTo(Equal(session2), "client1 and client2 should have different session IDs")
+		Expect(session1).NotTo(Equal(session3), "client1 and client3 should have different session IDs")
+		Expect(session2).NotTo(Equal(session3), "client2 and client3 should have different session IDs")
+
+		By("Disconnecting client1 and reconnecting")
+		Expect(client1.Close()).To(Succeed())
+
+		reconnectedClient, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer reconnectedClient.Close()
+
+		newSession := reconnectedClient.GetSessionId()
+		Expect(newSession).NotTo(BeEmpty(), "reconnected client should have a session ID")
+		Expect(newSession).NotTo(Equal(session1), "reconnected client should have a different session ID than before")
+		Expect(newSession).NotTo(Equal(session2), "reconnected client should have a different session ID than client2")
+		Expect(newSession).NotTo(Equal(session3), "reconnected client should have a different session ID than client3")
+	})
+
+	It("should only return tools specified by MCPVirtualServer when using X-Mcp-Virtualserver header", func() {
+		By("Creating an MCPServer with tools")
+		registration := NewMCPServerRegistration("virtualserver-test", k8sClient)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServer tools are present")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating an MCPVirtualServer with a subset of tools")
+		allowedTool := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
+		virtualServer := BuildTestMCPVirtualServer("test-virtualserver", TestNamespace, []string{allowedTool}).Build()
+		testResources = append(testResources, virtualServer)
+		Expect(k8sClient.Create(ctx, virtualServer)).To(Succeed())
+
+		By("Creating a client with X-Mcp-Virtualserver header")
+		virtualServerHeader := fmt.Sprintf("%s/%s", virtualServer.Namespace, virtualServer.Name)
+		virtualServerClient, err := NewMCPGatewayClientWithHeaders(ctx, gatewayURL, map[string]string{
+			"X-Mcp-Virtualserver": virtualServerHeader,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer virtualServerClient.Close()
+
+		By("Verifying only the tools from MCPVirtualServer are returned")
+		Eventually(func(g Gomega) {
+			filteredTools, err := virtualServerClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(filteredTools).NotTo(BeNil())
+			g.Expect(len(filteredTools.Tools)).To(Equal(1), "expected exactly 1 tool from virtual server")
+			g.Expect(filteredTools.Tools[0].Name).To(Equal(allowedTool))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying the original client without header still sees all tools")
+		allToolsAgain, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(allToolsAgain.Tools)).To(BeNumerically(">", 1), "expected more than 1 tool without virtual server header")
+	})
+
+	It("should send notifications/tools/list_changed to connected clients when MCPServer is registered", func() {
+
+		By("Creating clients with notification handlers and different sessions")
+		client1Notification := false
+		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			client1Notification = true
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client1.Close()
+
+		client2Notification := false
+		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			client2Notification = true
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client2.Close()
+		Expect(mcpGatewayClient.sessionID).NotTo(BeEmpty())
+		Expect(client2.sessionID).NotTo(BeEmpty())
+		Expect(client1.sessionID).NotTo(Equal(client2.sessionID))
+
+		By("registering a new MCPServer")
+		registration := NewMCPServerRegistration("notification-test", k8sClient)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Waiting for the server to become ready")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		// We do this to wait for the tools to show up as we know then that the gateway has done its work
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying both clients received notifications/tools/list_changed within 1 minutes")
+		Eventually(func(g Gomega) {
+			_, err := client1.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(client1Notification).To(BeTrueBecause("client1 should have received a notification within 1 minutes"))
+			g.Expect(client2Notification).To(BeTrueBecause("client2 should have received a notification within 1 minutes"))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+	})
+
+	It("should filter tools based on x-authorized-tools JWT header", func() {
+		if !IsTrustedHeadersEnabled() {
+			Skip("trusted headers public key not configured - skipping x-authorized-tools test")
+		}
+
+		By("Creating an MCPServer with tools")
+		registration := NewMCPServerRegistration("authorized-tools-test", k8sClient)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying MCPServer tools are present without filtering")
+		var allTools *mcp.ListToolsResult
+		Eventually(func(g Gomega) {
+			var err error
+			allTools, err = mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(allTools).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, allTools)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating a JWT with allowed tools for the server")
+
+		GinkgoWriter.Println("server name ", registeredServer.Name)
+
+		allowedTools := map[string][]string{
+			fmt.Sprintf("%s/%s", registeredServer.Namespace, registeredServer.Name): {"hello_world"},
+		}
+		jwtToken, err := CreateAuthorizedToolsJWT(allowedTools)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a client with x-authorized-tools header")
+		authorizedClient, err := NewMCPGatewayClientWithHeaders(ctx, gatewayURL, map[string]string{
+			"X-Authorized-Tools": jwtToken,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer authorizedClient.Close()
+
+		By("Verifying only the tools from the JWT are returned")
+		Eventually(func(g Gomega) {
+			filteredTools, err := authorizedClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(filteredTools).NotTo(BeNil())
+			g.Expect(len(filteredTools.Tools)).To(Equal(1), "expected exactly 1 tool from authorized tools header")
+			expectedToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
+			g.Expect(filteredTools.Tools[0].Name).To(Equal(expectedToolName))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
 })

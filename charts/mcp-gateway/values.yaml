@@ -24,3 +24,10 @@ envoyFilter:
 gateway:
   # publicHost set the value for --mcp-gateway-public-host flag
   publicHost: mcp.127-0-0-1.sslip.io
+
+# Broker configuration
+broker:
+  # writeTimeoutSeconds sets the HTTP write timeout for the broker in seconds.
+  # Default 0 (disabled) is required for SSE notification support via GET /mcp.
+  # Set > 0 to enable a timeout (will break SSE notifications).
+  writeTimeoutSeconds: 0
