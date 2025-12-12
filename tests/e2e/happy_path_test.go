@@ -260,6 +260,47 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Skip("not implemented")
 	})
 
+	It("should assign unique mcp-session-ids to concurrent clients and new session on reconnect", func() {
+		By("Creating multiple clients concurrently")
+		client1, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client1.Close()
+
+		client2, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client2.Close()
+
+		client3, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer client3.Close()
+
+		By("Verifying all clients have unique session IDs")
+		session1 := client1.GetSessionId()
+		session2 := client2.GetSessionId()
+		session3 := client3.GetSessionId()
+
+		Expect(session1).NotTo(BeEmpty(), "client1 should have a session ID")
+		Expect(session2).NotTo(BeEmpty(), "client2 should have a session ID")
+		Expect(session3).NotTo(BeEmpty(), "client3 should have a session ID")
+
+		Expect(session1).NotTo(Equal(session2), "client1 and client2 should have different session IDs")
+		Expect(session1).NotTo(Equal(session3), "client1 and client3 should have different session IDs")
+		Expect(session2).NotTo(Equal(session3), "client2 and client3 should have different session IDs")
+
+		By("Disconnecting client1 and reconnecting")
+		Expect(client1.Close()).To(Succeed())
+
+		reconnectedClient, err := NewMCPGatewayClient(ctx, gatewayURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer reconnectedClient.Close()
+
+		newSession := reconnectedClient.GetSessionId()
+		Expect(newSession).NotTo(BeEmpty(), "reconnected client should have a session ID")
+		Expect(newSession).NotTo(Equal(session1), "reconnected client should have a different session ID than before")
+		Expect(newSession).NotTo(Equal(session2), "reconnected client should have a different session ID than client2")
+		Expect(newSession).NotTo(Equal(session3), "reconnected client should have a different session ID than client3")
+	})
+
 	It("should only return tools specified by MCPVirtualServer when using X-Mcp-Virtualserver header", func() {
 		By("Creating an MCPServer with tools")
 		registration := NewMCPServerRegistration("virtualserver-test", k8sClient)
@@ -349,9 +390,9 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("Verifying both clients received notifications/tools/list_changed within 1 minutes")
 		Eventually(func(g Gomega) {
 			_, err := client1.ListTools(ctx, mcp.ListToolsRequest{})
-			Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(client1Notification).To(BeTrueBecause("client1 should have received a notification within 1 minutes"))
-			Expect(client2Notification).To(BeTrueBecause("client2 should have received a notification within 1 minutes"))
+			g.Expect(client2Notification).To(BeTrueBecause("client2 should have received a notification within 1 minutes"))
 		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 	})
 

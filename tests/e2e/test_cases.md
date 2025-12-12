@@ -14,3 +14,9 @@
 ### [Happy] Test notifications are received when a notifications/tools/list_changed notification is sent
 
 - When an MCPServer is registered with the MCP Gateway, a `notifications/tools/list_changed` should be sent to any clients connected to the MCP Gateway. This notification should work for a single connected client as well as multiple connected clients. They should all receive the same notification at least once. The clients should receive these notifications within one minute of the MCPServer having reached a ready state.
+
+### [Happy] Test no two mcp-session-ids are the same
+
+- When a client initializes with the gateway, the session id it receives should be unique. So if two clients connect at basically the same time, each of those clients should get a unique session id. 
+
+- If a client is closed and disconnects, if it connects to the gateway and initializes it should receive a new mcp-session-id
