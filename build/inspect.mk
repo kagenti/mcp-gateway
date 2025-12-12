@@ -6,7 +6,7 @@ open := $(shell { which xdg-open || which open; } 2>/dev/null)
 urls-impl:
 	@echo "=== MCP Gateway URLs ==="
 	@echo "Gateway: http://mcp.127-0-0-1.sslip.io:$(KIND_HOST_PORT_MCP_GATEWAY)"
-	@echo "Keycloak: http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
+	@echo "Keycloak: https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
 
 .PHONY: inspect-server1
 inspect-server1: ## Open MCP Inspector for test server 1

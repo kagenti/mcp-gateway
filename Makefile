@@ -357,9 +357,6 @@ local-env-setup: ## Setup complete local demo environment with Kind, Istio, MCP 
 	"$(MAKE)" metallb-install
 	"$(MAKE)" deploy-namespaces
 	"$(MAKE)" deploy-gateway
-	"$(MAKE)" cert-manager-install
-	"$(MAKE)" kuadrant-install
-	"$(MAKE)" keycloak-install
 	"$(MAKE)" deploy
 	"$(MAKE)" add-jwt-key	
 	"$(MAKE)" deploy-test-servers

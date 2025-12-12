@@ -1,7 +1,7 @@
 ##@ Auth Examples
 
 .PHONY: oauth-acl-example-setup
-oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions managed with an external Access Control List provider (requires: make local-env-setup)
+oauth-acl-example-setup: cert-manager-install kuadrant-install keycloak-install ## Setup auth example based on OAuth2 - permissions managed with an external Access Control List provider (requires: make local-env-setup)
 	@echo "========================================="
 	@echo "Setting up OAuth Example"
 	@echo "========================================="
@@ -40,7 +40,7 @@ oauth-acl-example-setup: ## Setup auth example based on OAuth2 - permissions man
 	@echo "and go through the OAuth flow with credentials: mcp/mcp"
 
 .PHONY: oauth-token-exchange-example-setup
-oauth-token-exchange-example-setup: ## Setup auth example of enabling OAuth2 authentication using Kuadrant, with Vault access and OAuth2 Token Exchange automatically handled for the tools/call request – permissions stored in the Keycloak server (requires: make local-env-setup)
+oauth-token-exchange-example-setup: cert-manager-install kuadrant-install keycloak-install ## Setup auth example of enabling OAuth2 authentication using Kuadrant, with Vault access and OAuth2 Token Exchange automatically handled for the tools/call request – permissions stored in the Keycloak server (requires: make local-env-setup)
 	@echo "========================================="
 	@echo "Setting up OAuth Example"
 	@echo "========================================="

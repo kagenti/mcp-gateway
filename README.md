@@ -81,7 +81,7 @@ make inspect-gateway
 
 This will start MCP Inspector and automatically open it with the correct URL for the gateway.
 
-## Example OAuth setup
+## Example OAuth setup: Keycloak as an ACL Server
 
 After running the Quick start above, configure OAuth authentication with a single command:
 
@@ -90,10 +90,35 @@ make oauth-token-exchange-example-setup
 ```
 
 This will:
+- Install Keycloak
+- Set up a Keycloak realm with user/groups/client scopes, including group mappings for tool permissions
+- Configure the mcp-broker with OAuth environment variables
+- Apply AuthPolicy for token validation/exchange on the /mcp endpoint, including tool authorization via keylcoak group mappings (both via Keycloak)
+- Apply additional OAuth configurations
+
+The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
+
+Finally, open MCP Inspector at http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-0-0-1.sslip.io:8001/mcp
+
+When you click connect with MCP Inspector, you should be redirected to Keycloak. There you will need to login as the MCP user with password mcp. You now should only be able to access tools based on the ACL configuration.
+
+You can modify tool authorization permissions by signing in to keycloak at https://keycloak.127-0-0-1.sslip.io:8002/ as the `admin` user with password `admin`, and modifying the 'Role Mappings' in the 'accounting' Group under the 'mcp' realm.
+Each MCP Server is represented as a 'Client', with each tool represented as a 'Role'.
+
+## Alternative OAuth example setup: Simple Remote ACL Server
+
+After running the Quick start above, configure OAuth authentication with a single command:
+
+```bash
+make oauth-acl-example-setup
+```
+
+This will:
+- Install Keycloak
 - Set up a Keycloak realm with user/groups/client scopes
 - Configure the mcp-broker with OAuth environment variables
-- Apply AuthPolicy for token validation on the /mcp endpoint
-- Apply additional OAuth configurations
+- Deploy a simple remote ACL server
+- Apply AuthPolicy for token validation on the /mcp endpoint (via Keycloak), including tool authorization via the remote ACL server
 
 The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.
 

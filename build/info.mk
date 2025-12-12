@@ -11,7 +11,7 @@ info-impl:
 	@echo ""
 	@echo "Service URLs:"
 	@echo "  Gateway:     http://mcp.127-0-0-1.sslip.io:$(KIND_HOST_PORT_MCP_GATEWAY)"
-	@echo "  Keycloak:    http://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
+	@echo "  Keycloak:    https://keycloak.127-0-0-1.sslip.io:$(KIND_HOST_PORT_KEYCLOAK)"
 	@echo ""
 	@echo "Quick Start Commands:"
 	@echo "  make dev                 # Configure for local development"

@@ -71,7 +71,7 @@ example response:
 {
   "resource_name":"MCP Gateway",
   "resource":"http://mcp.127-0-0-1.sslip.io:8001/mcp",
-  "authorization_servers":["http://keycloak.127-0-0-1.sslip.io:8001/realms/mcp"], 
+  "authorization_servers":["https://keycloak.127-0-0-1.sslip.io:8001/realms/mcp"], 
   "bearer_methods_supported": ["header"],
   "scopes_supported":["email","role","user","groups"]
 }

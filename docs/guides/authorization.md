@@ -148,7 +148,7 @@ spec:
       authentication:
         'keycloak':
           jwt:
-            issuerUrl: http://keycloak.keycloak.svc.cluster.local/realms/mcp
+            issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/mcp
       authorization:
         'allow-tool-call':
           patternMatching:
