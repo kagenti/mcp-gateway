@@ -235,7 +235,7 @@ func (m *mcpBrokerImpl) IsRegistered(id string) bool {
 }
 
 func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServersConfig) {
-	m.logger.Debug("Broker OnConfigChange called")
+	m.logger.Debug("Broker OnConfigChange called", "# servers", len(conf.Servers))
 	// unregister decommissioned servers
 	for serverID := range m.mcpServers {
 		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
@@ -249,7 +249,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 	// ensure new servers registered
 	discoveredTools := []mcp.Tool{}
 	for _, mcpServer := range conf.Servers {
-		m.logger.Info("Registering Server ", "mcpID", mcpServer.ID())
+		m.logger.Info("Registering Server", "mcpID", mcpServer.ID())
 
 		tools, err := m.RegisterServerWithConfig(ctx, mcpServer)
 		if err != nil {
@@ -259,9 +259,9 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		if tools != nil {
 			discoveredTools = append(discoveredTools, tools...)
 		}
-		m.logger.Info("Registered Server ", "mcpID", mcpServer.ID(), "total tools", len(tools))
+		m.logger.Info("Registered Server", "mcpID", mcpServer.ID(), "total tools", len(tools))
 	}
-	m.logger.Debug("OnConfigChange discovered tools ", "total", len(discoveredTools))
+	m.logger.Debug("OnConfigChange discovered tools", "total", len(discoveredTools))
 	if len(discoveredTools) > 0 {
 		m.listeningMCPServer.AddTools(toolsToServerTools(discoveredTools)...)
 	}
@@ -885,6 +885,8 @@ func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
 		ToolConflicts:    0,
 		Timestamp:        time.Now(),
 	}
+
+	m.logger.Debug("ValidateAllServers: checking servers", "# servers", len(m.mcpServers))
 
 	for id, upstream := range m.mcpServers {
 		status := m.validateMCPServer(ctx, string(id), upstream.Name, upstream.ToolPrefix)
