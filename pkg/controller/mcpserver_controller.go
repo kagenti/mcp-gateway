@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -573,6 +574,10 @@ func (r *MCPReconciler) buildServerInfoForHostnameBackend(
 	}
 
 	externalHost := string(backendRef.Name)
+	if !isValidHostname(externalHost) {
+		return nil, fmt.Errorf("invalid hostname in backendRef: %s", externalHost)
+	}
+
 	port := "443"
 	if backendRef.Port != nil {
 		port = fmt.Sprintf("%d", *backendRef.Port)
@@ -591,6 +596,18 @@ func (r *MCPReconciler) buildServerInfoForHostnameBackend(
 		HTTPRouteNamespace: namespace,
 		Credential:         "",
 	}, nil
+}
+
+// validates hostname can't contain path injection
+func isValidHostname(hostname string) bool {
+	if hostname == "" {
+		return false
+	}
+	u, err := url.Parse("//" + hostname)
+	if err != nil {
+		return false
+	}
+	return u.Host == hostname
 }
 
 func (r *MCPReconciler) cleanupOrphanedHTTPRoutes(

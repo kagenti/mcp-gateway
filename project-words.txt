@@ -1,5 +1,8 @@
 # New Words
 apikey
+dotdot
+istionetv
+istiov
 authorino
 Authorino
 clientcmd
