@@ -198,7 +198,7 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 	// Get tool annotations from broker and set headers
 	headers := NewHeaders()
 	if s.Broker != nil {
-		if annotations, hasAnnotations := s.Broker.ToolAnnotations(toolName); hasAnnotations {
+		if annotations, hasAnnotations := s.Broker.ToolAnnotations(serverInfo.ID(), toolName); hasAnnotations {
 			// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
 			var parts []string
 			push := func(key string, val *bool) {

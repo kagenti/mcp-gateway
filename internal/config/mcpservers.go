@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// UpstreamMCPID is used as type for identifying individual upstreams
+type UpstreamMCPID string
+
 // MCPServersConfig holds server configuration
 type MCPServersConfig struct {
 	Servers        []*MCPServer
@@ -88,8 +91,8 @@ type MCPServer struct {
 }
 
 // ID returns a unique id for the a registered server
-func (mcpServer *MCPServer) ID() string {
-	return fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL)
+func (mcpServer *MCPServer) ID() UpstreamMCPID {
+	return UpstreamMCPID(fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL))
 }
 
 // ConfigChanged checks if a server's config has changed in a way that will affect the gateway.

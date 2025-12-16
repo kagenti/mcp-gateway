@@ -350,10 +350,13 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should send notifications/tools/list_changed to connected clients when MCPServer is registered", func() {
-
+		// NOTE on notifications. A notification is sent when servers are removed during clean up as this effects tools list also.
+		// as the list_changed notification is broadcast, this can mean clients in other tests receive additonal notifications
+		// for that reason we only assert we received at least one rather than a set number
 		By("Creating clients with notification handlers and different sessions")
 		client1Notification := false
 		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			GinkgoWriter.Println("client 1 recieved notifcation registration", j.Method)
 			client1Notification = true
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -361,6 +364,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 		client2Notification := false
 		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			GinkgoWriter.Println("client 2 recieved notifcation registration", j.Method)
 			client2Notification = true
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -390,10 +394,128 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		By("Verifying both clients received notifications/tools/list_changed within 1 minutes")
 		Eventually(func(g Gomega) {
 			_, err := client1.ListTools(ctx, mcp.ListToolsRequest{})
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(client1Notification).To(BeTrueBecause("client1 should have received a notification within 1 minutes"))
-			g.Expect(client2Notification).To(BeTrueBecause("client2 should have received a notification within 1 minutes"))
+			Expect(err).NotTo(HaveOccurred())
+			g.Expect(client1Notification).To(BeTrue(), "client1 should have received a notification within 1 minutes")
+			g.Expect(client2Notification).To(BeTrue(), "client1 should have received a notification within 1 minutes")
 		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+	})
+
+	It("should forward notifications/tools/list_changed from backend MCP server to connected clients", func() {
+
+		By("Creating an MCPServer pointing to server1 which has the add_tool feature")
+		registration := NewMCPServerRegistration("backend-notification-test", k8sClient).
+			WithBackendTarget("mcp-test-server1", 9090)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying initial tools are present")
+		var initialToolCount int
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+			initialToolCount = len(toolsList.Tools)
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating new clients with notification handlers")
+		client1Notification := false
+		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			if j.Method == "notifications/tools/list_changed" {
+				GinkgoWriter.Println("client 1 recieved notifcation", j.Method)
+				client1Notification = true
+			}
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client1.Close()
+
+		client2Notification := false
+		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			GinkgoWriter.Println("client 2 recieved notifcation", j.Method)
+			if j.Method == "notifications/tools/list_changed" {
+				client2Notification = true
+			}
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer client2.Close()
+
+		By("Calling add_tool on the backend server to trigger notifications/tools/list_changed")
+		dynamicToolName := fmt.Sprintf("dynamic_tool_%s", UniqueName(""))
+		addToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "add_tool")
+		res, err := client1.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name: addToolName,
+				Arguments: map[string]string{
+					"name":        dynamicToolName,
+					"description": "A dynamically added tool for testing notifications",
+				},
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		GinkgoWriter.Println("add_tool response:", res.Content)
+
+		By("Verifying both clients received notifications/tools/list_changed")
+		Eventually(func(g Gomega) {
+			g.Expect(client1Notification).To(BeTrue(), "client1 should have received notifications/tools/list_changed")
+			g.Expect(client2Notification).To(BeTrue(), "client2 should have received notifications/tools/list_changed")
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools/list now includes the new dynamically added tool")
+		Eventually(func(g Gomega) {
+			toolsList, err := client1.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(len(toolsList.Tools)).To(BeNumerically("==", initialToolCount+1), "tools list should have increased by one")
+
+			foundNewTool := false
+			for _, t := range toolsList.Tools {
+				if strings.HasSuffix(t.Name, dynamicToolName) {
+					foundNewTool = true
+					break
+				}
+			}
+			g.Expect(foundNewTool).To(BeTrueBecause("the dynamically added tool %s should be in the tools list", dynamicToolName))
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+	})
+
+	It("should expose tool annotations to clients in tools/list response", func() {
+		By("Creating an MCPServer pointing to server1 which has tools with annotations")
+		registration := NewMCPServerRegistration("annotations-test", k8sClient).
+			WithBackendTarget("mcp-test-server1", 9090)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools are present and have annotations")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+
+			// Find the "time" tool from server1 which has Annotations{Title: "time"}
+			timeToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "time")
+			var foundTimeTool *mcp.Tool
+			for i := range toolsList.Tools {
+				if toolsList.Tools[i].Name == timeToolName {
+					foundTimeTool = &toolsList.Tools[i]
+					break
+				}
+			}
+			g.Expect(foundTimeTool).NotTo(BeNil(), "time tool should be present")
+			g.Expect(foundTimeTool.Annotations).NotTo(BeNil(), "time tool should have annotations")
+			g.Expect(foundTimeTool.Annotations.Title).To(Equal("time"), "time tool should have Title annotation set to 'time'")
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
 	It("should filter tools based on x-authorized-tools JWT header", func() {
@@ -450,16 +572,3 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 })
-
-// verifyMCPServerToolsPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
-func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsResult) bool {
-	if toolsList == nil {
-		return false
-	}
-	for _, t := range toolsList.Tools {
-		if strings.HasPrefix(t.Name, serverPrefix) {
-			return true
-		}
-	}
-	return false
-}
