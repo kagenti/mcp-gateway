@@ -3,7 +3,7 @@
 
 ### [Happy] Test MCPVirtualServer behaves as expected when defined
 
-- When a developer defines a MCPVirtualServer resource and specify the value of the `X-Mcp-Virtualserver` header as the name in the format `namespace/name` where the namespace and name come from the created MCPVirtualServer resource, they should only get the tools specified in the MCPVirtualServer resource when they do a tools/list request to the MCP Gateway host. 
+- When a developer defines a MCPVirtualServer resource and specify the value of the `X-Mcp-Virtualserver` header as the name in the format `namespace/name` where the namespace and name come from the created MCPVirtualServer resource, they should only get the tools specified in the MCPVirtualServer resource when they do a tools/list request to the MCP Gateway host.
 
 
 ### [Happy] Test tools are filtered down based on x-authorized-tools header
@@ -17,6 +17,10 @@
 
 ### [Happy] Test no two mcp-session-ids are the same
 
-- When a client initializes with the gateway, the session id it receives should be unique. So if two clients connect at basically the same time, each of those clients should get a unique session id. 
+- When a client initializes with the gateway, the session id it receives should be unique. So if two clients connect at basically the same time, each of those clients should get a unique session id.
 
 - If a client is closed and disconnects, if it connects to the gateway and initializes it should receive a new mcp-session-id
+
+### [Happy] Test Hostname backendRef registers MCPServer
+
+- When an HTTPRoute uses a Hostname backendRef (`kind: Hostname, group: networking.istio.io`) with a URLRewrite filter, and an MCPServer references that HTTPRoute, the controller should correctly handle the external endpoint configuration and the MCPServer should become ready. Tool discovery is not tested as it requires actual HTTPS connectivity to external services.
