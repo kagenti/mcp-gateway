@@ -543,7 +543,7 @@ func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, hea
 	if err != nil {
 		return nil, err
 	}
-	res, err := gatewayClient.Initialize(ctx, mcp.InitializeRequest{
+	_, err = gatewayClient.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			Capabilities:    mcp.ClientCapabilities{},
@@ -556,6 +556,18 @@ func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, hea
 	if err != nil {
 		return nil, err
 	}
-	GinkgoWriter.Println("init response ", res.ServerInfo)
 	return gatewayClient, nil
+}
+
+// verifyMCPServerToolsPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
+func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsResult) bool {
+	if toolsList == nil {
+		return false
+	}
+	for _, t := range toolsList.Tools {
+		if strings.HasPrefix(t.Name, serverPrefix) {
+			return true
+		}
+	}
+	return false
 }
