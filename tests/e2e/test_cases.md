@@ -1,6 +1,31 @@
 ## Test Cases
 
 
+### [Happy] Test registering multiple MCP servers with the gateway
+
+- When a developer creates multiple MCPServer resources with their corresponding HTTPRoutes, the gateway should register all servers and make their tools available. Each server's tools should be prefixed with the server's toolPrefix to avoid naming conflicts. A tools/list request should return tools from all registered servers.
+
+
+### [Happy] Test unregistering MCP servers from the gateway
+
+- When an MCPServer resource is deleted from the cluster, the gateway should remove the server and its tools should no longer be available. A subsequent tools/list request should not include any tools with that server's prefix.
+
+
+### [Happy] Test invoking tools through the gateway
+
+- When a client calls a tool through the gateway using the prefixed tool name, the gateway should forward the request to the appropriate backend MCP server and return the result. The tool should execute successfully and return the expected response.
+
+
+### [Happy] Test MCP server registration with credentials
+
+- When an MCPServer resource references a credential secret, the gateway should use those credentials to authenticate with the backend MCP server. If the credentials are invalid, the server should not be registered and its tools should not be available. When the credentials are updated to valid values, the server should become registered and its tools should appear in the tools/list.
+
+
+### [Happy] Test backend MCP session reuse
+
+- When a client makes multiple tool calls to the same backend MCP server, the gateway should reuse the same backend session for efficiency. The backend session ID should remain consistent across multiple calls from the same client. When a client disconnects and reconnects, a new backend session should be created.
+
+
 ### [Happy] Test MCPVirtualServer behaves as expected when defined
 
 - When a developer defines a MCPVirtualServer resource and specify the value of the `X-Mcp-Virtualserver` header as the name in the format `namespace/name` where the namespace and name come from the created MCPVirtualServer resource, they should only get the tools specified in the MCPVirtualServer resource when they do a tools/list request to the MCP Gateway host. 
@@ -15,8 +40,15 @@
 
 - When an MCPServer is registered with the MCP Gateway, a `notifications/tools/list_changed` should be sent to any clients connected to the MCP Gateway. This notification should work for a single connected client as well as multiple connected clients. They should all receive the same notification at least once. The clients should receive these notifications within one minute of the MCPServer having reached a ready state.
 
+- When a registered backend MCP Server, emits a `notifications/tools/list_changed` a notification should be received by the connected clients. When the clients receive this notification they should get a changed tools/list. 
+
 ### [Happy] Test no two mcp-session-ids are the same
 
 - When a client initializes with the gateway, the session id it receives should be unique. So if two clients connect at basically the same time, each of those clients should get a unique session id. 
 
 - If a client is closed and disconnects, if it connects to the gateway and initializes it should receive a new mcp-session-id
+
+
+### [Happy] When a tools has annotations these should be visible to the client
+
+- When a client does a tools/list if a tool has specified mcp tool annotations, these should be visible to client as headers

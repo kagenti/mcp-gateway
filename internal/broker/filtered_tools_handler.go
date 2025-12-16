@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/kagenti/mcp-gateway/internal/broker/upstream"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -100,27 +101,36 @@ func (broker *mcpBrokerImpl) parseAuthorizedToolsJWT(headerValues []string) (map
 	return allowedTools, nil
 }
 
+func (broker *mcpBrokerImpl) findServerByName(name string) *upstream.MCPManager {
+	for _, upstream := range broker.mcpServers {
+		if upstream.MCPName() == name {
+			return upstream
+		}
+	}
+	return nil
+}
+
 // filterToolsByServerMap filters tools based on a map of server name to allowed tool names.
 func (broker *mcpBrokerImpl) filterToolsByServerMap(allowedTools map[string][]string) []mcp.Tool {
 	var filtered []mcp.Tool
 
 	for serverName, toolNames := range allowedTools {
-		upstream := broker.mcpServers.findByName(serverName)
+		upstream := broker.findServerByName(serverName)
 		if upstream == nil {
 			broker.logger.Error("upstream not found", "server", serverName)
 			continue
 		}
-		tools := upstream.GetCachedTools()
+		tools := upstream.GetManagedTools()
 		if tools == nil {
-			broker.logger.Debug("no tools registered for upstream server", "server", upstream.Name)
+			broker.logger.Debug("no tools registered for upstream server", "server", upstream.MCPName)
 			continue
 		}
 
-		for _, tool := range tools.Tools {
+		for _, tool := range tools {
 			broker.logger.Debug("checking access", "tool", tool.Name, "against", toolNames)
 			if slices.Contains(toolNames, tool.Name) {
 				broker.logger.Debug("access granted", "tool", tool.Name)
-				tool.Name = string(upstream.prefixedName(tool.Name))
+				tool.Name = fmt.Sprintf("%s%s", upstream.UpstreamMCP.ToolPrefix, tool.Name)
 				filtered = append(filtered, tool)
 			}
 		}
