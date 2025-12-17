@@ -64,10 +64,3 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    - name: mcp-conformance-server-route-ext
-      hostname: 'conformance-server.127-0-0-1.sslip.io'
-      port: 8080
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: All
