@@ -571,3 +571,47 @@ func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsRe
 	}
 	return false
 }
+
+// ScaleDeployment scales a deployment to the specified replicas
+func ScaleDeployment(namespace, name string, replicas int) error {
+	cmd := exec.Command("kubectl", "scale", "deployment", name,
+		"-n", namespace, fmt.Sprintf("--replicas=%d", replicas))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to scale deployment %s: %s: %w", name, string(output), err)
+	}
+	return nil
+}
+
+// WaitForDeploymentReady waits for a deployment to have the expected number of ready replicas
+func WaitForDeploymentReady(namespace, name string, expectedReplicas int) error {
+	cmd := exec.Command("kubectl", "rollout", "status", "deployment", name,
+		"-n", namespace, "--timeout=60s")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("deployment %s not ready: %s: %w", name, string(output), err)
+	}
+	return nil
+}
+
+// WaitForDeploymentScaledDown waits for a deployment to have 0 available replicas
+func WaitForDeploymentScaledDown(namespace, name string) error {
+	cmd := exec.Command("kubectl", "wait", "deployment", name,
+		"-n", namespace, "--for=jsonpath={.status.availableReplicas}=0", "--timeout=60s")
+	// kubectl wait doesn't work well with 0 replicas, use rollout status instead
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// fallback: check replicas directly
+		checkCmd := exec.Command("kubectl", "get", "deployment", name,
+			"-n", namespace, "-o", "jsonpath={.status.availableReplicas}")
+		checkOutput, checkErr := checkCmd.CombinedOutput()
+		if checkErr != nil {
+			return fmt.Errorf("failed to check deployment %s: %s: %w", name, string(output), err)
+		}
+		if strings.TrimSpace(string(checkOutput)) == "" || strings.TrimSpace(string(checkOutput)) == "0" {
+			return nil
+		}
+		return fmt.Errorf("deployment %s still has replicas: %s", name, string(checkOutput))
+	}
+	return nil
+}

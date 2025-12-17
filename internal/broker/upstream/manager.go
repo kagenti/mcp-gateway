@@ -69,7 +69,8 @@ type ToolConflict struct {
 // MCPManager manages a single backend MCPServer for the broker. It is the only thing that should be connecting to the MCP Server for the broker. External client connections are  not handled by this Manager and are not handled by the broker. It handles tools updates, disconnection, liveness checks for the broker and updating the overall status that is available from the /status endpoint. It is responsible for adding and removing tools to the broker to make them available via the gateway. It periodically pings and will fetch new tools based on notifications. It is intended to be long lived and have 1:1 relationship with a backend MCP server.
 type MCPManager struct {
 	UpstreamMCP     *MCPServer
-	ticker          *time.Ticker // ticker allows for us to continue to probe and retry the backend
+	ticker          *time.Ticker  // ticker allows for us to continue to probe and retry the backend
+	tickerInterval  time.Duration // tickerInterval is the interval between backend health checks
 	addToolsFunc    AddToolsFunc
 	removeToolsFunc RemoveToolsFunc
 	// serverTools contains the managed MCP's tools with prefixed names. It is these that are externally available via the gateway
@@ -83,14 +84,21 @@ type MCPManager struct {
 	done      chan struct{}  // triggers the exit of the select and routine
 }
 
+// DefaultTickerInterval is the default interval for backend health checks
+const DefaultTickerInterval = time.Minute * 1
+
 // NewUpstreamMCPManager creates a new MCPManager for managing a single upstream MCP server.
 // The addTools and removeTools callbacks are used to update the gateway's tool registry.
-func NewUpstreamMCPManager(upstream *MCPServer, addTools AddToolsFunc, removeTools RemoveToolsFunc, logger *slog.Logger) *MCPManager {
-
+// The tickerInterval controls how often the manager checks backend health (use 0 for default).
+func NewUpstreamMCPManager(upstream *MCPServer, addTools AddToolsFunc, removeTools RemoveToolsFunc, logger *slog.Logger, tickerInterval time.Duration) *MCPManager {
+	if tickerInterval <= 0 {
+		tickerInterval = DefaultTickerInterval
+	}
 	return &MCPManager{
 		UpstreamMCP:     upstream,
 		addToolsFunc:    addTools,
 		removeToolsFunc: removeTools,
+		tickerInterval:  tickerInterval,
 		logger:          logger.With("sub-component", "mcp manager"),
 		serverTools:     []server.ServerTool{},
 		tools:           []mcp.Tool{},
@@ -112,8 +120,7 @@ func (man *MCPManager) Start(ctx context.Context) {
 	// this will be called once Stop is called
 	defer man.wg.Done()
 
-	// TODO make configurable
-	man.ticker = time.NewTicker(time.Minute * 5)
+	man.ticker = time.NewTicker(man.tickerInterval)
 
 	man.manage(ctx)
 
@@ -215,6 +222,7 @@ func (man *MCPManager) setTools(ctx context.Context) {
 // the protocol version and tool capabilities. Returns a ServerValidationStatus
 // containing the results.
 func (man *MCPManager) Validate(ctx context.Context) ServerValidationStatus {
+
 	s := ServerValidationStatus{
 		ID:                     string(man.UpstreamMCP.ID()),
 		Name:                   man.UpstreamMCP.Name,
@@ -225,24 +233,29 @@ func (man *MCPManager) Validate(ctx context.Context) ServerValidationStatus {
 		LastValidated:          time.Now(),
 	}
 	s.ProtocolValidation.ExpectedVersion = strings.Join(mcp.ValidProtocolVersions, ",")
-	s.ProtocolValidation.ExpectedVersion = strings.Join(mcp.ValidProtocolVersions, ",")
+	s.ProtocolValidation.SupportedVersion = strings.Join(mcp.ValidProtocolVersions, ",")
 	s.ConnectionStatus.IsReachable = false
 	if man.UpstreamMCP.Client == nil {
 		if err := man.UpstreamMCP.Connect(ctx); err != nil {
 			man.logger.Error("mcp manager failed to connect to server ", "server id", man.UpstreamMCP.ID(), "error", err)
 			s.ConnectionStatus.Error = err.Error()
+			return s
 		}
 		s.ConnectionStatus.IsReachable = true
 	}
-	// always ping to verify connection if client exists
-	if man.UpstreamMCP.Client != nil {
-		if err := man.UpstreamMCP.Ping(ctx); err != nil {
-			man.logger.Error("mcp manager failed to ping to server ", "server id", man.UpstreamMCP.ID(), "error", err)
-			s.ConnectionStatus.Error = err.Error()
-			s.ConnectionStatus.IsReachable = false
-		} else {
-			s.ConnectionStatus.IsReachable = true
+	// always ping to verify connection if client exists. If ping fails, disconnect and allow a new session to be establised
+	if err := man.UpstreamMCP.Ping(ctx); err != nil {
+		man.logger.Error("mcp manager failed to ping to server ", "server id", man.UpstreamMCP.ID(), "error", err)
+		s.ConnectionStatus.Error = err.Error()
+		s.ConnectionStatus.IsReachable = false
+		// closing connectin as we will likely need a new session
+		if err := man.UpstreamMCP.Close(); err != nil {
+			//not much we can do log and move on
+			man.logger.Error("failed to close client ", "server id", man.UpstreamMCP.ID(), "error", err)
 		}
+		man.UpstreamMCP.Client = nil
+	} else {
+		s.ConnectionStatus.IsReachable = true
 	}
 
 	s.ProtocolValidation.IsValid = false

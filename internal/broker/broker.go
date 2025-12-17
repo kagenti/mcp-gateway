@@ -65,6 +65,9 @@ type mcpBrokerImpl struct {
 
 	// trustedHeadersPublicKey this is the key to verify that a trusted header came from the trusted source (the owner of the private key)
 	trustedHeadersPublicKey string
+
+	// managerTickerInterval is the interval for MCP manager backend health checks
+	managerTickerInterval time.Duration
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
@@ -84,12 +87,20 @@ func WithTrustedHeadersPublicKey(key string) func(mb *mcpBrokerImpl) {
 	}
 }
 
+// WithManagerTickerInterval sets the interval for MCP manager backend health checks
+func WithManagerTickerInterval(interval time.Duration) func(mb *mcpBrokerImpl) {
+	return func(mb *mcpBrokerImpl) {
+		mb.managerTickerInterval = interval
+	}
+}
+
 // NewBroker creates a new MCPBroker accepts optional config functions such as WithEnforceToolFilter
 func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	mcpBkr := &mcpBrokerImpl{
-		mcpServers:     map[config.UpstreamMCPID]*upstream.MCPManager{},
-		logger:         logger.With("component", "broker"),
-		virtualServers: map[string]*config.VirtualServer{},
+		mcpServers:            map[config.UpstreamMCPID]*upstream.MCPManager{},
+		logger:                logger.With("component", "broker"),
+		virtualServers:        map[string]*config.VirtualServer{},
+		managerTickerInterval: time.Second * 60,
 	}
 
 	for _, option := range opts {
@@ -163,7 +174,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		// check if we need to setup a new manager
 		if _, ok := m.mcpServers[mcpServer.ID()]; !ok {
 			m.logger.Info("starting new manager", "server id", mcpServer.ID())
-			manager := upstream.NewUpstreamMCPManager(upstream.NewUpstreamMCP(mcpServer), m.listeningMCPServer.AddTools, m.listeningMCPServer.DeleteTools, m.logger)
+			manager := upstream.NewUpstreamMCPManager(upstream.NewUpstreamMCP(mcpServer), m.listeningMCPServer.AddTools, m.listeningMCPServer.DeleteTools, m.logger, m.managerTickerInterval)
 			m.mcpServers[mcpServer.ID()] = manager
 			go func() {
 				m.logger.Info("Starting manager for ", "mcpID", mcpServer.ID())
