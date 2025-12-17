@@ -66,15 +66,15 @@ type ToolConflict struct {
 	ConflictsWith []string `json:"conflictsWith"`
 }
 
-// MCPManager manages a single backend MCPServer for the gateway. It is the only thing that should be connecting to the MCP Server. It handles tools updates, disconnection, liveness checks for the broker and updating the overall status. It is responsible for adding and removing tools to the gateway. It periodically pings and will fetch new tools based on notifications. It is intended to be long lived and have 1:1 relationship with an MCPServer
+// MCPManager manages a single backend MCPServer for the broker. It is the only thing that should be connecting to the MCP Server for the broker. External client connections are  not handled by this Manager and are not handled by the broker. It handles tools updates, disconnection, liveness checks for the broker and updating the overall status that is available from the /status endpoint. It is responsible for adding and removing tools to the broker to make them available via the gateway. It periodically pings and will fetch new tools based on notifications. It is intended to be long lived and have 1:1 relationship with a backend MCP server.
 type MCPManager struct {
 	UpstreamMCP     *MCPServer
 	ticker          *time.Ticker // ticker allows for us to continue to probe and retry the backend
 	addToolsFunc    AddToolsFunc
 	removeToolsFunc RemoveToolsFunc
-	// serverTools contains tools with prefixed names for the gateway server
+	// serverTools contains the managed MCP's tools with prefixed names. It is these that are externally available via the gateway
 	serverTools []server.ServerTool
-	// tools are original from server with no prefix
+	// tools is the original set from MCP server with no prefix
 	tools     []mcp.Tool
 	logger    *slog.Logger
 	toolsLock sync.RWMutex   // protects tools, serverTools
@@ -91,7 +91,7 @@ func NewUpstreamMCPManager(upstream *MCPServer, addTools AddToolsFunc, removeToo
 		UpstreamMCP:     upstream,
 		addToolsFunc:    addTools,
 		removeToolsFunc: removeTools,
-		logger:          logger.With("component", "mcp manager"),
+		logger:          logger.With("sub-component", "mcp manager"),
 		serverTools:     []server.ServerTool{},
 		tools:           []mcp.Tool{},
 		done:            make(chan struct{}, 1),
