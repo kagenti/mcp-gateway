@@ -21,7 +21,7 @@ func TestDiffTools(t *testing.T) {
 			ToolPrefix: "test_",
 		},
 	}
-	manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+	manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 	tests := []struct {
 		name            string
@@ -134,7 +134,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
@@ -163,7 +163,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
@@ -188,7 +188,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
@@ -208,7 +208,7 @@ func TestValidate(t *testing.T) {
 				Capabilities:    mcp.ServerCapabilities{},
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
@@ -227,7 +227,7 @@ func TestValidate(t *testing.T) {
 				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
@@ -253,7 +253,7 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 		// simulate having discovered tools
 		manager.serverTools = []server.ServerTool{
 			{Tool: mcp.Tool{Name: "tool1"}},
@@ -277,7 +277,7 @@ func TestValidate(t *testing.T) {
 				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			},
 		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 

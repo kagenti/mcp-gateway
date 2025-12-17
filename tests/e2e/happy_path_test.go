@@ -518,6 +518,92 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
+	It("should gracefully handle an MCP Server becoming unavailable", func() {
+		// use server1 for this test as we need to scale its deployment
+		By("Creating an MCPServer pointing to server1")
+		registration := NewMCPServerRegistration("unavailable-test", k8sClient).
+			WithBackendTarget("mcp-test-server1", 9090)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Ensuring the gateway has registered the server")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools are present")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating a client with notification handler")
+		receivedNotification := false
+		notifyClient, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			if j.Method == "notifications/tools/list_changed" {
+				GinkgoWriter.Println("received notification during unavailability test", j.Method)
+				receivedNotification = true
+			}
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer notifyClient.Close()
+
+		By("Scaling down the MCP server deployment to 0")
+		Expect(ScaleDeployment(TestNamespace, "mcp-test-server1", 0)).To(Succeed())
+		// ensure we scale back up at the end of the test
+		defer func() {
+			_ = ScaleDeployment(TestNamespace, "mcp-test-server1", 1)
+			_ = WaitForDeploymentReady(TestNamespace, "mcp-test-server1", 1)
+		}()
+
+		By("Waiting for deployment to scale down")
+		Eventually(func(g Gomega) {
+			g.Expect(WaitForDeploymentScaledDown(TestNamespace, "mcp-test-server1")).To(Succeed())
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools are removed from tools/list within timeout")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalseBecause("%s should be removed when server unavailable", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying notification was received")
+		Eventually(func(g Gomega) {
+			g.Expect(receivedNotification).To(BeTrue(), "should have received notifications/tools/list_changed")
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying tool call returns error when server unavailable")
+		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "time")
+		res, err := mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+		// tool should either error or return an error result
+		if err == nil {
+			Expect(res).NotTo(BeNil())
+			Expect(res.IsError).To(BeTrue(), "tool call should return error when server unavailable")
+		}
+
+		By("Scaling the MCP server deployment back up")
+		Expect(ScaleDeployment(TestNamespace, "mcp-test-server1", 1)).To(Succeed())
+
+		By("Waiting for deployment to be ready")
+		Eventually(func(g Gomega) {
+			g.Expect(WaitForDeploymentReady(TestNamespace, "mcp-test-server1", 1)).To(Succeed())
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools are restored in tools/list")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should be restored when server available", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+	})
+
 	It("should filter tools based on x-authorized-tools JWT header", func() {
 		if !IsTrustedHeadersEnabled() {
 			Skip("trusted headers public key not configured - skipping x-authorized-tools test")

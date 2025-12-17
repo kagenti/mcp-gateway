@@ -50,7 +50,7 @@ func createTestManager(t *testing.T, serverName, toolPrefix string, tools []mcp.
 		ToolPrefix: toolPrefix,
 		URL:        "http://test.local/mcp",
 	})
-	manager := upstream.NewUpstreamMCPManager(mcpServer, nil, nil, slog.Default())
+	manager := upstream.NewUpstreamMCPManager(mcpServer, nil, nil, slog.Default(), 0)
 	// populate tools directly for testing (this requires accessing internal state)
 	manager.SetToolsForTesting(tools)
 	return manager
