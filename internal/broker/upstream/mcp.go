@@ -37,12 +37,48 @@ func NewUpstreamMCP(config *config.MCPServer) *MCPServer {
 	return up
 }
 
+// GetConfig return the config for the backend mcp server
+func (up *MCPServer) GetConfig() config.MCPServer {
+	// return a copy rather than the original
+	return config.MCPServer{
+		Name:       up.Name,
+		URL:        up.URL,
+		ToolPrefix: up.ToolPrefix,
+		Enabled:    up.Enabled,
+		Hostname:   up.Hostname,
+		Credential: up.Credential,
+	}
+}
+
+// ProtocolInfo returns the initialize result with the protocol information stored in it
+func (up *MCPServer) ProtocolInfo() *mcp.InitializeResult {
+	return up.init
+}
+
+// GetPrefix returns the specific tool prefix
+func (up *MCPServer) GetPrefix() string {
+	return up.ToolPrefix
+}
+
+// GetName returnss the name of the MCP Server
+func (up *MCPServer) GetName() string {
+	return up.Name
+}
+
+// SupportsToolsListChanged validates the mcp server supports toos/list_changed notifications
+func (up *MCPServer) SupportsToolsListChanged() bool {
+	if up.init == nil {
+		return false
+	}
+	return up.init.Capabilities.Tools.ListChanged
+}
+
 // Connect establishes a connection to the upstream MCP server. It creates a
 // streamable HTTP client, starts it for continuous listening, and performs
 // the MCP initialization handshake. If already connected, this is a no-op.
 // The initialization result is stored for later validation of protocol version
 // and capabilities.
-func (up *MCPServer) Connect(ctx context.Context) error {
+func (up *MCPServer) Connect(ctx context.Context, onConnection func()) error {
 	if up.Client != nil {
 		//if we already have a valid connection nothing to do
 		return nil
@@ -56,6 +92,9 @@ func (up *MCPServer) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
+	up.Client = httpClient
+	// call on connection to register handlers etc
+	onConnection()
 
 	// Start the client before initialize to listen for notifications
 	err = httpClient.Start(ctx)
@@ -83,15 +122,33 @@ func (up *MCPServer) Connect(ctx context.Context) error {
 	}
 	// whenever we do an init store the response and session id for validation a future use
 	up.init = initResp
-	up.Client = httpClient
+
 	return nil
 }
 
 // Disconnect closes the connection to the upstream MCP server. If no client
-// connection exists, this is a no-op and returns nil.
+// connection exists, this is a no-op and returns nil. It will unset the the client if it exists
 func (up *MCPServer) Disconnect() error {
 	if up.Client != nil {
-		return up.Close()
+		if err := up.Close(); err != nil {
+			up.Client = nil
+			return fmt.Errorf("failed to close client %w", err)
+		}
 	}
+	up.Client = nil
 	return nil
+}
+
+// OnNotification allows registering a notification handler func with the client
+func (up *MCPServer) OnNotification(handler func(notification mcp.JSONRPCNotification)) {
+	if up.Client != nil {
+		up.Client.OnNotification(handler)
+	}
+}
+
+// OnConnectionLost allows registering a connection lost handler with the client
+func (up *MCPServer) OnConnectionLost(handler func(err error)) {
+	if up.Client != nil {
+		up.Client.OnConnectionLost(handler)
+	}
 }

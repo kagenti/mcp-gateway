@@ -94,6 +94,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 	mcpGatewayClient, err = NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {})
 	Expect(err).Error().NotTo(HaveOccurred())
+
 })
 
 var _ = AfterSuite(func() {

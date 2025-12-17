@@ -36,3 +36,6 @@ resources:
   - custom-response-deployment.yaml
   - custom-response-httproute.yaml
   - custom-response-service.yaml
+  - broken-server-service.yaml
+  - broken-server-httproute.yaml
+  - broken-server-deployment.yaml

@@ -2,26 +2,113 @@ package upstream
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 )
 
+// MockMCP implements the MCP interface for testing
+type MockMCP struct {
+	name            string
+	prefix          string
+	id              config.UpstreamMCPID
+	cfg             *config.MCPServer
+	connectErr      error
+	pingErr         error
+	tools           []mcp.Tool
+	listToolsErr    error
+	protocolVersion string
+	hasToolsCap     bool
+	connected       bool
+}
+
+func (m *MockMCP) GetName() string {
+	return m.name
+}
+
+func (m *MockMCP) GetConfig() config.MCPServer {
+	return *m.cfg
+}
+
+func (m *MockMCP) ID() config.UpstreamMCPID {
+	return m.id
+}
+
+func (m *MockMCP) GetPrefix() string {
+	return m.prefix
+}
+
+func (m *MockMCP) Connect(_ context.Context, onConnected func()) error {
+	if m.connectErr != nil {
+		return m.connectErr
+	}
+	m.connected = true
+	if onConnected != nil {
+		onConnected()
+	}
+	return nil
+}
+
+func (m *MockMCP) SupportsToolsListChanged() bool {
+	return m.hasToolsCap
+}
+
+func (m *MockMCP) Disconnect() error {
+	m.connected = false
+	return nil
+}
+
+func (m *MockMCP) ListTools(_ context.Context, _ mcp.ListToolsRequest) (*mcp.ListToolsResult, error) {
+	if m.listToolsErr != nil {
+		return nil, m.listToolsErr
+	}
+	return &mcp.ListToolsResult{Tools: m.tools}, nil
+}
+
+func (m *MockMCP) OnNotification(_ func(notification mcp.JSONRPCNotification)) {}
+
+func (m *MockMCP) OnConnectionLost(_ func(err error)) {}
+
+func (m *MockMCP) Ping(_ context.Context) error {
+	return m.pingErr
+}
+
+func (m *MockMCP) ProtocolInfo() *mcp.InitializeResult {
+	result := &mcp.InitializeResult{
+		ProtocolVersion: m.protocolVersion,
+		Capabilities:    mcp.ServerCapabilities{},
+	}
+	if m.hasToolsCap {
+		result.Capabilities.Tools = &struct {
+			ListChanged bool `json:"listChanged,omitempty"`
+		}{}
+	}
+	return result
+}
+
+// newMockMCP creates a MockMCP with sensible defaults for testing
+func newMockMCP(name, prefix string) *MockMCP {
+	id := config.UpstreamMCPID(fmt.Sprintf("%s:%s:http://mock/mcp", name, prefix))
+	return &MockMCP{
+		name:            name,
+		prefix:          prefix,
+		id:              id,
+		cfg:             &config.MCPServer{Name: name, ToolPrefix: prefix, URL: "http://mock/mcp"},
+		protocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+		hasToolsCap:     true,
+		tools:           []mcp.Tool{{Name: "mock_tool"}},
+	}
+}
+
 func TestDiffTools(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	upstream := &MCPServer{
-		MCPServer: &config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-		},
-	}
-	manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
+	mock := newMockMCP("test-server", "test_")
+	manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 	tests := []struct {
 		name            string
@@ -53,7 +140,7 @@ func TestDiffTools(t *testing.T) {
 			newTools:        []mcp.Tool{{Name: "tool1"}},
 			expectedAdded:   0,
 			expectedRemoved: 1,
-			removedNames:    []string{"tool2"},
+			removedNames:    []string{"test_tool2"},
 		},
 		{
 			name:            "add and remove tools",
@@ -62,7 +149,7 @@ func TestDiffTools(t *testing.T) {
 			expectedAdded:   1,
 			expectedRemoved: 1,
 			addedNames:      []string{"test_tool3"},
-			removedNames:    []string{"tool2"},
+			removedNames:    []string{"test_tool2"},
 		},
 		{
 			name:            "empty old tools",
@@ -110,180 +197,4 @@ func TestDiffTools(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestValidate(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
-	ctx := context.Background()
-
-	t.Run("validates protocol version correctly with valid version", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		assert.Equal(t, "test-server:test_:http://localhost:9999/mcp", status.ID)
-		assert.Equal(t, "test-server", status.Name)
-		assert.Equal(t, "test_", status.ToolPrefix)
-		assert.True(t, status.ProtocolValidation.IsValid, "protocol should be valid for latest version")
-		assert.Contains(t, status.ProtocolValidation.ExpectedVersion, mcp.LATEST_PROTOCOL_VERSION)
-	})
-
-	t.Run("validates protocol version correctly with invalid version", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: "invalid-version",
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.ProtocolValidation.IsValid, "protocol should be invalid for unknown version")
-	})
-
-	t.Run("validates capabilities with tools capability", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		assert.True(t, status.CapabilitiesValidation.HasToolCapabilities)
-		assert.True(t, status.CapabilitiesValidation.IsValid)
-	})
-
-	t.Run("validates capabilities without tools capability", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities:    mcp.ServerCapabilities{},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.CapabilitiesValidation.HasToolCapabilities)
-		assert.False(t, status.CapabilitiesValidation.IsValid)
-	})
-
-	t.Run("sets expected version from valid protocol versions", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		expectedVersions := strings.Join(mcp.ValidProtocolVersions, ",")
-		assert.Equal(t, expectedVersions, status.ProtocolValidation.ExpectedVersion)
-	})
-
-	t.Run("reports tool count from server tools", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-		// simulate having discovered tools
-		manager.serverTools = []server.ServerTool{
-			{Tool: mcp.Tool{Name: "tool1"}},
-			{Tool: mcp.Tool{Name: "tool2"}},
-			{Tool: mcp.Tool{Name: "tool3"}},
-		}
-
-		status := manager.Validate(ctx)
-
-		assert.Equal(t, 3, status.CapabilitiesValidation.ToolCount)
-	})
-
-	t.Run("connection error when no client and connect fails", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "unreachable-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:1/mcp", // invalid port
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger)
-
-		status := manager.Validate(ctx)
-
-		// connect will fail but IsReachable is still set to true after the attempt
-		// this tests the current behavior (which may be a bug worth fixing)
-		assert.True(t, status.ConnectionStatus.IsReachable)
-		assert.NotEmpty(t, status.ConnectionStatus.Error)
-	})
 }

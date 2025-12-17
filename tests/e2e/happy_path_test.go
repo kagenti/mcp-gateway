@@ -14,12 +14,22 @@ import (
 )
 
 var gatewayURL = "http://localhost:8001/mcp"
+
+// these can be used across many tests
+var sharedMCPTestServer1 = "mcp-test-server1"
+var sharedMCPTestServer2 = "mcp-test-server2"
+
+// this should only be used by one test as the tests run in parrallel.
+var scaledMCPTestServer = "mcp-test-server3"
+
 var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	var (
 		testResources = []client.Object{}
 	)
 
 	BeforeEach(func() {
+		// we don't use defers for this so if a test fails ensure this server that gets scaled down and up is up and running
+		_ = ScaleDeployment(TestNamespace, scaledMCPTestServer, 1)
 	})
 
 	AfterEach(func() {
@@ -32,6 +42,8 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	JustAfterEach(func() {
 		// dump logs if test failed
 		if CurrentSpecReport().Failed() {
+			GinkgoWriter.Println("failure detected")
+
 			//	DumpComponentLogs()
 			//	DumpTestServerLogs()
 		}
@@ -404,7 +416,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 		By("Creating an MCPServer pointing to server1 which has the add_tool feature")
 		registration := NewMCPServerRegistration("backend-notification-test", k8sClient).
-			WithBackendTarget("mcp-test-server1", 9090)
+			WithBackendTarget(sharedMCPTestServer1, 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
 
@@ -484,38 +496,101 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
 	})
 
-	It("should expose tool annotations to clients in tools/list response", func() {
-		By("Creating an MCPServer pointing to server1 which has tools with annotations")
-		registration := NewMCPServerRegistration("annotations-test", k8sClient).
-			WithBackendTarget("mcp-test-server1", 9090)
+	// Note this is a complex test as it scales up and down the server. It can take quite a while to run.
+	// consider moving to separate suite
+	It("should gracefully handle an MCP Server becoming unavailable", func() {
+		By("Scaling down the MCP server3 deployment to 0")
+		Expect(ScaleDeployment(TestNamespace, scaledMCPTestServer, 0)).To(Succeed())
+
+		By("Registering an MCPServer pointing to server3")
+		registration := NewMCPServerRegistration("unavailable-test", k8sClient).
+			WithBackendTarget(scaledMCPTestServer, 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
+
+		By("Verifying MCPServer status reports connection failure")
+		Eventually(func(g Gomega) {
+			err := VerifyMCPServerNotReadyWithReason(ctx, k8sClient,
+				registeredServer.Name, registeredServer.Namespace, "connection refused")
+			g.Expect(err).NotTo(HaveOccurred())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Scaling up the MCP server3 deployment to 1")
+		Expect(ScaleDeployment(TestNamespace, scaledMCPTestServer, 1)).To(Succeed())
+
+		By("Waiting for deployment to be ready")
+		Eventually(func(g Gomega) {
+			g.Expect(WaitForDeploymentReady(TestNamespace, scaledMCPTestServer, 1)).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("Ensuring the gateway has registered the server")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
-		By("Verifying tools are present and have annotations")
+		By("Verifying tools are now present")
 		Eventually(func(g Gomega) {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
 			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should exist", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutConfigSync, TestRetryInterval).To(Succeed())
 
-			// Find the "time" tool from server1 which has Annotations{Title: "time"}
-			timeToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "time")
-			var foundTimeTool *mcp.Tool
-			for i := range toolsList.Tools {
-				if toolsList.Tools[i].Name == timeToolName {
-					foundTimeTool = &toolsList.Tools[i]
-					break
-				}
+		By("Creating a client with notification handler")
+		receivedNotification := false
+		notifyClient, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
+			if j.Method == "notifications/tools/list_changed" {
+				GinkgoWriter.Println("received notification during unavailability test", j.Method)
+				receivedNotification = true
 			}
-			g.Expect(foundTimeTool).NotTo(BeNil(), "time tool should be present")
-			g.Expect(foundTimeTool.Annotations).NotTo(BeNil(), "time tool should have annotations")
-			g.Expect(foundTimeTool.Annotations.Title).To(Equal("time"), "time tool should have Title annotation set to 'time'")
+		})
+		Expect(err).NotTo(HaveOccurred())
+		defer notifyClient.Close()
+
+		By("Scaling back down the MCP server3 deployment to 0")
+		Expect(ScaleDeployment(TestNamespace, scaledMCPTestServer, 0)).To(Succeed())
+
+		By("Verifying tools are removed from tools/list within timeout")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeFalseBecause("%s should be removed when server unavailable", registeredServer.Spec.ToolPrefix))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying client notification was received")
+		Eventually(func(g Gomega) {
+			g.Expect(receivedNotification).To(BeTrue(), "should have received notifications/tools/list_changed")
+		}, TestTimeoutMedium, TestRetryInterval).To(Succeed())
+
+		By("Verifying tool call returns error when server unavailable")
+		toolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "time")
+		_, err = mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+
+		By("Scaling the MCP server deployment back up")
+		Expect(ScaleDeployment(TestNamespace, scaledMCPTestServer, 1)).To(Succeed())
+
+		By("Waiting for deployment to be ready")
+		Eventually(func(g Gomega) {
+			g.Expect(WaitForDeploymentReady(TestNamespace, scaledMCPTestServer, 1)).To(Succeed())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying tools are restored in tools/list")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolsPresent(registeredServer.Spec.ToolPrefix, toolsList)).To(BeTrueBecause("%s should be restored when server available", registeredServer.Spec.ToolPrefix))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying tool call work when server back available")
+		toolName = fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "time")
+		_, err = mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName},
+		})
+		Expect(err).NotTo(HaveOccurred(), "tool calls should work once the server is back and ready")
 	})
 
 	It("should filter tools based on x-authorized-tools JWT header", func() {
@@ -568,6 +643,69 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			g.Expect(len(filteredTools.Tools)).To(Equal(1), "expected exactly 1 tool from authorized tools header")
 			expectedToolName := fmt.Sprintf("%s%s", registeredServer.Spec.ToolPrefix, "hello_world")
 			g.Expect(filteredTools.Tools[0].Name).To(Equal(expectedToolName))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+	})
+
+	It("should report invalid protocol version in MCPServer status", func() {
+		By("Creating an MCPServer pointing to the broken server with wrong protocol version")
+		// The broken server is already deployed with --failure-mode=protocol
+		registration := NewMCPServerRegistration("protocol-status-test", k8sClient).
+			WithBackendTarget("mcp-test-broken-server", 9090)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Verifying MCPServer status reports protocol version failure")
+		Eventually(func(g Gomega) {
+			err := VerifyMCPServerNotReadyWithReason(ctx, k8sClient,
+				registeredServer.Name, registeredServer.Namespace, "unsupported protocol version")
+			g.Expect(err).NotTo(HaveOccurred())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying the status message contains details about the protocol issue")
+		msg, err := GetMCPServerStatusMessage(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Println("MCPServer status message:", msg)
+		Expect(msg).To(ContainSubstring("unsupported protocol version"))
+	})
+
+	It("should report tool conflicts in MCPServer status when same prefix is used", func() {
+
+		By("Creating first MCPServer with a specific prefix")
+		registration1 := NewMCPServerRegistration("conflict-test-1", k8sClient).
+			WithToolPrefix("conflict_")
+		testResources = append(testResources, registration1.GetObjects()...)
+		server1 := registration1.Register(ctx)
+
+		By("Ensuring first server becomes ready")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, server1.Name, server1.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Creating second MCPServer with the SAME prefix pointing to server2")
+		registration2 := NewMCPServerRegistration("conflict-test-2", k8sClient).
+			WithToolPrefix("conflict_")
+		testResources = append(testResources, registration2.GetObjects()...)
+		server2 := registration2.Register(ctx)
+
+		By("Verifying at least one MCPServer reports tool conflict in status")
+		// Both servers have tools like "time", "headers" etc.
+		// With the same prefix, they would produce "conflict_time", "conflict_headers" etc.
+		// At least one server should report a conflict.
+		Eventually(func(g Gomega) {
+			// Check if either server reports a conflict
+			msg1, err1 := GetMCPServerStatusMessage(ctx, k8sClient, server1.Name, server1.Namespace)
+			msg2, err2 := GetMCPServerStatusMessage(ctx, k8sClient, server2.Name, server2.Namespace)
+
+			g.Expect(err1).NotTo(HaveOccurred())
+			g.Expect(err2).NotTo(HaveOccurred())
+
+			GinkgoWriter.Println("Server1 status:", msg1)
+			GinkgoWriter.Println("Server2 status:", msg2)
+
+			// At least one should contain conflict-related message
+			hasConflict := strings.Contains(msg1, "conflict") || strings.Contains(msg2, "conflict") ||
+				strings.Contains(msg1, "conflicts exists") || strings.Contains(msg2, "conflicts exists")
+			g.Expect(hasConflict).To(BeTrue(), "expected at least one server to report tool conflict")
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 

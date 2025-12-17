@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kagenti/mcp-gateway/internal/broker"
+	"github.com/kagenti/mcp-gateway/internal/broker/upstream"
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
 	"github.com/kagenti/mcp-gateway/pkg/config"
 )
@@ -131,7 +131,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 			if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
 				log.Error(configErr, "Failed to regenerate config after credential validation error")
 			}
-			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err), 0)
+			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err))
 		}
 		log.V(1).Info("Credential validation success ", "credential ref", mcpServer.Spec.CredentialRef)
 	}
@@ -143,7 +143,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 		if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
 			log.Error(configErr, "Failed to regenerate config after discovery error")
 		}
-		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error(), 0)
+		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
 	}
 
 	validator := NewServerValidator(r.Client)
@@ -151,16 +151,22 @@ func (r *MCPReconciler) reconcileMCPServer(
 	if err != nil {
 		log.Error(err, "Failed to validate server status via broker")
 		ready, message := false, fmt.Sprintf("Validation failed: %v", err)
-		if err := r.updateStatus(ctx, mcpServer, ready, message, 0); err != nil {
+		if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
 			log.Error(err, "Failed to update status")
 			return reconcile.Result{}, err
 		}
 		return r.regenerateAggregatedConfig(ctx)
 	}
 
-	ready, message, toolCount := r.evaluateValidationResults(statusResponse, serverInfo)
+	var serverStatus upstream.ServerValidationStatus
+	for _, sr := range statusResponse.Servers {
+		if sr.ID == serverInfo.ID {
+			serverStatus = sr
+			break
+		}
+	}
 
-	if err := r.updateStatus(ctx, mcpServer, ready, message, toolCount); err != nil {
+	if err := r.updateStatus(ctx, mcpServer, serverStatus.Ready, serverStatus.Message); err != nil {
 		log.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -169,10 +175,9 @@ func (r *MCPReconciler) reconcileMCPServer(
 		log.Error(err, "Failed to update HTTPRoute status")
 	}
 
-	// if server has credentials and isn't ready, retry with exponential backoff
 	// this handles the case where secret volume mounts take time to propagate (60-120s)
 	// retry for any failure, not just "no broker validation data yet", as credentials might not be available initially
-	if !ready {
+	if !serverStatus.Ready {
 		// calculate exponential backoff based on elapsed time since condition was set
 		baseDelay := 5 * time.Second
 		maxDelay := 60 * time.Second
@@ -463,6 +468,17 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		return nil, fmt.Errorf("failed to get service %s: %w", backendName, err)
 	}
 
+	// Extract hostname from HTTPRoute
+	if len(httpRoute.Spec.Hostnames) == 0 {
+		return nil, fmt.Errorf(
+			"HTTPRoute %s/%s must have at least one hostname for MCP backend routing",
+			namespace,
+			targetRef.Name,
+		)
+	}
+	// use first hostname if multiple are present
+	hostname := string(httpRoute.Spec.Hostnames[0])
+
 	if service.Spec.Type == corev1.ServiceTypeExternalName {
 		// externalname service points to external host
 		isExternal = true
@@ -483,17 +499,6 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 	}
 
 	toolPrefix := mcpServer.Spec.ToolPrefix
-
-	// Extract hostname from HTTPRoute
-	if len(httpRoute.Spec.Hostnames) == 0 {
-		return nil, fmt.Errorf(
-			"HTTPRoute %s/%s must have at least one hostname for MCP backend routing",
-			namespace,
-			targetRef.Name,
-		)
-	}
-	// use first hostname if multiple are present
-	hostname := string(httpRoute.Spec.Hostnames[0])
 
 	protocol := "http"
 	if httpRoute.Spec.ParentRefs != nil {
@@ -532,9 +537,10 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 			routingHostname = nameAndEndpoint
 		}
 	}
-
+	id := serverID(httpRoute, mcpServer, hostname)
+	fmt.Println("SERVER ID ************", id)
 	serverInfo := ServerInfo{
-		ID:                 serverID(httpRoute, mcpServer, endpoint),
+		ID:                 id,
 		Endpoint:           endpoint,
 		Hostname:           routingHostname,
 		ToolPrefix:         toolPrefix,
@@ -684,81 +690,11 @@ func serverID(httpRoute *gatewayv1.HTTPRoute, mcpServer *mcpv1alpha1.MCPServer, 
 	return fmt.Sprintf("%s:%s:%s", fmt.Sprintf("%s/%s", httpRoute.Namespace, httpRoute.Name), mcpServer.Spec.ToolPrefix, endpoint)
 }
 
-// evaluateValidationResults checks broker validation results for servers related to this MCPServer
-func (r *MCPReconciler) evaluateValidationResults(
-	statusResponse *broker.StatusResponse,
-	serverInfo *ServerInfo,
-) (bool, string, int) {
-	if statusResponse == nil {
-		return false, "No validation data available", 0
-	}
-
-	var errors []string
-	validServers := 0
-	totalToolCount := 0
-
-	// Log available endpoints for debugging
-	log := log.FromContext(context.Background())
-	// Check each server in the status response
-	for _, server := range statusResponse.Servers {
-		// Only check servers that belong to this MCPServer
-		if server.ID != serverInfo.ID {
-			log.V(1).Info("NOT validating",
-				"serverID", serverInfo.ID,
-				"statusID", server.ID)
-			continue
-		}
-		log.V(1).Info("validating",
-			"serverID", serverInfo.ID,
-			"statusID", server.ID)
-
-		serverValid := true
-		var serverErrors []string
-
-		if !server.ProtocolValidation.IsValid {
-			serverValid = false
-			serverErrors = append(serverErrors, fmt.Sprintf("Protocol version failed - expected %s, got %s",
-				server.ProtocolValidation.ExpectedVersion, server.ProtocolValidation.SupportedVersion))
-		}
-
-		if !server.CapabilitiesValidation.IsValid {
-			serverValid = false
-			missing := ""
-			if len(server.CapabilitiesValidation.MissingCapabilities) > 0 {
-				missing = fmt.Sprintf(" (missing: %v)", server.CapabilitiesValidation.MissingCapabilities)
-			}
-			serverErrors = append(serverErrors, fmt.Sprintf("Capabilities failed%s", missing))
-		}
-
-		if !server.ConnectionStatus.IsReachable {
-			serverValid = false
-			serverErrors = append(serverErrors, "Not reachable")
-		}
-
-		if !serverValid {
-			// Combine all errors for this server
-			allServerErrors := strings.Join(serverErrors, ", ")
-			errors = append(errors, fmt.Sprintf("Server %s: %s", server.Name, allServerErrors))
-		} else {
-			validServers++
-			// add tool count for valid servers
-			totalToolCount += server.CapabilitiesValidation.ToolCount
-		}
-	}
-
-	if len(errors) > 0 {
-		return false, strings.Join(errors, "; "), totalToolCount
-	}
-
-	return true, fmt.Sprintf("MCPServer successfully reconciled and validated %d servers with %d tools", validServers, totalToolCount), totalToolCount
-}
-
 func (r *MCPReconciler) updateStatus(
 	ctx context.Context,
 	mcpServer *mcpv1alpha1.MCPServer,
 	ready bool,
 	message string,
-	discoveredTools int,
 ) error {
 	condition := metav1.Condition{
 		Type:               "Ready",
@@ -796,12 +732,6 @@ func (r *MCPReconciler) updateStatus(
 		mcpServer.Status.Conditions = append(mcpServer.Status.Conditions, condition)
 		statusChanged = true
 	}
-
-	// check if tool count changed
-	if mcpServer.Status.DiscoveredTools != discoveredTools {
-		statusChanged = true
-	}
-	mcpServer.Status.DiscoveredTools = discoveredTools
 
 	// only update if something actually changed
 	if !statusChanged {

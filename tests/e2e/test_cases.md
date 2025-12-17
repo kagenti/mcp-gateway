@@ -52,3 +52,15 @@
 ### [Happy] When a tools has annotations these should be visible to the client
 
 - When a client does a tools/list if a tool has specified mcp tool annotations, these should be visible to client as headers
+
+### [Happy] Gracefully handle an MCP Server becoming unavailable
+
+- When a backend MCP Server becomes unavailable, the gateway should no longer show its tools in the tools/list response and a notification should be sent to the client within one minute. When the MCP Server becomes available again, the tools/list should be updated to include the tools again. While unavailable any tools/call should result in a 503 response
+
+### [Happy] MCP Server status
+
+- When a backend MCPServer is added but the backend MCP is invalid because it doesn't meet the protocol version the status of the MCPServer resource should report the reason for the MCPSever being invalid
+
+- When a backend MCPServer is added but the backend MCP is invalid because it has conflicting tools due to tool name overlap with another server that has been added, the status of the MCPServer resource should report the reason for the MCPSever being invalid
+
+- When a backend MCPServer is added but the backend MCP is invalid because the broker cannot connect to the the backend MCP server, the MCPServer resource should report the reason for the MCPSever being invalid

@@ -34,7 +34,7 @@ type MCPBroker interface {
 	GetVirtualSeverByHeader(namespaceName string) (config.VirtualServer, error)
 
 	// ValidateAllServers performs comprehensive validation of all registered servers and returns status
-	ValidateAllServers(ctx context.Context) StatusResponse
+	ValidateAllServers() StatusResponse
 
 	// HandleStatusRequest handles HTTP status endpoint requests
 	HandleStatusRequest(w http.ResponseWriter, r *http.Request)
@@ -51,9 +51,9 @@ type mcpBrokerImpl struct {
 	vsLock         sync.RWMutex //vsLock is for managing access to the virtual servers
 
 	// mcpServers tracks the known servers
-	// TODO this should be protected or be a sync map
 	mcpServers map[config.UpstreamMCPID]*upstream.MCPManager
-	mcpLock    sync.RWMutex
+	// protects mcpServers
+	mcpLock sync.RWMutex
 
 	// listeningMCPServer returns an actual listening MCP server that federates registered MCP servers
 	listeningMCPServer *server.MCPServer
@@ -65,6 +65,9 @@ type mcpBrokerImpl struct {
 
 	// trustedHeadersPublicKey this is the key to verify that a trusted header came from the trusted source (the owner of the private key)
 	trustedHeadersPublicKey string
+
+	// managerTickerInterval is the interval for MCP manager backend health checks
+	managerTickerInterval time.Duration
 }
 
 // this ensures that mcpBrokerImpl implements the MCPBroker interface
@@ -84,12 +87,20 @@ func WithTrustedHeadersPublicKey(key string) func(mb *mcpBrokerImpl) {
 	}
 }
 
+// WithManagerTickerInterval sets the interval for MCP manager backend health checks
+func WithManagerTickerInterval(interval time.Duration) func(mb *mcpBrokerImpl) {
+	return func(mb *mcpBrokerImpl) {
+		mb.managerTickerInterval = interval
+	}
+}
+
 // NewBroker creates a new MCPBroker accepts optional config functions such as WithEnforceToolFilter
 func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 	mcpBkr := &mcpBrokerImpl{
-		mcpServers:     map[config.UpstreamMCPID]*upstream.MCPManager{},
-		logger:         logger.With("component", "broker"),
-		virtualServers: map[string]*config.VirtualServer{},
+		mcpServers:            map[config.UpstreamMCPID]*upstream.MCPManager{},
+		logger:                logger,
+		virtualServers:        map[string]*config.VirtualServer{},
+		managerTickerInterval: time.Second * 60,
 	}
 
 	for _, option := range opts {
@@ -117,7 +128,9 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 		slog.Info("MCP server error", "method", method, "error", err)
 	})
 
-	hooks.AddAfterListTools(mcpBkr.FilterTools)
+	hooks.AddAfterListTools(func(ctx context.Context, id any, message *mcp.ListToolsRequest, result *mcp.ListToolsResult) {
+		mcpBkr.FilterTools(ctx, id, message, result)
+	})
 
 	mcpBkr.listeningMCPServer = server.NewMCPServer(
 		"Kagenti MCP Broker",
@@ -129,7 +142,7 @@ func NewBroker(logger *slog.Logger, opts ...func(*mcpBrokerImpl)) MCPBroker {
 }
 
 func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServersConfig) {
-	m.logger.Debug("Broker OnConfigChange start", "Total managers", len(m.mcpServers), "total servers ", len(conf.Servers))
+	m.logger.Debug("Broker OnConfigChange start", "Total managers for upstream mcp servers", len(m.mcpServers), "total servers", len(conf.Servers))
 	// unregister decommissioned servers
 	m.mcpLock.Lock()
 	defer m.mcpLock.Unlock()
@@ -138,9 +151,9 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		if !slices.ContainsFunc(conf.Servers, func(s *config.MCPServer) bool {
 			return serverID == s.ID()
 		}) {
-			m.logger.Info("un-register upstream server ", "server id", serverID)
+			m.logger.Info("un-register upstream server", "server id", serverID)
 			if man, ok := m.mcpServers[serverID]; ok {
-				m.logger.Info("stopping manager for unregistered server ", "server id", serverID)
+				m.logger.Info("stopping manager for unregistered server", "server id", serverID)
 				man.Stop()
 				delete(m.mcpServers, serverID)
 			}
@@ -151,11 +164,11 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 	for _, mcpServer := range conf.Servers {
 		man, ok := m.mcpServers[mcpServer.ID()]
 		if ok {
-			m.logger.Info("Server is registered ", "mcpID", mcpServer.ID())
+			m.logger.Info("Server is registered", "mcpID", mcpServer.ID())
 			// already have a manger
-			if mcpServer.ConfigChanged(*man.UpstreamMCP.MCPServer) {
+			if mcpServer.ConfigChanged(man.MCP.GetConfig()) {
 				// todo prob could look at just updating the config
-				m.logger.Info("Server Config Changed removing manager ", "mcpID", mcpServer.ID())
+				m.logger.Info("Server Config Changed removing manager", "mcpID", mcpServer.ID())
 				man.Stop()
 				delete(m.mcpServers, mcpServer.ID())
 			}
@@ -163,10 +176,10 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		// check if we need to setup a new manager
 		if _, ok := m.mcpServers[mcpServer.ID()]; !ok {
 			m.logger.Info("starting new manager", "server id", mcpServer.ID())
-			manager := upstream.NewUpstreamMCPManager(upstream.NewUpstreamMCP(mcpServer), m.listeningMCPServer.AddTools, m.listeningMCPServer.DeleteTools, m.logger)
+			manager := upstream.NewUpstreamMCPManager(upstream.NewUpstreamMCP(mcpServer), m.listeningMCPServer, m.logger.With("sub-component", "mcp-manager"), m.managerTickerInterval)
 			m.mcpServers[mcpServer.ID()] = manager
 			go func() {
-				m.logger.Info("Starting manager for ", "mcpID", mcpServer.ID())
+				m.logger.Info("Starting manager for", "mcpID", mcpServer.ID())
 				manager.Start(ctx)
 			}()
 		}
@@ -177,7 +190,7 @@ func (m *mcpBrokerImpl) OnConfigChange(ctx context.Context, conf *config.MCPServ
 		m.virtualServers[vs.Name] = vs
 	}
 	m.vsLock.Unlock()
-	m.logger.Debug("Broker OnConfigChange done", "Total managers", len(m.mcpServers), "total servers ", len(conf.Servers))
+	m.logger.Debug("Broker OnConfigChange done", "Total managers for upstream mcp servers", len(m.mcpServers), "total servers", len(conf.Servers))
 }
 
 func (m *mcpBrokerImpl) RegisteredMCPServers() map[config.UpstreamMCPID]*upstream.MCPManager {
@@ -231,7 +244,7 @@ func (m *mcpBrokerImpl) HandleStatusRequest(w http.ResponseWriter, r *http.Reque
 }
 
 // ValidateAllServers performs comprehensive validation of all registered servers and returns status
-func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
+func (m *mcpBrokerImpl) ValidateAllServers() StatusResponse {
 	response := StatusResponse{
 		Servers:          make([]upstream.ServerValidationStatus, 0),
 		OverallValid:     true,
@@ -245,18 +258,10 @@ func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
 	m.logger.Debug("ValidateAllServers: checking servers", "# servers", len(m.mcpServers))
 
 	for _, upstream := range m.RegisteredMCPServers() {
-		status := upstream.Validate(ctx)
+		status := upstream.GetStatus()
 		response.Servers = append(response.Servers, status)
 
-		response.ToolConflicts += len(status.ToolConflicts)
-
-		hasErrors := !status.ConnectionStatus.IsReachable ||
-			!status.ProtocolValidation.IsValid ||
-			!status.CapabilitiesValidation.IsValid
-
-		hasWarnings := len(status.ToolConflicts) > 0
-
-		if hasErrors || hasWarnings {
+		if !status.Ready {
 			response.UnHealthyServers++
 			response.OverallValid = false
 		} else {
@@ -268,7 +273,6 @@ func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
 		"totalServers", response.TotalServers,
 		"healthyServers", response.HealthyServers,
 		"unhealthyServers", response.UnHealthyServers,
-		"toolConflicts", response.ToolConflicts,
 		"overallValid", response.OverallValid)
 
 	return response

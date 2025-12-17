@@ -32,7 +32,7 @@ test-e2e-setup: ## Setup cluster for e2e tests (if not already setup)
 .PHONY: test-e2e-run
 test-e2e-run: test-e2e-deps ## Run e2e tests (assumes cluster is ready)
 	@echo "Running e2e tests..."
-	$(GINKGO) -v --tags=e2e --timeout=5m ./tests/e2e
+	$(GINKGO) -v --tags=e2e --timeout=8m ./tests/e2e
 
 .PHONY: test-e2e
 test-e2e: test-e2e-setup test-e2e-run ## Run full e2e test suite (setup + run)
@@ -56,4 +56,4 @@ test-e2e-watch: test-e2e-deps ## Run e2e tests in watch mode for development
 # CI-specific target that assumes cluster exists
 .PHONY: test-e2e-ci
 test-e2e-ci: test-e2e-deps ## Run e2e tests in CI (no setup, fail fast)
-	$(GINKGO) -v --tags=e2e --timeout=5m --fail-fast ./tests/e2e
+	$(GINKGO) -v --tags=e2e --timeout=8m --fail-fast ./tests/e2e

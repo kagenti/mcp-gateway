@@ -20,7 +20,7 @@ sequenceDiagram
         MCP Router->>Gateway: no routing needed
         Gateway->>MCP Broker: POST /mcp init
         note right of MCP Broker: MCP Broker is the default backend for /mcp
-        MCP Broker->>MCP Client: set g-session-id
+        MCP Broker->>MCP Client: set mcp-session-id
 ```
 
 ## Aggregated Tools/List (no auth)
@@ -49,10 +49,11 @@ sequenceDiagram
         MCP Client->>Gateway: POST /mcp 
         note right of MCP Client: method: tools/call
         Gateway->>MCP Router: POST /mcp
-        note left of MCP Router: method: tools/call <br/> gateway-session-id present <br/> payload validated
-        MCP Router->>Session Cache: get mcp-session-id from  gateway-session-id/server-name
+        note left of MCP Router: method: tools/call <br/> gateway mcp-session-id present <br/> payload validated
+        MCP Router->>Session Cache: get backend mcp-session-id based ok key  gateway-session-id/server-name
         Session Cache->>MCP Router: no session found
-        MCP Router->>MCP Server: initialize with client headers
+        MCP Router->>Gateway: initialize with client headers via gateway to ensure additional auth applied
+        Gateway->>MCP Server: initialize 
         MCP Server->>MCP Router: initialize response OK
         MCP Router->>Session Cache: store mcp-session-id under gateway-session-id/server-name
         MCP Router->>Gateway: set header mcp-session-id
@@ -103,41 +104,36 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
         title MCP Tool Call (auth)
-        actor MCP Client
-        MCP Client->>Gateway: POST /mcp 
-        note right of MCP Client: method: tools/call <br/> name: prefix_echo
-        Gateway->>MCP Router: POST /mcp
-        note left of MCP Router: method: tools/call <br/> name: prefix_echo
-        MCP Router->>Gateway: set authority: <prefix>.<host>
-        MCP Router->>Gateway: update body to remove prefix 
-        MCP Router->>Gateway: set x-mcp-tool header 
+        MCPClient->>Gateway: POST /mcp 
+        note right of MCPClient: method: tools/call <br/> name: prefix_echo
+        Gateway->>MCPRouter: POST /mcp
+        note left of MCPRouter: method: tools/call <br/> name: prefix_echo
+        MCPRouter->>Gateway: set authority: <prefix>.<host>
+        MCPRouter->>Gateway: update body to remove prefix 
+        MCPRouter->>Gateway: set x-mcp-tool header 
         Gateway->>WASM: auth on authority
         WASM->>Authorino: apply auth 
         note right of Authorino: checking JWT and tool name <br/> defined in AuthPolicy
         Authorino->>WASM: 401 WWW-Authenticate 
-        note left of Authorino: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/tool/prefix_echo
-        note left of Authorino: the response is set in the  AuthPolicy targeting the MCP HTTPRoute <br/> as the owner of the MCP server will know <br/> what that should be . Prefix will need to be included in the resource url
-        WASM->>MCP Client: 401 WWW-Authenticate 
-        note left of WASM: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/tool/prefix_echo
-        MCP Client->>Gateway: .well-known/oauth-protected-resource/tool/prefix_echo
-        Gateway->>MCP Router: .well-known/oauth-protected-resource/tool/prefix_echo
-        MCP Router->>Gateway: set authority: <prefix>.<host>
-        MCP Router->>Gateway: set path: .well-known/oauth-protected-resource/tool/echo
-        Gateway->>MCP Server: GET .well-known/oauth-protected-resource/tool/echo
-        MCP Server->>MCP Client: responds with resource json with auth server etc
-        MCP Client->>Auth Server: Authenticate 
-        Auth Server->>MCP Client: Authenticated !!
-        MCP Client->>Gateway: Bearer header set POST/mcp
-        note right of MCP Client: method: tools/call <br/> name: prefix_echo
-        Gateway->>MCP Router: POST /mcp tools/call
-        MCP Router->>Gateway: set authority: <prefix>.<host>
-        MCP Router->>Gateway: update body to remove prefix 
-        MCP Router->>Gateway: set x-mcp-tool header 
+        note left of Authorino: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/mcp
+        WASM->>MCPClient: 401 WWW-Authenticate 
+        note left of WASM: WWW-Authenticate: Bearer <br/> resource_metadata=<host>/.well-known/oauth-protected-resource/mcp
+        MCPClient->>Gateway: .well-known/oauth-protected-resource/mcp
+        Gateway->>MCPRouter: .well-known/oauth-protected-resource/mcp
+        Gateway->>MCPBroker: .well-known/oauth-protected-resource/mcp
+        MCPBroker->>MCPClient: auth metadata response
+        MCPClient->>Auth-Server: Authenticate (dynamic client reg etc) 
+        Auth-Server->>MCPClient: Authenticated !!
+        MCPClient->>Gateway: Bearer header set POST/mcp
+        note right of MCPClient: method: tools/call <br/> name: prefix_echo
+        Gateway->>MCPRouter: POST /mcp tools/call
+        MCPRouter->>Gateway: set authority: <prefix>.<host>
+        MCPRouter->>Gateway: update body to remove prefix set headers etc
         Gateway->>WASM: POST /mcp tools/call
         WASM->>Authorino: Apply Auth
-        Authorino->>WASM: 200
-        Gateway->>MCP Server: POST /mcp tools/call
-        MCP Server->>MCP Client: tools/call response
+        Authorino->>WASM: OK
+        Gateway->>MCPServer: POST /mcp tools/call
+        MCPServer->>MCPClient: tools/call response
 ```        
 
 ## MCP Notifications

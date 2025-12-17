@@ -13,7 +13,7 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 		echo "Kind cluster 'mcp-gateway' already exists"; \
 	fi
 	# Install Gateway API CRDs
-	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
 	$(KUBECTL) wait --for condition=Established --timeout=60s crd/gateways.gateway.networking.k8s.io
 	# Build and load image
 	"$(MAKE)" docker-build
@@ -37,6 +37,7 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-api-key-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-custom-path-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-oidc-server -n mcp-test
+	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/everything-server -n mcp-test	
 
 # Collect debug info on failure
 .PHONY: ci-debug-logs

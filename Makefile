@@ -98,11 +98,8 @@ deploy: install-crd ## Deploy broker/router and controller to mcp-system namespa
 
 # Deploy only the broker/router
 deploy-broker: install-crd ## Deploy only the broker/router (without controller)
-	kubectl apply -f config/mcp-system/namespace.yaml
-	kubectl apply -f config/mcp-system/rbac.yaml
-	kubectl apply -f config/mcp-system/service.yaml
-	kubectl apply -f config/mcp-system/deployment-broker.yaml
-	kubectl apply -k config/mcp-system/ --dry-run=client -o yaml | kubectl apply -f - -l app=mcp-gateway
+	kubectl apply -k config/mcp-system
+	kubectl patch deployment mcp-broker-router -n mcp-system --patch-file config/mcp-system/poll-interval-patch.yaml
 
 .PHONY: configure-redis
 configure-redis:  ## patch deployment with redis connection
@@ -170,7 +167,7 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/custom-path-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 	cd tests/servers/oidc-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-oidc-server:latest .
 	cd tests/servers/everything-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-everything-server:latest .
-	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .
+	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .	
 
 # Build conformance server Docker image
 .PHONY: build-conformance-server

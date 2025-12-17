@@ -1,4 +1,4 @@
-## MCP Server Registration
+## MCP Server Registration and Management 
 
 ### Problem
 
@@ -9,7 +9,8 @@ The MCP Gateway needs to discover and register backend MCP servers so that their
 3. Initialize connections to the backend MCP server
 4. Discover available tools
 5. Register for state change notifications
-6. Handle configuration changes and server lifecycle
+6. Handle configuration changes
+7. Periodically ensure that the backend MCP Server is alive and healthy
 
 The broker needs a robust mechanism to manage the lifecycle of each upstream MCP server connection, including periodic health checks, reconnection logic, and graceful handling of configuration changes.
 
@@ -18,7 +19,7 @@ The broker needs a robust mechanism to manage the lifecycle of each upstream MCP
 The MCP Gateway uses a two-phase registration process:
 
 1. **Controller Phase**: The MCP Controller watches for MCPServer resources, discovers server endpoints from HTTPRoutes, and writes aggregated configuration to ConfigMaps
-2. **Broker Phase**: The MCP Broker reads configuration changes and manages each upstream MCP server through an `MCPManager` that handles the full lifecycle of the connection
+2. **Broker Phase**: The MCP Broker reads configuration changes and manages each upstream MCP server through an `MCPManager` struct that handles the full lifecycle of the connection
 
 Each upstream MCP server is managed by a dedicated `MCPManager` instance that runs as a background routine, handling:
 - Initial connection and discovery
@@ -94,7 +95,7 @@ The MCPManager subscribes to state change notifications from the upstream MCP se
 
 When a notification is received, the MCPManager:
 1. Updates its internal state (e.g., re-fetches tool list)
-2. Triggers the notification on the broker
+2. Forwards the notification to the broker
 3. The broker forwards it to all connected clients
 
 For more details, see the [notifications design documentation](./notifications.md).
