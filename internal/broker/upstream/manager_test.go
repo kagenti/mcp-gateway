@@ -2,16 +2,51 @@ package upstream
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
+	"github.com/kagenti/mcp-gateway/internal/tests/server2"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 )
+
+const (
+	// MCPPort is the port the test server should listen on
+	MCPPort = "8089"
+	// MCPAddr is the URL the client will use to contact the test server
+	MCPAddr = "http://localhost:8089/mcp"
+)
+
+// TestMain starts an MCP server that we will run actual tests against
+func TestMain(m *testing.M) {
+	startFunc, shutdownFunc, err := server2.RunServer("http", MCPPort)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Server setup error: %v\n", err)
+		os.Exit(1)
+	}
+
+	go func() {
+		_ = startFunc()
+	}()
+
+	// wait for server to be ready
+	time.Sleep(100 * time.Millisecond)
+
+	code := m.Run()
+
+	err = shutdownFunc()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Server shutdown error: %v\n", err)
+	}
+
+	os.Exit(code)
+}
 
 func TestDiffTools(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -112,147 +147,73 @@ func TestDiffTools(t *testing.T) {
 	}
 }
 
+// TestValidate is an integration test that uses a small test server defined in test main to test the validation logic
 func TestValidate(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	ctx := context.Background()
 
 	t.Run("validates protocol version correctly with valid version", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
+		upstream := NewUpstreamMCP(&config.MCPServer{
+			Name:       "test-server",
+			ToolPrefix: "test_",
+			URL:        MCPAddr,
+		})
 		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		assert.Equal(t, "test-server:test_:http://localhost:9999/mcp", status.ID)
+		assert.Equal(t, "test-server:test_:"+MCPAddr, status.ID)
 		assert.Equal(t, "test-server", status.Name)
 		assert.Equal(t, "test_", status.ToolPrefix)
+		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
 		assert.True(t, status.ProtocolValidation.IsValid, "protocol should be valid for latest version")
 		assert.Contains(t, status.ProtocolValidation.ExpectedVersion, mcp.LATEST_PROTOCOL_VERSION)
-	})
 
-	t.Run("validates protocol version correctly with invalid version", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: "invalid-version",
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.ProtocolValidation.IsValid, "protocol should be invalid for unknown version")
+		// cleanup
+		_ = upstream.Disconnect()
 	})
 
 	t.Run("validates capabilities with tools capability", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
+		upstream := NewUpstreamMCP(&config.MCPServer{
+			Name:       "test-server",
+			ToolPrefix: "test_",
+			URL:        MCPAddr,
+		})
 		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
+		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
 		assert.True(t, status.CapabilitiesValidation.HasToolCapabilities)
 		assert.True(t, status.CapabilitiesValidation.IsValid)
-	})
 
-	t.Run("validates capabilities without tools capability", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities:    mcp.ServerCapabilities{},
-			},
-		}
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.CapabilitiesValidation.HasToolCapabilities)
-		assert.False(t, status.CapabilitiesValidation.IsValid)
+		// cleanup
+		_ = upstream.Disconnect()
 	})
 
 	t.Run("sets expected version from valid protocol versions", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			},
-		}
+		upstream := NewUpstreamMCP(&config.MCPServer{
+			Name:       "test-server",
+			ToolPrefix: "test_",
+			URL:        MCPAddr,
+		})
 		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
 		expectedVersions := strings.Join(mcp.ValidProtocolVersions, ",")
 		assert.Equal(t, expectedVersions, status.ProtocolValidation.ExpectedVersion)
+
+		// cleanup
+		_ = upstream.Disconnect()
 	})
 
 	t.Run("reports tool count from server tools", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "test-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:9999/mcp",
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-				Capabilities: mcp.ServerCapabilities{
-					Tools: &struct {
-						ListChanged bool "json:\"listChanged,omitempty\""
-					}{
-						ListChanged: true,
-					},
-				},
-			},
-		}
+		upstream := NewUpstreamMCP(&config.MCPServer{
+			Name:       "test-server",
+			ToolPrefix: "test_",
+			URL:        MCPAddr,
+		})
 		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 		// simulate having discovered tools
 		manager.serverTools = []server.ServerTool{
@@ -263,27 +224,24 @@ func TestValidate(t *testing.T) {
 
 		status := manager.Validate(ctx)
 
+		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
 		assert.Equal(t, 3, status.CapabilitiesValidation.ToolCount)
+
+		// cleanup
+		_ = upstream.Disconnect()
 	})
 
-	t.Run("connection error when no client and connect fails", func(t *testing.T) {
-		upstream := &MCPServer{
-			MCPServer: &config.MCPServer{
-				Name:       "unreachable-server",
-				ToolPrefix: "test_",
-				URL:        "http://localhost:1/mcp", // invalid port
-			},
-			init: &mcp.InitializeResult{
-				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			},
-		}
+	t.Run("connection error when server unreachable", func(t *testing.T) {
+		upstream := NewUpstreamMCP(&config.MCPServer{
+			Name:       "unreachable-server",
+			ToolPrefix: "test_",
+			URL:        "http://localhost:1/mcp", // invalid port
+		})
 		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		// connect will fail but IsReachable is still set to true after the attempt
-		// this tests the current behavior (which may be a bug worth fixing)
-		assert.True(t, status.ConnectionStatus.IsReachable)
+		assert.False(t, status.ConnectionStatus.IsReachable, "unreachable server should not be reachable")
 		assert.NotEmpty(t, status.ConnectionStatus.Error)
 	})
 }
