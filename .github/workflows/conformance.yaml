@@ -1,4 +1,4 @@
-name: E2E Tests
+name: MCP Conformance Tests
 
 on:
   pull_request:
@@ -12,9 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e-tests:
+  conformance-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -24,6 +24,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Create Kind cluster
         run: |
@@ -36,7 +41,7 @@ jobs:
               - |
                 apiVersion: kubelet.config.k8s.io/v1beta1
                 kind: KubeletConfiguration
-                syncFrequency: "10s"                        
+                syncFrequency: "10s"
             extraPortMappings:
             - containerPort: 30080
               hostPort: 8001
@@ -49,11 +54,18 @@ jobs:
       - name: Setup CI environment
         run: make ci-setup
 
-      - name: Run E2E tests
-        run: make test-e2e-ci
+      - name: Deploy conformance server
+        run: make deploy-conformance-server
+
+      - name: Run MCP conformance tests
+        run: |
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario server-initialize
 
       - name: Collect logs on failure
         if: failure()
         run: |
           make ci-debug-logs
-          make ci-debug-test-servers-logs
+          echo "=== Conformance server logs ==="
+          kubectl logs -n mcp-test deployment/conformance-server --tail=50

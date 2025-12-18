@@ -45,10 +45,6 @@ ci-debug-logs: ## Collect logs for debugging CI failures
 	-$(KUBECTL) logs -n mcp-system deployment/mcp-controller --tail=100
 	@echo "=== Broker logs ==="
 	-$(KUBECTL) logs -n mcp-system deployment/mcp-broker-router --tail=100
-	@echo "=== Test server logs ==="
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server1 --tail=50
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server2 --tail=50
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server3 --tail=50
 	@echo "=== MCPServers ==="
 	-$(KUBECTL) get mcpservers -A
 	@echo "=== HTTPRoutes ==="
@@ -57,3 +53,10 @@ ci-debug-logs: ## Collect logs for debugging CI failures
 	-$(KUBECTL) get configmap -n mcp-system mcp-gateway-config -o yaml
 	@echo "=== Pods ==="
 	-$(KUBECTL) get pods -A
+
+.PHONY: ci-debug-test-servers-logs
+ci-debug-test-servers-logs: ## Collect test servers logs for debugging CI failures
+	@echo "=== Test server logs ==="
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server1 --tail=50
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server2 --tail=50
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server3 --tail=50
