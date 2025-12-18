@@ -215,11 +215,8 @@ deploy-conformance-server: kind-load-conformance-server ## Deploy conformance MC
 	@kubectl wait --for=condition=ready pod -n mcp-test -l app=conformance-server --timeout=60s
 	@echo "Conformance server ready, deploying MCPServer resource..."
 	kubectl apply -f config/samples/mcpserver-conformance-server.yaml
-	@echo "Waiting for controller to process MCPServer..."
-	@sleep 3
-	@echo "Restarting broker to ensure connection..."
-	kubectl rollout restart deployment/mcp-broker-router -n mcp-system
-	@kubectl rollout status deployment/mcp-broker-router -n mcp-system --timeout=60s
+	@echo "Waiting for MCPServer to be Ready..."
+	@kubectl wait --for=condition=Ready mcpserver/conformance-server -n mcp-test --timeout=60s
 
 # Build and push container image
 docker-build: ## Build container image locally
