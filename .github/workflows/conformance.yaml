@@ -14,7 +14,7 @@ concurrency:
 jobs:
   conformance-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -62,6 +62,38 @@ jobs:
           npx @modelcontextprotocol/conformance server \
             --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
             --scenario server-initialize
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-list
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-simple-text
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-image
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-audio
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-embedded-resource
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-mixed-content
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-error
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-with-progress
 
       - name: Collect logs on failure
         if: failure()
