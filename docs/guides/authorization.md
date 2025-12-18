@@ -47,10 +47,10 @@ data:
                 "id": "mcp-test/mcp-server1-route",
                 "access": {
                     "accounting": [
-                        "test_headers"
+                        "test1_headers"
                     ],
                     "developers": [
-                        "test_hello_world"
+                        "test1_hello_world"
                     ]
                 }
             },
@@ -119,8 +119,8 @@ EOF
 
 - `id`: Server identifier (matches hostnames in HTTPRoutes)
 - `access`: Maps groups to allowed tools
-- `accounting` group: Can use `test_headers` tool
-- `developers` group: Can use `test_hello_world` tool
+- `accounting` group: Can use `test1_headers` tool
+- `developers` group: Can use `test1_hello_world` tool
 
 ## Step 2: Configure Tool-Level Authorization
 
@@ -215,8 +215,8 @@ open "http://localhost:6274/?transport=streamable-http&serverUrl=http://mcp.127-
 
 1. **Login as mcp/mcp** (has both `accounting` and `developers` groups)
 2. **Try allowed tools**:
-   - `test_hello_world` - Should work (developers group)
-   - `test_headers` - Should work (accounting group)
+   - `test1_hello_world` - Should work (developers group)
+   - `test1_headers` - Should work (accounting group)
 3. **Try restricted tools**:
    - Tools not in the ACL - Should return 403 Forbidden
 

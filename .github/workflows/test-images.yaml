@@ -63,6 +63,10 @@ jobs:
             context: tests/servers/everything-server
             dockerfile: Dockerfile
             image-name: test-everything-server
+          - server: conformance-server
+            context: tests/servers/conformance-server
+            dockerfile: Dockerfile
+            image-name: test-conformance-server
 
     steps:
       - name: Check out code

@@ -4,10 +4,10 @@
             "id": "mcp-test/mcp-server1-route",
             "access": {
                 "accounting": [
-                    "test_headers"
+                    "test1_headers"
                 ],
                 "developers": [
-                    "test_hello_world"
+                    "test1_hello_world"
                 ]
             }
         },

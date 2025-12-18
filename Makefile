@@ -170,8 +170,13 @@ build-test-servers: ## Build test server Docker images locally
 	cd tests/servers/custom-path-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-custom-path-server:latest .
 	cd tests/servers/oidc-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-oidc-server:latest .
 	cd tests/servers/everything-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-everything-server:latest .
-	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .	
+	cd tests/servers/custom-response-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/custom-response-server:latest .
 
+# Build conformance server Docker image
+.PHONY: build-conformance-server
+build-conformance-server: ## Build conformance server Docker image locally
+	@echo "Building conformance server image..."
+	cd tests/servers/conformance-server && $(CONTAINER_ENGINE) build $(CONTAINER_ENGINE_EXTRA_FLAGS) -t ghcr.io/kagenti/mcp-gateway/test-conformance-server:latest .
 
 # Load test server images into Kind cluster
 kind-load-test-servers: kind build-test-servers ## Load test server images into Kind cluster
@@ -186,6 +191,12 @@ kind-load-test-servers: kind build-test-servers ## Load test server images into 
 	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-everything-server:latest)
 	$(call load-image,ghcr.io/kagenti/mcp-gateway/custom-response-server:latest)
 
+# Load conformance server image into Kind cluster
+.PHONY: kind-load-conformance-server
+kind-load-conformance-server: kind build-conformance-server ## Load conformance server image into Kind cluster
+	@echo "Loading conformance server image into Kind cluster..."
+	$(call load-image,ghcr.io/kagenti/mcp-gateway/test-conformance-server:latest)
+
 # Deploy test servers
 deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local testing
 	@echo "Deploying test MCP servers..."
@@ -194,6 +205,18 @@ deploy-test-servers: kind-load-test-servers ## Deploy test MCP servers for local
 	@kubectl create configmap mcp-gateway-keycloak-cert -n mcp-test --from-file=keycloak.crt=./out/certs/ca.crt 2>/dev/null || true
 	@export GATEWAY_IP=$$(kubectl get gateway/mcp-gateway -n gateway-system -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || echo '127.0.0.1'); \
 	  kubectl patch deployment mcp-oidc-server -n mcp-test --type='json' -p="$$(cat config/keycloak/patch-hostaliases.json | envsubst)"
+
+# Deploy conformance server
+.PHONY: deploy-conformance-server
+deploy-conformance-server: kind-load-conformance-server ## Deploy conformance MCP server
+	@echo "Deploying conformance MCP server..."
+	kubectl apply -k config/test-servers/conformance-server/
+	@echo "Waiting for conformance server to be ready..."
+	@kubectl wait --for=condition=ready pod -n mcp-test -l app=conformance-server --timeout=60s
+	@echo "Conformance server ready, deploying MCPServer resource..."
+	kubectl apply -f config/samples/mcpserver-conformance-server.yaml
+	@echo "Waiting for MCPServer to be Ready..."
+	@kubectl wait --for=condition=Ready mcpserver/conformance-server -n mcp-test --timeout=60s
 
 # Build and push container image
 docker-build: ## Build container image locally

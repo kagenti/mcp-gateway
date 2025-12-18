@@ -31,7 +31,7 @@ kubectl describe mcpserver api-key-server -n mcp-test
 **Example MCPServer spec:**
 ```yaml
 spec:
-  toolPrefix: test_
+  toolPrefix: test1_
   targetRef:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
@@ -60,7 +60,7 @@ data:
       - name: mcp-test/mcp-server1-route
         url: http://mcp-test-server1.mcp-test.svc.cluster.local:9090/mcp
         hostname: server1.mcp.local
-        toolPrefix: test_
+        toolPrefix: test1_
         enabled: true
 ```
 
@@ -123,7 +123,7 @@ gateway-session-id/backend-server-name → backend-mcp-session-id
 
 **Example flow:**
 1. Client initializes → broker creates session `client-abc-123`
-2. Client calls `test_hi` with session `client-abc-123`
+2. Client calls `test1_hi` with session `client-abc-123`
 3. Router checks: Does `client-abc-123/server1` mapping exist?
 4. If no: Router initializes connection to backend, gets session `backend-xyz-789`
 5. Router stores: `client-abc-123/server1` → `backend-xyz-789`
@@ -143,7 +143,7 @@ This opens `http://localhost:6274/?transport=streamable-http&serverUrl=http://mc
 
 **What you can do:**
 1. **View all tools**: Navigate to **Tools** → **List Tools** to see all available tools with their prefixes
-2. **Execute tools**: Click on any tool (e.g., `test_greet`) and provide arguments to execute it
+2. **Execute tools**: Click on any tool (e.g., `test1_greet`) and provide arguments to execute it
 3. **View request/response**: See full JSON payloads for each interaction
 
 ## Step 4: Examining Component Layout and Logs
@@ -303,7 +303,7 @@ INFO [EXT-PROC] Processing response body...
 ```
 
 **Example tools returned:**
-- `test_greet` (from server1 with prefix `test_`)
+- `test1_greet` (from server1 with prefix `test1_`)
 - `test2_greet` (from server2 with prefix `test2_`)
 - `apikey_greet` (from api-key-server with prefix `apikey_`)
 
@@ -313,7 +313,7 @@ The `tools/call` method is where routing happens - this is the most complex flow
 
 **How to test:** In the MCP Inspector (Step 3):
 1. Navigate to **Tools** → **List Tools** to see available tools
-2. Click on a tool (e.g., `test_greet`)
+2. Click on a tool (e.g., `test1_greet`)
 3. Provide any required arguments
 4. Click **Execute**
 5. Watch the logs in your terminal to see the routing activity
@@ -324,10 +324,10 @@ The router intercepts the request via Envoy ext_proc, strips the tool prefix, an
 
 **Expected logs with debug logging enabled:**
 ```
-INFO [EXT-PROC] Found matching server toolName=test_greet serverPrefix=test_ serverName=mcp-test/mcp-server1-route
-INFO Stripped tool name tool=greet originalPrefix=test_
+INFO [EXT-PROC] Found matching server toolName=test1_greet serverPrefix=test1_ serverName=mcp-test/mcp-server1-route
+INFO Stripped tool name tool=greet originalPrefix=test1_
 INFO Completed MCP processing with routing target=mcp-test/mcp-server1-route
-INFO Sending MCP routing instructions to Envoy: request_body:{response:{header_mutation:{set_headers:{header:{key:"x-mcp-toolname" raw_value:"test_greet"}}
+INFO Sending MCP routing instructions to Envoy: request_body:{response:{header_mutation:{set_headers:{header:{key:"x-mcp-toolname" raw_value:"test1_greet"}}
 INFO [EXT-PROC] Processing response body... (size: 136, end_of_stream: true)
 INFO [EXT-PROC] Response body content: event: message
 id: 3_0
