@@ -699,7 +699,6 @@ func (r *MCPReconciler) evaluateValidationResults(
 
 	// Log available endpoints for debugging
 	log := log.FromContext(context.Background())
-
 	// Check each server in the status response
 	for _, server := range statusResponse.Servers {
 		// Only check servers that belong to this MCPServer

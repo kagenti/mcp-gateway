@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// UpstreamMCPID is used as type for identifying individual upstreams
+type UpstreamMCPID string
+
 // MCPServersConfig holds server configuration
 type MCPServersConfig struct {
 	Servers        []*MCPServer
@@ -48,25 +51,6 @@ func (config *MCPServersConfig) StripServerPrefix(toolName string) string {
 	return toolName
 }
 
-// GetServerInfo retrieve the server info based on a prefix toolname. The prefix here is really used
-// as a server id as it is unique to each registered MCPServer
-func (config *MCPServersConfig) GetServerInfo(toolName string) *MCPServer {
-
-	// find server by prefix
-	for _, server := range config.Servers {
-		if server.Enabled && strings.HasPrefix(toolName, server.ToolPrefix) {
-			slog.Info("[EXT-PROC] Found matching server",
-				"toolName", toolName,
-				"serverPrefix", server.ToolPrefix,
-				"serverName", server.Name)
-			return server
-		}
-	}
-
-	slog.Info("Tool name doesn't match any configured server prefix", "tool", toolName)
-	return nil
-}
-
 // GetServerConfigByName get the routing config by server name
 func (config *MCPServersConfig) GetServerConfigByName(serverName string) *MCPServer {
 	for _, server := range config.Servers {
@@ -88,8 +72,8 @@ type MCPServer struct {
 }
 
 // ID returns a unique id for the a registered server
-func (mcpServer *MCPServer) ID() string {
-	return fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL)
+func (mcpServer *MCPServer) ID() UpstreamMCPID {
+	return UpstreamMCPID(fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL))
 }
 
 // ConfigChanged checks if a server's config has changed in a way that will affect the gateway.

@@ -15,7 +15,6 @@ import (
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/tests/server2"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,11 +30,6 @@ const (
 )
 
 var logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-
-// See https://stackoverflow.com/questions/28817992/how-to-set-bool-pointer-to-true-in-struct-literal
-func pointer[T any](d T) *T {
-	return &d
-}
 
 // TestMain starts an MCP server that we will run actual tests against
 func TestMain(m *testing.M) {
@@ -75,233 +69,44 @@ func TestOnConfigChange(t *testing.T) {
 		URL:        MCPAddr,
 		ToolPrefix: "_test1",
 	}
+	virtualServer1 := &config.VirtualServer{
+		Name:  "test/test",
+		Tools: []string{"test"},
+	}
 	b.OnConfigChange(context.TODO(), conf)
-	if b.IsRegistered(server1.ID()) {
-		t.Fatalf("server1 should not be registered but is")
+	servers := b.RegisteredMCPServers()
+	require.Equal(t, 0, len(servers))
+	if _, ok := servers[server1.ID()]; ok {
+		t.Fatalf("expected server 1 not to be registered")
 	}
 
 	conf.Servers = append(conf.Servers, server1)
+	conf.VirtualServers = append(conf.VirtualServers, virtualServer1)
 	b.OnConfigChange(context.TODO(), conf)
-	if !b.IsRegistered(server1.ID()) {
-		t.Fatalf("server1 should be registered but is not")
+	servers = b.RegisteredMCPServers()
+	require.Equal(t, 1, len(servers))
+	if _, ok := servers[server1.ID()]; !ok {
+		t.Fatalf("expected server 1 to be registered")
+	}
+
+	vs, err := b.GetVirtualSeverByHeader("test/test")
+	require.Nil(t, err, "error shuld be nil from GetVirtualSeverByHeader")
+	if vs.Name != "test/test" {
+		t.Fatalf("expected virtual server to have same name")
+	}
+	if len(vs.Tools) != 1 && vs.Tools[0] != "test" {
+		t.Fatalf("expected the virtual server to have the test tool listed")
 	}
 
 	conf.Servers = []*config.MCPServer{}
 	b.OnConfigChange(context.TODO(), conf)
-	if b.IsRegistered(server1.ID()) {
-		t.Fatalf("server1 should not be registered but is")
+	servers = b.RegisteredMCPServers()
+	require.Equal(t, 0, len(servers))
+	if _, ok := servers[server1.ID()]; ok {
+		t.Fatalf("expected server 1 not to be registered")
 	}
 
 	_ = b.Shutdown(context.Background())
-}
-
-func TestRegisterServer(t *testing.T) {
-	fmt.Fprintf(os.Stderr, "TestRegisterServer\n")
-
-	broker := NewBroker(logger)
-	brokerImpl := broker.(*mcpBrokerImpl)
-
-	tools, err := brokerImpl.RegisterServerWithConfig(
-		context.Background(),
-		&config.MCPServer{
-			Name:       "test-server",
-			URL:        MCPAddr,
-			ToolPrefix: "testprefix-reg",
-			Hostname:   "mcp_add_service_cluster",
-			Enabled:    true,
-		},
-	)
-	require.NoError(t, err)
-	require.NotNil(t, brokerImpl.listeningMCPServer)
-	// RegisterServerWithConfig returns tools but doesn't add them to listeningMCPServer
-	// (that's done by OnConfigChange), so we add them here to test the tool content
-	brokerImpl.listeningMCPServer.AddTools(toolsToServerTools(tools)...)
-
-	expectedTools := map[string]*server.ServerTool{
-		"testprefix-regheaders": {
-			Tool: mcp.Tool{
-				Description: "get HTTP headers",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "header inspector",
-					ReadOnlyHint:    pointer(true),
-					DestructiveHint: pointer(false),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type:       "object",
-					Properties: map[string]interface{}(nil),
-				},
-			},
-		},
-		"testprefix-regtime": {
-			Tool: mcp.Tool{
-				Description: "Get the current time",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "Clock",
-					ReadOnlyHint:    pointer(true),
-					DestructiveHint: pointer(false),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type:       "object",
-					Properties: map[string]interface{}(nil),
-				},
-			},
-		},
-		"testprefix-reghello_world": {
-			Tool: mcp.Tool{
-				Description: "Say hello to someone",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "greeter tool",
-					ReadOnlyHint:    pointer(true),
-					DestructiveHint: pointer(false),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type: "object",
-					Properties: map[string]interface{}{
-						"name": map[string]interface{}{
-							"type":        "string",
-							"description": "Name of the person to greet",
-						},
-					},
-					Required: []string{"name"},
-				},
-			},
-		},
-		"testprefix-regpour_chocolate_into_mold": {
-			Tool: mcp.Tool{
-				Description: "Pour chocolate into mold",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "chocolate fill tool",
-					ReadOnlyHint:    pointer(false),
-					DestructiveHint: pointer(true),
-					IdempotentHint:  pointer(false),
-					OpenWorldHint:   pointer(true),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type: "object",
-					Properties: map[string]interface{}{
-						"quantity": map[string]interface{}{
-							"type":        "string",
-							"description": "milliliters",
-						},
-					},
-					Required: []string{"quantity"},
-				},
-			},
-		},
-		"testprefix-regset_time": {
-			Tool: mcp.Tool{
-				Description: "Set the clock",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "set time tool",
-					ReadOnlyHint:    pointer(false),
-					DestructiveHint: pointer(true),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type: "object",
-					Properties: map[string]interface{}{
-						"time": map[string]interface{}{
-							"type":        "string",
-							"description": "new time",
-						},
-					},
-					Required: []string{"time"},
-				},
-			},
-		},
-		"testprefix-regslow": {
-			Tool: mcp.Tool{
-				Description: "Delay for N seconds",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "delay tool",
-					ReadOnlyHint:    pointer(true),
-					DestructiveHint: pointer(false),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type: "object",
-					Properties: map[string]interface{}{
-						"seconds": map[string]interface{}{
-							"type":        "string",
-							"description": "number of seconds to wait",
-						},
-					},
-					Required: []string{"seconds"},
-				},
-			},
-		},
-		"testprefix-regauth1234": {
-			Tool: mcp.Tool{
-				Description: "check authorization header",
-				Annotations: mcp.ToolAnnotation{
-					Title:           "auth header verifier",
-					ReadOnlyHint:    pointer(true),
-					DestructiveHint: pointer(false),
-					IdempotentHint:  pointer(true),
-					OpenWorldHint:   pointer(false),
-				},
-				InputSchema: mcp.ToolInputSchema{
-					Type:       "object",
-					Properties: map[string]interface{}(nil),
-				},
-			},
-		},
-	}
-
-	require.Len(t, brokerImpl.listeningMCPServer.ListTools(), len(expectedTools))
-	for name, tool := range brokerImpl.listeningMCPServer.ListTools() {
-		expectedTool, ok := expectedTools[name]
-		require.True(t, ok, "Found unexpected tool named %q", name)
-		require.Equal(t, expectedTool.Tool.Description, tool.Tool.Description, "Description for tool %q", name)
-		require.Equal(t, expectedTool.Tool.Annotations, tool.Tool.Annotations, "Annotations for tool %q", name)
-		require.Equal(t, expectedTool.Tool.InputSchema.Properties, tool.Tool.InputSchema.Properties, "InputSchema properties for tool %q", name)
-		require.Equal(t, expectedTool.Tool.InputSchema, tool.Tool.InputSchema, "InputSchema for tool %q", name)
-		require.Equal(t, expectedTool.Tool.Meta, tool.Tool.Meta, "Meta for tool %q", name)
-		require.Equal(t, expectedTool.Tool.OutputSchema, tool.Tool.OutputSchema, "OutputSchema for tool %q", name)
-	}
-
-	_ = broker.Shutdown(context.Background())
-}
-
-func TestUnregisterServer(t *testing.T) {
-	fmt.Fprintf(os.Stderr, "TestUnregisterServer\n")
-
-	broker := NewBroker(logger)
-	brokerImpl := broker.(*mcpBrokerImpl)
-	serverConfig := &config.MCPServer{
-		Name:       "test-server-unreg",
-		URL:        MCPAddr,
-		ToolPrefix: "testprefix-unreg",
-		Hostname:   "mcp_add_service_cluster",
-		Enabled:    true,
-	}
-	_, err := brokerImpl.RegisterServerWithConfig(
-		context.Background(),
-		serverConfig,
-	)
-	require.NoError(t, err)
-
-	// It is an error to attempt to unregister an unknown server
-	err = broker.UnregisterServer(context.Background(), "unknown:unknown:http://mcp-time:8000/mcp")
-	require.Error(t, err)
-
-	// We should be able to unregister a known server
-	err = broker.UnregisterServer(context.Background(), serverConfig.ID())
-	require.NoError(t, err)
-
-	// After the first unregister, the server should be unknown, and removing it again should fail
-	err = broker.UnregisterServer(context.Background(), serverConfig.ID())
-	require.Error(t, err)
-
-	_ = broker.Shutdown(context.Background())
 }
 
 var _ http.ResponseWriter = &simpleResponseWriter{}
@@ -371,4 +176,39 @@ func TestOauthResourceHandler(t *testing.T) {
 		t.Fatalf("expected %s to be in %v", bearerMethod, config.BearerMethodsSupported)
 	}
 
+}
+
+func TestGetServerInfo(t *testing.T) {
+	b := NewBroker(logger)
+
+	// Attach phony tools to the upstreams
+	bImpl, ok := b.(*mcpBrokerImpl)
+	require.True(t, ok)
+	bImpl.mcpServers["test1"] = createTestManager(t, "test1", "", []mcp.Tool{
+		mcp.NewTool("pour_chocolate"),
+	})
+	bImpl.mcpServers["test2"] = createTestManager(t, "test2", "", []mcp.Tool{
+		mcp.NewTool("restore_from_tape"),
+	})
+	bImpl.mcpServers["test3"] = createTestManager(t, "test3", "t", []mcp.Tool{
+		mcp.NewTool("restore_from_tape"),
+	})
+	bImpl.mcpServers["test4"] = createTestManager(t, "test4", "tt", []mcp.Tool{})
+
+	svr := b.GetServerInfo("pour_chocolate")
+	require.NotNil(t, svr)
+	require.Equal(t, "test1", svr.Name)
+
+	svr = b.GetServerInfo("restore_from_tape")
+	require.NotNil(t, svr)
+	require.Equal(t, "test2", svr.Name)
+
+	// We used a prefix so that this tool exists
+	svr = b.GetServerInfo("trestore_from_tape")
+	require.NotNil(t, svr)
+	require.Equal(t, "test3", svr.Name)
+
+	// There is no tool, even though the prefix matches
+	svr = b.GetServerInfo("tt_orbit_mars")
+	require.Nil(t, svr)
 }
