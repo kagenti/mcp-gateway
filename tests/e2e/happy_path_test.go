@@ -449,6 +449,22 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
+	It("should register MCP server via Hostname backendRef", func() {
+		// tool discovery not tested - broker needs actual https connectivity
+		externalHost := "mcp-test-server2.mcp-test.svc.cluster.local"
+		port := int32(9090)
+
+		By("Creating ServiceEntry, DestinationRule, HTTPRoute with Hostname backendRef, and MCPServer")
+		registration := NewExternalMCPServerRegistration("hostname-backend", k8sClient, externalHost, port)
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer := registration.Register(ctx)
+
+		By("Verifying MCPServer becomes ready")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+	})
+
 })
 
 // verifyMCPServerToolsPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
