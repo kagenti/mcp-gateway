@@ -352,7 +352,7 @@ func LoadConfig(path string) {
 		logger.Debug("No virtualServers section found in configuration")
 	}
 
-	logger.Debug("config successfully loaded ")
+	logger.Debug("config successfully loaded", "# servers", len(mcpConfig.Servers))
 
 	for _, s := range mcpConfig.Servers {
 		logger.Debug(
