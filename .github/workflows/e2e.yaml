@@ -54,4 +54,6 @@ jobs:
 
       - name: Collect logs on failure
         if: failure()
-        run: make ci-debug-logs
+        run: |
+          make ci-debug-logs
+          make ci-debug-test-servers-logs
