@@ -34,7 +34,7 @@ type MCPBroker interface {
 	GetVirtualSeverByHeader(namespaceName string) (config.VirtualServer, error)
 
 	// ValidateAllServers performs comprehensive validation of all registered servers and returns status
-	ValidateAllServers(ctx context.Context) StatusResponse
+	ValidateAllServers() StatusResponse
 
 	// HandleStatusRequest handles HTTP status endpoint requests
 	HandleStatusRequest(w http.ResponseWriter, r *http.Request)
@@ -244,7 +244,7 @@ func (m *mcpBrokerImpl) HandleStatusRequest(w http.ResponseWriter, r *http.Reque
 }
 
 // ValidateAllServers performs comprehensive validation of all registered servers and returns status
-func (m *mcpBrokerImpl) ValidateAllServers(ctx context.Context) StatusResponse {
+func (m *mcpBrokerImpl) ValidateAllServers() StatusResponse {
 	response := StatusResponse{
 		Servers:          make([]upstream.ServerValidationStatus, 0),
 		OverallValid:     true,

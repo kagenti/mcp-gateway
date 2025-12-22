@@ -72,9 +72,8 @@ type MCPManager struct {
 	logger *slog.Logger
 	// toolsLock protects tools, serverTools
 	toolsLock sync.RWMutex
-	stopOnce  sync.Once      // ensures Stop() is only executed once
-	wg        sync.WaitGroup // tracks the Start() goroutine
-	done      chan struct{}  // triggers the exit of the select and routine
+	stopOnce  sync.Once     // ensures Stop() is only executed once
+	done      chan struct{} // triggers the exit of the select and routine
 	status    ServerValidationStatus
 }
 
@@ -173,7 +172,7 @@ func (man *MCPManager) manage(ctx context.Context) {
 		err = fmt.Errorf("failed to connect to upstream mcp %s removing tools : %w", man.MCP.ID(), err)
 		man.removeTools()
 		// we call disconnect here as we may have connected but failed to initialize
-		man.MCP.Disconnect()
+		_ = man.MCP.Disconnect()
 		man.setStatus(err)
 		return
 	}
@@ -182,7 +181,7 @@ func (man *MCPManager) manage(ctx context.Context) {
 		err = fmt.Errorf("upstream mcp failed to ping server %s removing tools : %w", man.MCP.ID(), err)
 		man.logger.Error("upstream mcp", "error", err)
 		man.removeTools()
-		man.MCP.Disconnect()
+		_ = man.MCP.Disconnect()
 		man.setStatus(err)
 		return
 	}

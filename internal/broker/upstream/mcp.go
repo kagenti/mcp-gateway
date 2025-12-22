@@ -138,12 +138,14 @@ func (up *MCPServer) Disconnect() error {
 	return nil
 }
 
+// OnNotification allows registering a notification handler func with the client
 func (up *MCPServer) OnNotification(handler func(notification mcp.JSONRPCNotification)) {
 	if up.Client != nil {
 		up.Client.OnNotification(handler)
 	}
 }
 
+// OnConnectionLost allows registering a connection lost handler with the client
 func (up *MCPServer) OnConnectionLost(handler func(err error)) {
 	if up.Client != nil {
 		up.Client.OnConnectionLost(handler)
