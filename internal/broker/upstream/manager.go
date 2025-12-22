@@ -302,6 +302,12 @@ func (man *MCPManager) SetToolsForTesting(tools []mcp.Tool) {
 	man.tools = tools
 }
 
+// SetStatusForTesting sets the status directly for testing purposes.
+// This bypasses the normal status update flow and should only be used in tests.
+func (man *MCPManager) SetStatusForTesting(status ServerValidationStatus) {
+	man.status = status
+}
+
 // GetManagedTool returns a copy of a specific tool by its original name (without prefix).
 // Returns nil if the tool is not found.
 func (man *MCPManager) GetManagedTool(name string) *mcp.Tool {

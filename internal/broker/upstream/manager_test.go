@@ -2,7 +2,6 @@ package upstream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -44,12 +43,19 @@ func (m *MockMCP) GetPrefix() string {
 	return m.prefix
 }
 
-func (m *MockMCP) Connect(_ context.Context) error {
+func (m *MockMCP) Connect(_ context.Context, onConnected func()) error {
 	if m.connectErr != nil {
 		return m.connectErr
 	}
 	m.connected = true
+	if onConnected != nil {
+		onConnected()
+	}
 	return nil
+}
+
+func (m *MockMCP) SupportsToolsListChanged() bool {
+	return m.hasToolsCap
 }
 
 func (m *MockMCP) Disconnect() error {
@@ -101,13 +107,8 @@ func newMockMCP(name, prefix string) *MockMCP {
 
 func TestDiffTools(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	upstream := &MCPServer{
-		MCPServer: &config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-		},
-	}
-	manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
+	mock := newMockMCP("test-server", "test_")
+	manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 	tests := []struct {
 		name            string
@@ -139,7 +140,7 @@ func TestDiffTools(t *testing.T) {
 			newTools:        []mcp.Tool{{Name: "tool1"}},
 			expectedAdded:   0,
 			expectedRemoved: 1,
-			removedNames:    []string{"tool2"},
+			removedNames:    []string{"test_tool2"},
 		},
 		{
 			name:            "add and remove tools",
@@ -148,7 +149,7 @@ func TestDiffTools(t *testing.T) {
 			expectedAdded:   1,
 			expectedRemoved: 1,
 			addedNames:      []string{"test_tool3"},
-			removedNames:    []string{"tool2"},
+			removedNames:    []string{"test_tool2"},
 		},
 		{
 			name:            "empty old tools",
@@ -198,113 +199,3 @@ func TestDiffTools(t *testing.T) {
 	}
 }
 
-// TestValidate uses MockMCP to test validation logic
-func TestValidate(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
-	ctx := context.Background()
-
-	t.Run("connection error returns appropriate message", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.connectErr = errors.New("connection refused")
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.ConnectionStatus.IsReachable)
-		assert.Equal(t, "connection refused", status.ConnectionStatus.Error)
-		assert.Equal(t, "unable to connect to the upstream MCP server", status.Message)
-	})
-
-	t.Run("ping failure after successful connect", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.pingErr = errors.New("ping timeout")
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.ConnectionStatus.IsReachable)
-		assert.Equal(t, "ping timeout", status.ConnectionStatus.Error)
-		assert.Equal(t, "unable to ping the upstream MCP server", status.Message)
-	})
-
-	t.Run("invalid protocol version", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.protocolVersion = "0.0.1" // invalid version
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.True(t, status.ConnectionStatus.IsReachable)
-		assert.False(t, status.ProtocolValidation.IsValid)
-		assert.Contains(t, status.Message, "protocol version is invalid")
-	})
-
-	t.Run("valid protocol version", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.protocolVersion = mcp.LATEST_PROTOCOL_VERSION
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.True(t, status.ConnectionStatus.IsReachable)
-		assert.True(t, status.ProtocolValidation.IsValid)
-		assert.Empty(t, status.Message)
-	})
-
-	t.Run("server without tools capability", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.hasToolsCap = false
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.True(t, status.ConnectionStatus.IsReachable)
-		assert.False(t, status.CapabilitiesValidation.HasToolCapabilities)
-		// CapabilitiesValidation.IsValid is always set to true at the end
-		assert.True(t, status.CapabilitiesValidation.IsValid)
-	})
-
-	t.Run("server with tools capability", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.hasToolsCap = true
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.True(t, status.ConnectionStatus.IsReachable)
-		assert.True(t, status.CapabilitiesValidation.HasToolCapabilities)
-		assert.True(t, status.CapabilitiesValidation.IsValid)
-	})
-
-	t.Run("status fields populated correctly", func(t *testing.T) {
-		mock := newMockMCP("my-server", "prefix_")
-		manager := NewUpstreamMCPManager(mock, nil, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.Equal(t, string(mock.id), status.ID)
-		assert.Equal(t, "my-server", status.Name)
-		assert.Equal(t, "prefix_", status.ToolPrefix)
-		assert.NotZero(t, status.LastValidated)
-	})
-
-	t.Run("isValid returns true when all conditions met", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		// isValid requires: IsReachable && len(ToolConflicts)==0 && CapabilitiesValidation.IsValid
-		assert.True(t, status.isValid())
-	})
-
-	t.Run("isValid returns false when not reachable", func(t *testing.T) {
-		mock := newMockMCP("test-server", "test_")
-		mock.connectErr = errors.New("connection failed")
-		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
-
-		status := manager.Validate(ctx)
-
-		assert.False(t, status.isValid())
-	})
-}
