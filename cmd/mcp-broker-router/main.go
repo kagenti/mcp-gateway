@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,6 +134,15 @@ func main() {
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
+	fmt.Println("** startup flags passed **")
+	flag.VisitAll(func(f *flag.Flag) {
+
+		if strings.Contains(f.Name, "key") && f.DefValue != f.Value.String() {
+			fmt.Printf("%s: %s\n", f.Name, "xxxx")
+		} else {
+			fmt.Printf("%s: %s\n", f.Name, f.Value)
+		}
+	})
 
 	loggerOpts := &slog.HandlerOptions{}
 
@@ -290,7 +300,7 @@ func setUpBroker(address string, toolFiltering bool, sessionManager *session.JWT
 	if managerTickerInterval <= 0 {
 		panic("flag mcp-check-interval cannot be 0 or less seconds")
 	}
-	mcpBroker := broker.NewBroker(logger,
+	mcpBroker := broker.NewBroker(logger.With("component", "broker"),
 		broker.WithEnforceToolFilter(toolFiltering),
 		broker.WithTrustedHeadersPublicKey(os.Getenv("TRUSTED_HEADER_PUBLIC_KEY")),
 		broker.WithManagerTickerInterval(managerTickerInterval),
@@ -321,7 +331,7 @@ func setUpRouter(broker broker.MCPBroker, logger *slog.Logger, jwtManager *sessi
 	// Create the ExtProcServer instance
 	server := &mcpRouter.ExtProcServer{
 		RoutingConfig: mcpConfig,
-		Logger:        logger,
+		Logger:        logger.With("component", "router"),
 		JWTManager:    jwtManager,
 		InitForClient: clients.Initialize,
 		SessionCache:  sessionCache,

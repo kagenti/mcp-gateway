@@ -98,11 +98,8 @@ deploy: install-crd ## Deploy broker/router and controller to mcp-system namespa
 
 # Deploy only the broker/router
 deploy-broker: install-crd ## Deploy only the broker/router (without controller)
-	kubectl apply -f config/mcp-system/namespace.yaml
-	kubectl apply -f config/mcp-system/rbac.yaml
-	kubectl apply -f config/mcp-system/service.yaml
-	kubectl apply -f config/mcp-system/deployment-broker.yaml
-	kubectl apply -k config/mcp-system/ --dry-run=client -o yaml | kubectl apply -f - -l app=mcp-gateway
+	kubectl apply -k config/mcp-system
+	kubectl patch deployment mcp-broker-router -n mcp-system --patch-file config/mcp-system/poll-interval-patch.yaml
 
 .PHONY: configure-redis
 configure-redis:  ## patch deployment with redis connection

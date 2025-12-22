@@ -2,50 +2,101 @@ package upstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/kagenti/mcp-gateway/internal/config"
-	"github.com/kagenti/mcp-gateway/internal/tests/server2"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	// MCPPort is the port the test server should listen on
-	MCPPort = "8089"
-	// MCPAddr is the URL the client will use to contact the test server
-	MCPAddr = "http://localhost:8089/mcp"
-)
+// MockMCP implements the MCP interface for testing
+type MockMCP struct {
+	name            string
+	prefix          string
+	id              config.UpstreamMCPID
+	cfg             *config.MCPServer
+	connectErr      error
+	pingErr         error
+	tools           []mcp.Tool
+	listToolsErr    error
+	protocolVersion string
+	hasToolsCap     bool
+	connected       bool
+}
 
-// TestMain starts an MCP server that we will run actual tests against
-func TestMain(m *testing.M) {
-	startFunc, shutdownFunc, err := server2.RunServer("http", MCPPort)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Server setup error: %v\n", err)
-		os.Exit(1)
+func (m *MockMCP) GetName() string {
+	return m.name
+}
+
+func (m *MockMCP) GetConfig() *config.MCPServer {
+	return m.cfg
+}
+
+func (m *MockMCP) ID() config.UpstreamMCPID {
+	return m.id
+}
+
+func (m *MockMCP) GetPrefix() string {
+	return m.prefix
+}
+
+func (m *MockMCP) Connect(_ context.Context) error {
+	if m.connectErr != nil {
+		return m.connectErr
 	}
+	m.connected = true
+	return nil
+}
 
-	go func() {
-		_ = startFunc()
-	}()
+func (m *MockMCP) Disconnect() error {
+	m.connected = false
+	return nil
+}
 
-	// wait for server to be ready
-	time.Sleep(100 * time.Millisecond)
-
-	code := m.Run()
-
-	err = shutdownFunc()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Server shutdown error: %v\n", err)
+func (m *MockMCP) ListTools(_ context.Context, _ mcp.ListToolsRequest) (*mcp.ListToolsResult, error) {
+	if m.listToolsErr != nil {
+		return nil, m.listToolsErr
 	}
+	return &mcp.ListToolsResult{Tools: m.tools}, nil
+}
 
-	os.Exit(code)
+func (m *MockMCP) OnNotification(_ func(notification mcp.JSONRPCNotification)) {}
+
+func (m *MockMCP) OnConnectionLost(_ func(err error)) {}
+
+func (m *MockMCP) Ping(_ context.Context) error {
+	return m.pingErr
+}
+
+func (m *MockMCP) ProtocolInfo() *mcp.InitializeResult {
+	result := &mcp.InitializeResult{
+		ProtocolVersion: m.protocolVersion,
+		Capabilities:    mcp.ServerCapabilities{},
+	}
+	if m.hasToolsCap {
+		result.Capabilities.Tools = &struct {
+			ListChanged bool `json:"listChanged,omitempty"`
+		}{}
+	}
+	return result
+}
+
+// newMockMCP creates a MockMCP with sensible defaults for testing
+func newMockMCP(name, prefix string) *MockMCP {
+	id := config.UpstreamMCPID(fmt.Sprintf("%s:%s:http://mock/mcp", name, prefix))
+	return &MockMCP{
+		name:            name,
+		prefix:          prefix,
+		id:              id,
+		cfg:             &config.MCPServer{Name: name, ToolPrefix: prefix, URL: "http://mock/mcp"},
+		protocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+		hasToolsCap:     true,
+		tools:           []mcp.Tool{{Name: "mock_tool"}},
+	}
 }
 
 func TestDiffTools(t *testing.T) {
@@ -147,101 +198,113 @@ func TestDiffTools(t *testing.T) {
 	}
 }
 
-// TestValidate is an integration test that uses a small test server defined in test main to test the validation logic
+// TestValidate uses MockMCP to test validation logic
 func TestValidate(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	ctx := context.Background()
 
-	t.Run("validates protocol version correctly with valid version", func(t *testing.T) {
-		upstream := NewUpstreamMCP(&config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-			URL:        MCPAddr,
-		})
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
+	t.Run("connection error returns appropriate message", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.connectErr = errors.New("connection refused")
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		assert.Equal(t, "test-server:test_:"+MCPAddr, status.ID)
-		assert.Equal(t, "test-server", status.Name)
-		assert.Equal(t, "test_", status.ToolPrefix)
-		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
-		assert.True(t, status.ProtocolValidation.IsValid, "protocol should be valid for latest version")
-		assert.Contains(t, status.ProtocolValidation.ExpectedVersion, mcp.LATEST_PROTOCOL_VERSION)
-
-		// cleanup
-		_ = upstream.Disconnect()
+		assert.False(t, status.ConnectionStatus.IsReachable)
+		assert.Equal(t, "connection refused", status.ConnectionStatus.Error)
+		assert.Equal(t, "unable to connect to the upstream MCP server", status.Message)
 	})
 
-	t.Run("validates capabilities with tools capability", func(t *testing.T) {
-		upstream := NewUpstreamMCP(&config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-			URL:        MCPAddr,
-		})
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
+	t.Run("ping failure after successful connect", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.pingErr = errors.New("ping timeout")
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
+		assert.False(t, status.ConnectionStatus.IsReachable)
+		assert.Equal(t, "ping timeout", status.ConnectionStatus.Error)
+		assert.Equal(t, "unable to ping the upstream MCP server", status.Message)
+	})
+
+	t.Run("invalid protocol version", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.protocolVersion = "0.0.1" // invalid version
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
+
+		status := manager.Validate(ctx)
+
+		assert.True(t, status.ConnectionStatus.IsReachable)
+		assert.False(t, status.ProtocolValidation.IsValid)
+		assert.Contains(t, status.Message, "protocol version is invalid")
+	})
+
+	t.Run("valid protocol version", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.protocolVersion = mcp.LATEST_PROTOCOL_VERSION
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
+
+		status := manager.Validate(ctx)
+
+		assert.True(t, status.ConnectionStatus.IsReachable)
+		assert.True(t, status.ProtocolValidation.IsValid)
+		assert.Empty(t, status.Message)
+	})
+
+	t.Run("server without tools capability", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.hasToolsCap = false
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
+
+		status := manager.Validate(ctx)
+
+		assert.True(t, status.ConnectionStatus.IsReachable)
+		assert.False(t, status.CapabilitiesValidation.HasToolCapabilities)
+		// CapabilitiesValidation.IsValid is always set to true at the end
+		assert.True(t, status.CapabilitiesValidation.IsValid)
+	})
+
+	t.Run("server with tools capability", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.hasToolsCap = true
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
+
+		status := manager.Validate(ctx)
+
+		assert.True(t, status.ConnectionStatus.IsReachable)
 		assert.True(t, status.CapabilitiesValidation.HasToolCapabilities)
 		assert.True(t, status.CapabilitiesValidation.IsValid)
-
-		// cleanup
-		_ = upstream.Disconnect()
 	})
 
-	t.Run("sets expected version from valid protocol versions", func(t *testing.T) {
-		upstream := NewUpstreamMCP(&config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-			URL:        MCPAddr,
-		})
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
+	t.Run("status fields populated correctly", func(t *testing.T) {
+		mock := newMockMCP("my-server", "prefix_")
+		manager := NewUpstreamMCPManager(mock, nil, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		expectedVersions := strings.Join(mcp.ValidProtocolVersions, ",")
-		assert.Equal(t, expectedVersions, status.ProtocolValidation.ExpectedVersion)
-
-		// cleanup
-		_ = upstream.Disconnect()
+		assert.Equal(t, string(mock.id), status.ID)
+		assert.Equal(t, "my-server", status.Name)
+		assert.Equal(t, "prefix_", status.ToolPrefix)
+		assert.NotZero(t, status.LastValidated)
 	})
 
-	t.Run("reports tool count from server tools", func(t *testing.T) {
-		upstream := NewUpstreamMCP(&config.MCPServer{
-			Name:       "test-server",
-			ToolPrefix: "test_",
-			URL:        MCPAddr,
-		})
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
-		// simulate having discovered tools
-		manager.serverTools = []server.ServerTool{
-			{Tool: mcp.Tool{Name: "tool1"}},
-			{Tool: mcp.Tool{Name: "tool2"}},
-			{Tool: mcp.Tool{Name: "tool3"}},
-		}
+	t.Run("isValid returns true when all conditions met", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		assert.True(t, status.ConnectionStatus.IsReachable, "server should be reachable")
-		assert.Equal(t, 3, status.CapabilitiesValidation.ToolCount)
-
-		// cleanup
-		_ = upstream.Disconnect()
+		// isValid requires: IsReachable && len(ToolConflicts)==0 && CapabilitiesValidation.IsValid
+		assert.True(t, status.isValid())
 	})
 
-	t.Run("connection error when server unreachable", func(t *testing.T) {
-		upstream := NewUpstreamMCP(&config.MCPServer{
-			Name:       "unreachable-server",
-			ToolPrefix: "test_",
-			URL:        "http://localhost:1/mcp", // invalid port
-		})
-		manager := NewUpstreamMCPManager(upstream, nil, nil, logger, 0)
+	t.Run("isValid returns false when not reachable", func(t *testing.T) {
+		mock := newMockMCP("test-server", "test_")
+		mock.connectErr = errors.New("connection failed")
+		manager := NewUpstreamMCPManager(mock, nil, logger, 0)
 
 		status := manager.Validate(ctx)
 
-		assert.False(t, status.ConnectionStatus.IsReachable, "unreachable server should not be reachable")
-		assert.NotEmpty(t, status.ConnectionStatus.Error)
+		assert.False(t, status.isValid())
 	})
 }

@@ -130,7 +130,7 @@ func (broker *mcpBrokerImpl) filterToolsByServerMap(allowedTools map[string][]st
 			broker.logger.Debug("checking access", "tool", tool.Name, "against", toolNames)
 			if slices.Contains(toolNames, tool.Name) {
 				broker.logger.Debug("access granted", "tool", tool.Name)
-				tool.Name = fmt.Sprintf("%s%s", upstream.UpstreamMCP.ToolPrefix, tool.Name)
+				tool.Name = fmt.Sprintf("%s%s", upstream.MCP.GetPrefix(), tool.Name)
 				filtered = append(filtered, tool)
 			}
 		}

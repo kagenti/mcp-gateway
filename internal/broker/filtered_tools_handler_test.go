@@ -411,7 +411,7 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 			for _, manager := range tc.MCPServers {
 				for _, tool := range manager.GetManagedTools() {
 					inputTools.Tools = append(inputTools.Tools, mcp.Tool{
-						Name: manager.UpstreamMCP.ToolPrefix + tool.Name,
+						Name: manager.MCP.GetPrefix() + tool.Name,
 					})
 				}
 			}

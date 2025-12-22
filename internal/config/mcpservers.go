@@ -92,7 +92,7 @@ type MCPServer struct {
 
 // ID returns a unique id for the a registered server
 func (mcpServer *MCPServer) ID() UpstreamMCPID {
-	return UpstreamMCPID(fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.URL))
+	return UpstreamMCPID(fmt.Sprintf("%s:%s:%s", mcpServer.Name, mcpServer.ToolPrefix, mcpServer.Hostname))
 }
 
 // ConfigChanged checks if a server's config has changed in a way that will affect the gateway.

@@ -263,6 +263,54 @@ func VerifyMCPServerReady(ctx context.Context, k8sClient client.Client, name, na
 
 }
 
+// GetMCPServerStatusMessage returns the Ready condition message for an MCPServer
+func GetMCPServerStatusMessage(ctx context.Context, k8sClient client.Client, name, namespace string) (string, error) {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get mcp server %s: %w", name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" {
+			return condition.Message, nil
+		}
+	}
+	return "", fmt.Errorf("mcpserver %s has no Ready condition", name)
+}
+
+// VerifyMCPServerNotReadyWithReason checks if MCPServer has Ready=False with message containing reason
+func VerifyMCPServerNotReadyWithReason(ctx context.Context, k8sClient client.Client, name, namespace, expectedReason string) error {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return fmt.Errorf("failed to get mcp server %s: %w", name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" {
+			if condition.Status == metav1.ConditionTrue {
+				return fmt.Errorf("mcpserver %s is Ready, expected NotReady with reason: %s", name, expectedReason)
+			}
+			if !strings.Contains(condition.Message, expectedReason) {
+				return fmt.Errorf("mcpserver %s message %q does not contain expected reason %q", name, condition.Message, expectedReason)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("mcpserver %s has no Ready condition", name)
+}
+
 // MCPServerRegistrationBuilder builds and registers MCP server resources
 type MCPServerRegistrationBuilder struct {
 	k8sClient     client.Client
@@ -278,6 +326,7 @@ func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServ
 		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
 	mcpServer := BuildTestMCPServer(httpRoute.Name, TestNamespace,
 		httpRoute.Name, httpRoute.Name).Build()
+	mcpServer.Labels["test"] = testName
 
 	return &MCPServerRegistrationBuilder{
 		k8sClient: k8sClient,
@@ -338,7 +387,11 @@ func (b *MCPServerRegistrationBuilder) WithBackendTarget(backend string, port in
 			Name: gatewayapiv1.ObjectName(backend),
 			Port: &p,
 		}
+		b.httpRoute.Spec.Hostnames = []gatewayapiv1.Hostname{gatewayapiv1.Hostname(fmt.Sprintf("%s.mcp.local", backend))}
 	}
+	// regen the mcp server
+	b.mcpServer = BuildTestMCPServer(b.httpRoute.Name, TestNamespace,
+		b.httpRoute.Name, b.httpRoute.Name).Build()
 	return b
 }
 
@@ -351,6 +404,14 @@ func (b *MCPServerRegistrationBuilder) WithCredential(secret *corev1.Secret, key
 // WithHTTPRoute overrides the default HTTPRoute
 func (b *MCPServerRegistrationBuilder) WithHTTPRoute(route *gatewayapiv1.HTTPRoute) *MCPServerRegistrationBuilder {
 	b.httpRoute = route
+	return b
+}
+
+// WithToolPrefix overrides the default tool prefix
+func (b *MCPServerRegistrationBuilder) WithToolPrefix(prefix string) *MCPServerRegistrationBuilder {
+	if b.mcpServer != nil {
+		b.mcpServer.Spec.ToolPrefix = prefix
+	}
 	return b
 }
 
