@@ -71,10 +71,11 @@ type MCPManager struct {
 	tools  []mcp.Tool
 	logger *slog.Logger
 	// toolsLock protects tools, serverTools
-	toolsLock sync.RWMutex
-	stopOnce  sync.Once     // ensures Stop() is only executed once
-	done      chan struct{} // triggers the exit of the select and routine
-	status    ServerValidationStatus
+	toolsLock         sync.RWMutex
+	stopOnce          sync.Once     // ensures Stop() is only executed once
+	done              chan struct{} // triggers the exit of the select and routine
+	status            ServerValidationStatus
+	onToolsDiscovered func(server string, tools []mcp.Tool)
 }
 
 // DefaultTickerInterval is the default interval for backend health checks
@@ -102,6 +103,11 @@ func (man *MCPManager) MCPName() string {
 	return man.MCP.GetName()
 }
 
+// RegisterOnDiscoverToolsFunc whenever tools are discovered and different from existing tool set for the server this function will be called
+func (man *MCPManager) RegisterOnDiscoverToolsFunc(handler func(server string, tools []mcp.Tool)) {
+	man.onToolsDiscovered = handler
+}
+
 // Start begins the management loop for the upstream MCP server. It connects to
 // the server, discovers tools, and periodically validates the connection. It also
 // registers notification callbacks to handle tool list changes. This method blocks
@@ -115,10 +121,10 @@ func (man *MCPManager) Start(ctx context.Context) {
 		case <-ctx.Done():
 			man.Stop()
 		case <-man.ticker.C:
-			man.logger.Debug("interval tick", "upstream mcp", man.MCPName())
+			man.logger.Debug("health check tick", "upstream mcp server", man.MCP.ID())
 			man.manage(ctx)
 		case <-man.done:
-			man.logger.Debug("shutting down manager for mcp", "server id", man.MCP.ID())
+			man.logger.Debug("shutting down manager", "upstream mcp server", man.MCP.ID())
 			return
 		}
 	}
@@ -134,15 +140,15 @@ func (man *MCPManager) Stop() {
 		}
 		man.removeTools()
 		if err := man.MCP.Disconnect(); err != nil {
-			man.logger.Error("manager stopping for", "server id", man.MCP.ID(), "error", err)
+			man.logger.Error("failed to disconnect during stop", "upstream mcp server", man.MCP.ID(), "error", err)
 		}
 		close(man.done)
-		man.logger.Debug("stopped manager for", "server id", man.MCP.ID())
+		man.logger.Debug("manager stopped", "upstream mcp server", man.MCP.ID())
 	})
 }
 
 func (man *MCPManager) registerCallbacks(ctx context.Context) func() {
-	man.logger.Debug("registering callbacks for upstream mcp")
+	man.logger.Debug("registering callbacks", "upstream mcp server", man.MCP.ID())
 	return func() {
 		man.MCP.OnNotification(func(notification mcp.JSONRPCNotification) {
 			if notification.Method == notificationToolsListChanged {
@@ -157,17 +163,17 @@ func (man *MCPManager) registerCallbacks(ctx context.Context) func() {
 
 		man.MCP.OnConnectionLost(func(err error) {
 			// just logging for visibility as will be re-connected on next tick
-			man.logger.Error("connection lost to", "server id", man.MCP.ID(), "error", err)
+			man.logger.Error("connection lost", "upstream mcp server", man.MCP.ID(), "error", err)
 		})
 	}
 }
 
 // manage should be the only entry point that triggers changes to tools
 func (man *MCPManager) manage(ctx context.Context) {
-	man.logger.Debug("manage", "upstream mcp", man.MCP.ID())
+	man.logger.Debug("managing connection", "upstream mcp server", man.MCP.ID())
 
 	// during connect the client will validate the protocol. So we don't have a separate validate requirement currently. If a client already exists it will be re-used.
-	man.logger.Debug("upstream mcp attempting to connect")
+	man.logger.Debug("attempting to connect", "upstream mcp server", man.MCP.ID())
 	if err := man.MCP.Connect(ctx, man.registerCallbacks(ctx)); err != nil {
 		err = fmt.Errorf("failed to connect to upstream mcp %s removing tools : %w", man.MCP.ID(), err)
 		man.removeTools()
@@ -179,39 +185,44 @@ func (man *MCPManager) manage(ctx context.Context) {
 	// there may be an active client so we also ping
 	if err := man.MCP.Ping(ctx); err != nil {
 		err = fmt.Errorf("upstream mcp failed to ping server %s removing tools : %w", man.MCP.ID(), err)
-		man.logger.Error("upstream mcp", "error", err)
+		man.logger.Error("ping failed", "upstream mcp server", man.MCP.ID(), "error", err)
 		man.removeTools()
 		_ = man.MCP.Disconnect()
 		man.setStatus(err)
 		return
 	}
 
-	if len(man.serverTools) > 0 && man.MCP.SupportsToolsListChanged() {
-		man.logger.Debug("upstream mcp tools already exist wait for notification to update", "total upstream registered", len(man.serverTools))
+	if man.hasTools() && man.MCP.SupportsToolsListChanged() {
+		man.logger.Debug("tools already registered, waiting for change notification", "upstream mcp server", man.MCP.ID())
 		return
 	}
 
-	man.logger.Debug("upstream mcp adding and removing tools")
+	man.logger.Debug("syncing tools", "upstream mcp server", man.MCP.ID())
 	current, newTools, err := man.getTools(ctx)
 	if err != nil {
 		err = fmt.Errorf("upstream mcp failed to list tools server %s : %w", man.MCP.ID(), err)
-		man.logger.Error("upstream mcp", "error", err)
+		man.logger.Error("failed to list tools", "upstream mcp server", man.MCP.ID(), "error", err)
 		man.setStatus(err)
 		return
 	}
 	toAdd, toRemove := man.diffTools(current, newTools)
 	if err := man.findToolConflicts(toAdd); err != nil {
 		err = fmt.Errorf("upstream mcp failed to add tools to gateway %s : %w", man.MCP.ID(), err)
-		man.logger.Error("upstream mcp", "error", err)
+		man.logger.Error("tool conflict detected", "upstream mcp server", man.MCP.ID(), "error", err)
 		man.setStatus(err)
 		return
 	}
-	man.logger.Debug("upstream mcp", "adding tools to gateway", len(toAdd), "removing old tools", len(toRemove))
+	man.logger.Debug("updating gateway tools", "upstream mcp server", man.MCP.ID(), "adding", len(toAdd), "removing", len(toRemove))
 	man.gatewayServer.DeleteTools(toRemove...)
 	man.gatewayServer.AddTools(toAdd...)
 	man.toolsLock.Lock()
 	man.tools = newTools
 	man.serverTools = toAdd
+	if man.onToolsDiscovered != nil {
+		toolsCopy := make([]mcp.Tool, len(man.tools))
+		copy(toolsCopy, man.tools)
+		go man.onToolsDiscovered(man.MCPName(), toolsCopy)
+	}
 	man.toolsLock.Unlock()
 	man.setStatus(nil)
 }
@@ -220,6 +231,12 @@ func (man *MCPManager) manage(ctx context.Context) {
 // no locking is done here as it is expected to be called multiple times
 func (man *MCPManager) GetStatus() ServerValidationStatus {
 	return man.status
+}
+
+func (man *MCPManager) hasTools() bool {
+	man.toolsLock.RLock()
+	defer man.toolsLock.RUnlock()
+	return len(man.serverTools) > 0
 }
 
 func (man *MCPManager) setStatus(err error) {
@@ -241,21 +258,22 @@ func (man *MCPManager) findToolConflicts(mcpTools []server.ServerTool) error {
 	for _, tool := range mcpTools {
 		for existingToolName, existingToolInfo := range gatewayServerTools {
 			existingTool := existingToolInfo.Tool
+			// TODO revisit as this is in the tool definition
 			existingToolID, ok := existingTool.Meta.AdditionalFields["id"]
 			if !ok {
 				// should never happen as we are adding every time
-				man.logger.Error("unable to check conflict. Tool id is missing")
+				man.logger.Error("unable to check conflict, tool id is missing", "upstream mcp server", man.MCP.ID())
 				continue
 			}
 			toolID, is := existingToolID.(string)
 			if !is {
 				// also should never happen
-				man.logger.Error("unable to check conflict. Tool id is not a string", "it", reflect.TypeOf(existingToolID))
+				man.logger.Error("unable to check conflict, tool id is not a string", "upstream mcp server", man.MCP.ID(), "type", reflect.TypeOf(existingToolID))
 				continue
 			}
 
 			if existingToolName == tool.Tool.GetName() && toolID != string(man.MCP.ID()) {
-				man.logger.Debug("conflict", "existing", existingToolName, "new", tool.Tool.GetName(), "toolID", toolID, "mcpID", string(man.MCP.ID()))
+				man.logger.Debug("tool name conflict found", "upstream mcp server", man.MCP.ID(), "existing", existingToolName, "new", tool.Tool.GetName(), "conflicting server", toolID)
 				conflictingToolNames = append(conflictingToolNames, toolID)
 			}
 
@@ -271,12 +289,12 @@ func (man *MCPManager) findToolConflicts(mcpTools []server.ServerTool) error {
 // getTools return the existing, and new tools
 func (man *MCPManager) getTools(ctx context.Context) ([]mcp.Tool, []mcp.Tool, error) {
 	man.toolsLock.RLock()
-	var tools []mcp.Tool
+	tools := make([]mcp.Tool, len(man.tools))
 	copy(tools, man.tools)
 	man.toolsLock.RUnlock()
 	res, err := man.MCP.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		return tools, nil, fmt.Errorf("failed to get tools %w", err)
+		return tools, tools, fmt.Errorf("failed to get tools: %w", err)
 	}
 	return tools, res.Tools, nil
 }
@@ -331,7 +349,7 @@ func (man *MCPManager) removeTools() {
 	man.serverTools = nil
 	man.tools = nil
 	man.gatewayServer.DeleteTools(toolsToRemove...)
-	man.logger.Debug("upstream mcp tools list change. removed all tools", "server id", man.MCP.ID(), "removed", len(toolsToRemove))
+	man.logger.Debug("removed all tools", "upstream mcp server", man.MCP.ID(), "count", len(toolsToRemove))
 }
 
 func (man *MCPManager) toolToServerTool(newTool mcp.Tool) server.ServerTool {

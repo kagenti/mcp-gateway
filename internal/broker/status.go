@@ -113,7 +113,7 @@ func (h *StatusHandler) handleGetStatus(w http.ResponseWriter, r *http.Request) 
 	h.sendJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *StatusHandler) handleSingleServerByName(ctx context.Context, w http.ResponseWriter, serverName string) {
+func (h *StatusHandler) handleSingleServerByName(_ context.Context, w http.ResponseWriter, serverName string) {
 	//TODO(craig) this should not need to call validate all servers
 	statusResponse := h.broker.ValidateAllServers()
 

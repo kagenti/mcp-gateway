@@ -37,6 +37,7 @@ func NewUpstreamMCP(config *config.MCPServer) *MCPServer {
 	return up
 }
 
+// GetConfig return the config for the backend mcp server
 func (up *MCPServer) GetConfig() *config.MCPServer {
 	// return a copy rather than the original
 	return &config.MCPServer{
