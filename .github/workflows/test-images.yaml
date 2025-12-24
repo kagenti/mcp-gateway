@@ -3,12 +3,12 @@ name: Build Test Server Images
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'tests/servers/**'
       - '.github/workflows/test-images.yaml'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'tests/servers/**'
       - '.github/workflows/test-images.yaml'
@@ -59,10 +59,10 @@ jobs:
             context: tests/servers/oidc-server
             dockerfile: Dockerfile
             image-name: test-oidc-server
-          - server: everything-server
-            context: tests/servers/everything-server
-            dockerfile: Dockerfile
-            image-name: test-everything-server
+          # - server: everything-server
+          #   context: tests/servers/everything-server
+          #   dockerfile: Dockerfile
+          #   image-name: test-everything-server
           - server: conformance-server
             context: tests/servers/conformance-server
             dockerfile: Dockerfile

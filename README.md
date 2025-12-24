@@ -56,6 +56,10 @@ This sets up:
 - Test MCP servers
 - example configurations
 
+#### Adding e2e tests
+
+If you are adding an e2e test, please consider using the claude slash command provided : [e2e command](./.claude/commands/e2e-tests.md). You can of course still add them manually if you prefer. 
+
 ## Quick start with MCP Inspector
 
 Set up a local kind cluster with the Broker, Router & Controller running.

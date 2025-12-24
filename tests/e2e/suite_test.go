@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -22,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
 	mcpv1alpha1 "github.com/kagenti/mcp-gateway/pkg/apis/mcp/v1alpha1"
 )
 
@@ -81,10 +83,18 @@ var _ = BeforeSuite(func() {
 	err = k8sClient.Get(ctx, client.ObjectKey{Name: SystemNamespace}, systemNs)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("System namespace %s must exist", SystemNamespace))
 
+	By("cleaning up all existing mcpservers")
+
+	err = k8sClient.DeleteAllOf(ctx, &v1alpha1.MCPServer{}, client.InNamespace("mcp-test"), &client.DeleteAllOfOptions{ListOptions: client.ListOptions{
+		LabelSelector: labels.Everything(),
+	}})
+	Expect(err).ToNot(HaveOccurred(), "all existing MCPSevers should be removed before the e2e test suite")
+
 	By("setting up an mcp client for the gateway")
 	Expect(err).To(BeNil())
 	mcpGatewayClient, err = NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {})
 	Expect(err).Error().NotTo(HaveOccurred())
+
 })
 
 var _ = AfterSuite(func() {
