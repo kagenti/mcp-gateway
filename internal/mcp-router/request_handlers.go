@@ -255,7 +255,7 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 		remoteMCPSeverSession = id
 	}
 	headers.WithMCPSession(remoteMCPSeverSession)
-	// reset the host name now we have identifed the correct tool and backend
+	// reset the host name now we have identified the correct tool and backend
 	headers.WithAuthority(serverInfo.Hostname)
 	// prepare request body for MCP Backend
 	body, err := mcpReq.ToBytes()

@@ -213,7 +213,7 @@ MCP servers can require authentication:
    - **Important**: Secret must have label `mcp.kagenti.com/credential=true`
    - Without this label, the MCPServer will fail validation
 2. Controller aggregates credentials into `mcp-aggregated-credentials` secret
-3. Broker receives via environment variables: `KAGENTAI_{NAME}_CRED`
+3. Broker receives via environment variables: `KAGENTI_{NAME}_CRED`
 4. Router adds Authorization header to Envoy routing instructions
 
 Example credential secret:
@@ -318,7 +318,7 @@ Successfully implemented external MCP server support (e.g., GitHub Copilot MCP) 
    - App tokens (`ghu_` prefix) don't work with GitHub Copilot MCP
 
 4. **Credential Environment Variable**
-   - Controller generates env var name: `KAGENTAI_{MCP_NAME}_CRED`
+   - Controller generates env var name: `KAGENTI_{MCP_NAME}_CRED`
    - Router reads this env var to add Authorization header
    - Broker uses same env var for tool discovery
 

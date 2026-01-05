@@ -282,6 +282,12 @@ golangci-lint:
 		"$(MAKE)" golangci-lint-bin && bin/golangci-lint run ./...; \
 	fi
 
+# To install cspell, do `npm install -g cspell@latest`.
+# TODO: Add the spell checker to `make lint`.
+.PHONY: spell
+spell:
+	cspell --quiet .
+
 .PHONY: lint
 lint: check-gofmt check-goimports check-newlines fmt vet golangci-lint ## Run all linting and style checks
 	@echo "All lint checks passed!"
