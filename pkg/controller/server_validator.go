@@ -38,7 +38,7 @@ func NewServerValidator(k8sClient client.Client) *ServerValidator {
 	}
 }
 
-// ValidateServers validates MCP servers by calling broker status endpoints
+// ValidateServers validates MCP servers by calling the broker's /status endpoints
 func (v *ServerValidator) ValidateServers(ctx context.Context) (*broker.StatusResponse, error) {
 	logger := log.FromContext(ctx)
 
