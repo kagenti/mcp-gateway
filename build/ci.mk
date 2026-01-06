@@ -38,6 +38,8 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-custom-path-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-oidc-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/everything-server -n mcp-test	
+	# Install cspell
+	npm install -g cspell@9.4.0
 
 # Collect debug info on failure
 .PHONY: ci-debug-logs
