@@ -39,6 +39,7 @@ type ServerValidationStatus struct {
 	LastValidated time.Time `json:"lastValidated"`
 	Message       string    `json:"message"`
 	Ready         bool      `json:"ready"`
+	TotalTools    int       `json:"totalTools"`
 }
 
 // MCP defines the interface for the manager to interact with an MCP server
@@ -169,7 +170,7 @@ func (man *MCPManager) registerCallbacks(ctx context.Context) func() {
 // manage should be the only entry point that triggers changes to tools
 func (man *MCPManager) manage(ctx context.Context) {
 	man.logger.Debug("managing connection", "upstream mcp server", man.MCP.ID())
-
+	var numberOfTools = 0
 	// during connect the client will validate the protocol. So we don't have a separate validate requirement currently. If a client already exists it will be re-used.
 	man.logger.Debug("attempting to connect", "upstream mcp server", man.MCP.ID())
 	if err := man.MCP.Connect(ctx, man.registerCallbacks(ctx)); err != nil {
@@ -177,7 +178,7 @@ func (man *MCPManager) manage(ctx context.Context) {
 		man.removeTools()
 		// we call disconnect here as we may have connected but failed to initialize
 		_ = man.MCP.Disconnect()
-		man.setStatus(err)
+		man.setStatus(err, numberOfTools)
 		return
 	}
 	// there may be an active client so we also ping
@@ -186,7 +187,7 @@ func (man *MCPManager) manage(ctx context.Context) {
 		man.logger.Error("ping failed", "upstream mcp server", man.MCP.ID(), "error", err)
 		man.removeTools()
 		_ = man.MCP.Disconnect()
-		man.setStatus(err)
+		man.setStatus(err, numberOfTools)
 		return
 	}
 
@@ -200,14 +201,14 @@ func (man *MCPManager) manage(ctx context.Context) {
 	if err != nil {
 		err = fmt.Errorf("upstream mcp failed to list tools server %s : %w", man.MCP.ID(), err)
 		man.logger.Error("failed to list tools", "upstream mcp server", man.MCP.ID(), "error", err)
-		man.setStatus(err)
+		man.setStatus(err, numberOfTools)
 		return
 	}
 	toAdd, toRemove := man.diffTools(current, fetched)
 	if err := man.findToolConflicts(toAdd); err != nil {
 		err = fmt.Errorf("upstream mcp failed to add tools to gateway %s : %w", man.MCP.ID(), err)
 		man.logger.Error("tool conflict detected", "upstream mcp server", man.MCP.ID(), "error", err)
-		man.setStatus(err)
+		man.setStatus(err, numberOfTools)
 		return
 	}
 	man.logger.Debug("updating gateway tools", "upstream mcp server", man.MCP.ID(), "adding", len(toAdd), "removing", len(toRemove))
@@ -215,13 +216,14 @@ func (man *MCPManager) manage(ctx context.Context) {
 	man.gatewayServer.AddTools(toAdd...)
 	man.toolsLock.Lock()
 	man.tools = fetched
+	numberOfTools = len(fetched)
 	// set a tools map for quick look up by other functions
 	for _, newTool := range fetched {
 		man.toolsMap[newTool.Name] = newTool
 	}
 	man.serverTools = toAdd
 	man.toolsLock.Unlock()
-	man.setStatus(nil)
+	man.setStatus(nil, numberOfTools)
 }
 
 // GetStatus returns the current status of the MCP Server
@@ -236,7 +238,7 @@ func (man *MCPManager) hasTools() bool {
 	return len(man.serverTools) > 0
 }
 
-func (man *MCPManager) setStatus(err error) {
+func (man *MCPManager) setStatus(err error, toolCount int) {
 	man.status.ID = string(man.MCP.ID())
 	man.status.LastValidated = time.Now()
 	man.status.Name = man.MCPName()
@@ -245,6 +247,7 @@ func (man *MCPManager) setStatus(err error) {
 		man.status.Ready = false
 		return
 	}
+	man.status.TotalTools = toolCount
 	man.status.Ready = true
 	man.status.Message = fmt.Sprintf("server added successfully. Total tools added %d", len(man.serverTools))
 }

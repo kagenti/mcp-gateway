@@ -263,6 +263,32 @@ func VerifyMCPServerReady(ctx context.Context, k8sClient client.Client, name, na
 
 }
 
+// VerifyMCPVerifyMCPServerReadyWithToolsCountServerReady checks if the MCPServer has Ready condition. Once ready it should be able to be invoked
+func VerifyMCPServerReadyWithToolsCount(ctx context.Context, k8sClient client.Client, name, namespace string, toolsCount int) error {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return fmt.Errorf("failed to verify mcp server %s ready %w", mcpServer.Name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
+			if mcpServer.Status.DiscoveredTools != toolsCount {
+				return fmt.Errorf("status tool count does not match expected %d got %d", toolsCount, mcpServer.Status.DiscoveredTools)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("mcpserver %s not ready ", mcpServer.Name)
+
+}
+
 // GetMCPServerStatusMessage returns the Ready condition message for an MCPServer
 func GetMCPServerStatusMessage(ctx context.Context, k8sClient client.Client, name, namespace string) (string, error) {
 	mcpServer := &mcpv1alpha1.MCPServer{}

@@ -131,7 +131,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 			if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
 				log.Error(configErr, "Failed to regenerate config after credential validation error")
 			}
-			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err))
+			return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, fmt.Sprintf("Credential validation failed: %v", err), 0)
 		}
 		log.V(1).Info("Credential validation success ", "credential ref", mcpServer.Spec.CredentialRef)
 	}
@@ -143,7 +143,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 		if _, configErr := r.regenerateAggregatedConfig(ctx); configErr != nil {
 			log.Error(configErr, "Failed to regenerate config after discovery error")
 		}
-		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error())
+		return reconcile.Result{}, r.updateStatus(ctx, mcpServer, false, err.Error(), 0)
 	}
 
 	validator := NewServerValidator(r.Client)
@@ -151,7 +151,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 	if err != nil {
 		log.Error(err, "Failed to validate server status via broker")
 		ready, message := false, fmt.Sprintf("Validation failed: %v", err)
-		if err := r.updateStatus(ctx, mcpServer, ready, message); err != nil {
+		if err := r.updateStatus(ctx, mcpServer, ready, message, 0); err != nil {
 			log.Error(err, "Failed to update status")
 			return reconcile.Result{}, err
 		}
@@ -166,7 +166,7 @@ func (r *MCPReconciler) reconcileMCPServer(
 		}
 	}
 
-	if err := r.updateStatus(ctx, mcpServer, serverStatus.Ready, serverStatus.Message); err != nil {
+	if err := r.updateStatus(ctx, mcpServer, serverStatus.Ready, serverStatus.Message, serverStatus.TotalTools); err != nil {
 		log.Error(err, "Failed to update status")
 		return reconcile.Result{}, err
 	}
@@ -695,6 +695,7 @@ func (r *MCPReconciler) updateStatus(
 	mcpServer *mcpv1alpha1.MCPServer,
 	ready bool,
 	message string,
+	toolCount int,
 ) error {
 	condition := metav1.Condition{
 		Type:               "Ready",
@@ -730,6 +731,10 @@ func (r *MCPReconciler) updateStatus(
 	}
 	if !found {
 		mcpServer.Status.Conditions = append(mcpServer.Status.Conditions, condition)
+		statusChanged = true
+	}
+	if mcpServer.Status.DiscoveredTools != toolCount {
+		mcpServer.Status.DiscoveredTools = toolCount
 		statusChanged = true
 	}
 
