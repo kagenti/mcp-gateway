@@ -75,7 +75,7 @@ This CRD is expected to converge with or be replaced by a 'Backend' resource tha
 ### ...Solo AgentGateway?
 
 - Introduces a new MCP-aware proxy with its own data plane and lifecycle
-- MCP routing, policy, and semantics are implemented outside native Envoy mechanisms
+- MCP routing, policy, and semantics are implemented outside native Envoy mechanisms like routing and filters.
 - Long-term evolution tied to AgentGateway and kgateway roadmaps
 
 ### ...Envoy AI Gateway?
