@@ -92,7 +92,7 @@ func (hb *HeadersBuilder) WithMCPToolName(toolName string) *HeadersBuilder {
 	return hb
 }
 
-// WithMCPServerName will set the x-mcp-serername header
+// WithMCPServerName will set the x-mcp-servername header
 func (hb *HeadersBuilder) WithMCPServerName(serverName string) *HeadersBuilder {
 	hb.headers = append(hb.headers, &basepb.HeaderValueOption{
 		Header: &basepb.HeaderValue{

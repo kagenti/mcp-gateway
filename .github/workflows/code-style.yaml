@@ -30,7 +30,9 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Run lint checks
-        run: make lint
+        run: |
+          npm install -g cspell@9.4.0
+          make lint
 
       - name: Check CRD synchronization
         run: |

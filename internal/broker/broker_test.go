@@ -89,7 +89,7 @@ func TestOnConfigChange(t *testing.T) {
 	}
 
 	vs, err := b.GetVirtualSeverByHeader("test/test")
-	require.Nil(t, err, "error shuld be nil from GetVirtualSeverByHeader")
+	require.Nil(t, err, "error should be nil from GetVirtualSeverByHeader")
 	if vs.Name != "test/test" {
 		t.Fatalf("expected virtual server to have same name")
 	}

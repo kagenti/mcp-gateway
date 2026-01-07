@@ -314,7 +314,7 @@ When redirected to the Keycloak login page, authenticate with username/password:
 
 The tool/list response shall now be filtered only to the tools the `mcp` user has access to.
 
-When calling any of the Kubernetes MCP server tools, an authentication token such as the following ones shall be the obtained and injected by the MCP gateway into the request to the MCP server. The MCP server will pass the thoken through to the Kubernetes API server for authentication:
+When calling any of the Kubernetes MCP server tools, an authentication token such as the following ones shall be the obtained and injected by the MCP gateway into the request to the MCP server. The MCP server will pass the token through to the Kubernetes API server for authentication:
 
 ```json
 {

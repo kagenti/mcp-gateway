@@ -282,8 +282,16 @@ golangci-lint:
 		"$(MAKE)" golangci-lint-bin && bin/golangci-lint run ./...; \
 	fi
 
+# To install cspell, do `npm install -g cspell@latest`.
+# If this reports "Unknown word" for valid spellings, do
+# `cspell --words-only --unique . | sort --ignore-case >> project-words.txt`
+# to add new words to the list.
+.PHONY: spell
+spell:
+	cspell --quiet .
+
 .PHONY: lint
-lint: check-gofmt check-goimports check-newlines fmt vet golangci-lint ## Run all linting and style checks
+lint: check-gofmt check-goimports check-newlines fmt vet golangci-lint spell ## Run all linting and style checks
 	@echo "All lint checks passed!"
 
 # Code style checks

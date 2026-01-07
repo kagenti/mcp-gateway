@@ -58,7 +58,7 @@ Each component should emit:
 - Structured logs with trace ID correlation
 - Error details indicating the source of 404s
 
-The trace flow will be more complex when statefulness comes into play with eliciations. This will need some thought if and how an elicitation response in a separate follow up message from the original tool call can be tied easily together.
+The trace flow will be more complex when statefulness comes into play with elicitations. This will need some thought if and how an elicitation response in a separate follow up message from the original tool call can be tied easily together.
 
 #### Journey 2: Tool Call Analytics
 
@@ -95,7 +95,7 @@ If the number of tools is thousands, a label may not be the best idea.
 - I need to understand the reasoning chain that led to a particular outcome
 - I need to debug why an answer or result wasn't as expected
 
-This is distinct from "what went wrong" (Journey 1) - here we're not looking for technical errors, but rather understanding the **logical flow and context** of tool calls made by an agent or model. This problem cannot be solved entirely within the MCP Gateway, however we should aim to enable as much as possible via standard mechanisms. To that end, this user journey may be satisifed in time by more focused journeys as observability requirements become clearer from outside the MCP Gateway. 
+This is distinct from "what went wrong" (Journey 1) - here we're not looking for technical errors, but rather understanding the **logical flow and context** of tool calls made by an agent or model. This problem cannot be solved entirely within the MCP Gateway, however we should aim to enable as much as possible via standard mechanisms. To that end, this user journey may be satisfied in time by more focused journeys as observability requirements become clearer from outside the MCP Gateway. 
 
 **Tool Call Graphs:**
 

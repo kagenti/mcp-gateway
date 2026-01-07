@@ -60,12 +60,12 @@ func (up *MCPServer) GetPrefix() string {
 	return up.ToolPrefix
 }
 
-// GetName returnss the name of the MCP Server
+// GetName returns the name of the MCP Server
 func (up *MCPServer) GetName() string {
 	return up.Name
 }
 
-// SupportsToolsListChanged validates the mcp server supports toos/list_changed notifications
+// SupportsToolsListChanged validates the mcp server supports tools/list_changed notifications
 func (up *MCPServer) SupportsToolsListChanged() bool {
 	if up.init == nil {
 		return false

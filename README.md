@@ -97,7 +97,7 @@ This will:
 - Install Keycloak
 - Set up a Keycloak realm with user/groups/client scopes, including group mappings for tool permissions
 - Configure the mcp-broker with OAuth environment variables
-- Apply AuthPolicy for token validation/exchange on the /mcp endpoint, including tool authorization via keylcoak group mappings (both via Keycloak)
+- Apply AuthPolicy for token validation/exchange on the /mcp endpoint, including tool authorization via keycloak group mappings (both via Keycloak)
 - Apply additional OAuth configurations
 
 The mcp-broker now serves OAuth discovery information at `/.well-known/oauth-protected-resource`.

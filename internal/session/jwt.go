@@ -85,7 +85,7 @@ func (m *JWTManager) Generate() string {
 	return sessID
 }
 
-// Validate validates a JWT token and fullfils SessionIdManager interface. returns IsInValid as a bool
+// Validate validates a JWT token and fulfils SessionIdManager interface. returns IsInValid as a bool
 func (m *JWTManager) Validate(tokenValue string) (bool, error) {
 	m.logger.Debug("validating JWT session")
 	token, err := jwt.ParseWithClaims(tokenValue, &Claims{}, func(t *jwt.Token) (interface{}, error) {
@@ -133,7 +133,7 @@ func (m *JWTManager) Terminate(sessionID string) (isNotAllowed bool, err error) 
 		// TODO(craig) this method will be invoked by the MCPBroker so we can probably do the cache deletion there rather than in this manager
 		ctx := context.TODO()
 		if err := m.sessionDeleter.DeleteSessions(ctx, sessionID); err != nil {
-			return false, fmt.Errorf("error clearing out assocatied sessions : %w", err)
+			return false, fmt.Errorf("error clearing out associated sessions : %w", err)
 		}
 	}
 	return false, nil
