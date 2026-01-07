@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"time"
 
@@ -134,15 +133,6 @@ func main() {
 	flag.BoolVar(&controllerMode, "controller", false, "Run in controller mode")
 	flag.BoolVar(&enforceToolFilteringFlag, "enforce-tool-filtering", false, "when enabled an x-authorized-tools header will be needed to return any tools")
 	flag.Parse()
-	fmt.Println("** startup flags passed **")
-	flag.VisitAll(func(f *flag.Flag) {
-
-		if strings.Contains(f.Name, "key") && f.DefValue != f.Value.String() {
-			fmt.Printf("%s: %s\n", f.Name, "xxxx")
-		} else {
-			fmt.Printf("%s: %s\n", f.Name, f.Value)
-		}
-	})
 
 	loggerOpts := &slog.HandlerOptions{}
 

@@ -538,7 +538,6 @@ func (r *MCPReconciler) discoverServersFromHTTPRoutes(
 		}
 	}
 	id := serverID(httpRoute, mcpServer, hostname)
-	fmt.Println("SERVER ID ************", id)
 	serverInfo := ServerInfo{
 		ID:                 id,
 		Endpoint:           endpoint,
