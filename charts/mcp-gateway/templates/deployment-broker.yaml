@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: config-volume
           secret:
-            name: mcp-gateway-config
+            secretName: mcp-gateway-config
             optional: true
       containers:
         - name: mcp-broker-router

@@ -37,7 +37,7 @@ curl -sSL https://raw.githubusercontent.com/kagenti/mcp-gateway/main/charts/samp
 ```bash
 git clone https://github.com/kagenti/mcp-gateway.git
 cd mcp-gateway
-./charts/sample_local_helm_setup.sh
+USE_LOCAL_CHART=true ./charts/sample_local_helm_setup.sh
 ```
 
 ## What the Script Does
