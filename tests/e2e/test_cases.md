@@ -28,7 +28,7 @@
 
 ### [Happy] Test MCPVirtualServer behaves as expected when defined
 
-- When a developer defines a MCPVirtualServer resource and specify the value of the `X-Mcp-Virtualserver` header as the name in the format `namespace/name` where the namespace and name come from the created MCPVirtualServer resource, they should only get the tools specified in the MCPVirtualServer resource when they do a tools/list request to the MCP Gateway host.
+- When a developer defines an MCPVirtualServer resource and specifies the value of the `X-Mcp-Virtualserver` header as the name in the format `namespace/name`, where the namespace and name come from the created MCPVirtualServer resource, they should only get the tools specified in the MCPVirtualServer resource when they do a tools/list request to the MCP Gateway host.
 
 
 ### [Happy] Test tools are filtered down based on x-authorized-tools header
