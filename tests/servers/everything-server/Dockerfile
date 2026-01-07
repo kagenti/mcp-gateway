@@ -12,7 +12,6 @@ RUN git clone --depth 1 https://github.com/modelcontextprotocol/servers.git && \
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/root/.npm npm install @modelcontextprotocol/sdk@1.19.1 # Temp fix for "everything.ts:624:72 - error TS2339: Property 'text' does not exist on type" 
 RUN --mount=type=cache,target=/root/.npm npm install && npm run build
 
 FROM node:22-alpine AS release
