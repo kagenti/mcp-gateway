@@ -71,6 +71,39 @@ ginkgo run -v --tags=e2e --focus="test description" tests/e2e/
 - Tests clean up existing resources before creating to avoid conflicts
 - Structured JSON responses provide better debugging when tests fail
 
+### Conformance Tests
+MCP conformance tests verify that the gateway correctly implements the Model Context Protocol specification. These tests are sourced from the official `@modelcontextprotocol/conformance` npm package maintained by Anthropic.
+
+**Test scenarios currently run in CI** (`.github/workflows/conformance.yaml`):
+- `server-initialize`: Server initialization handshake
+- `tools-list`: Tool listing and discovery
+- `tools-call-simple-text`: Simple text tool responses
+- `tools-call-image`: Image content in tool responses
+- `tools-call-audio`: Audio content in tool responses
+- `tools-call-embedded-resource`: Embedded resource handling
+- `tools-call-mixed-content`: Mixed content type responses
+- `tools-call-error`: Error handling and propagation
+- `tools-call-with-progress`: Progress notification support
+
+**Running conformance tests locally**:
+```bash
+make deploy-conformance-server  # Deploy test server to Kind cluster
+
+# Run specific scenario
+npx @modelcontextprotocol/conformance server \
+  --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+  --scenario server-initialize
+
+# Run all active scenarios
+npx @modelcontextprotocol/conformance server \
+  --url http://mcp.127-0-0-1.sslip.io:8001/mcp
+```
+
+**Updating CI test scenarios**:
+1. Check available scenarios: `npx @modelcontextprotocol/conformance list`
+2. Add new scenario blocks to `.github/workflows/conformance.yaml` under the "Run MCP conformance tests" step
+3. Each scenario runs as a separate `npx @modelcontextprotocol/conformance server --url ... --scenario <name>` command
+
 ### CI/CD Optimizations
 All GitHub workflows have concurrency control to cancel stale runs:
 ```yaml
