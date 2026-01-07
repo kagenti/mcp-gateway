@@ -13,7 +13,7 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 		echo "Kind cluster 'mcp-gateway' already exists"; \
 	fi
 	# Install Gateway API CRDs
-	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+	$(KUBECTL) apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
 	$(KUBECTL) wait --for condition=Established --timeout=60s crd/gateways.gateway.networking.k8s.io
 	# Build and load image
 	"$(MAKE)" docker-build
@@ -45,15 +45,18 @@ ci-debug-logs: ## Collect logs for debugging CI failures
 	-$(KUBECTL) logs -n mcp-system deployment/mcp-controller --tail=100
 	@echo "=== Broker logs ==="
 	-$(KUBECTL) logs -n mcp-system deployment/mcp-broker-router --tail=100
-	@echo "=== Test server logs ==="
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server1 --tail=50
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server2 --tail=50
-	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server3 --tail=50
 	@echo "=== MCPServers ==="
 	-$(KUBECTL) get mcpservers -A
 	@echo "=== HTTPRoutes ==="
 	-$(KUBECTL) get httproutes -A
-	@echo "=== ConfigMap ==="
-	-$(KUBECTL) get configmap -n mcp-system mcp-gateway-config -o yaml
+	@echo "=== Secret ==="
+	-$(KUBECTL) get secret -n mcp-system mcp-gateway-config -o jsonpath='{.data.config\.yaml}' | base64 --decode
 	@echo "=== Pods ==="
 	-$(KUBECTL) get pods -A
+
+.PHONY: ci-debug-test-servers-logs
+ci-debug-test-servers-logs: ## Collect test servers logs for debugging CI failures
+	@echo "=== Test server logs ==="
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server1 --tail=50
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server2 --tail=50
+	-$(KUBECTL) logs -n mcp-test deployment/mcp-test-server3 --tail=50

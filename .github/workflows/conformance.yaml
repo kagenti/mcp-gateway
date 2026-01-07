@@ -1,0 +1,108 @@
+name: MCP Conformance Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Create Kind cluster
+        run: |
+          kind create cluster --name mcp-gateway --config - <<EOF
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+            kubeadmConfigPatches:
+              - |
+                apiVersion: kubelet.config.k8s.io/v1beta1
+                kind: KubeletConfiguration
+                syncFrequency: "10s"
+            extraPortMappings:
+            - containerPort: 30080
+              hostPort: 8001
+              protocol: TCP
+            - containerPort: 8443
+              hostPort: 8443
+              protocol: TCP
+          EOF
+
+      - name: Setup CI environment
+        run: make ci-setup
+
+      - name: Deploy conformance server
+        run: make deploy-conformance-server
+
+      - name: Wait for conformance server to get ready
+        run: sleep 10
+
+      - name: Run MCP conformance tests
+        run: |
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario server-initialize
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-list
+
+          sleep 10
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-simple-text
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-image
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-audio
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-embedded-resource
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-mixed-content
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-error
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario tools-call-with-progress
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          make ci-debug-logs
+          echo "=== Conformance server logs ==="
+          kubectl logs -n mcp-test deployment/conformance-server --tail=50
