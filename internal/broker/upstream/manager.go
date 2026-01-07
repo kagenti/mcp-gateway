@@ -69,7 +69,8 @@ type MCPManager struct {
 	// serverTools contains the managed MCP's tools with prefixed names. It is these that are externally available via the gateway
 	serverTools []server.ServerTool
 	// tools is the original set from MCP server with no prefix
-	tools    []mcp.Tool
+	tools []mcp.Tool
+	// toolsMap is a map of from tool name to tool for quick look up
 	toolsMap map[string]mcp.Tool
 	// toolsLock protects tools, serverTools
 	toolsLock sync.RWMutex
@@ -329,6 +330,10 @@ func (man *MCPManager) SetToolsForTesting(tools []mcp.Tool) {
 	man.toolsLock.Lock()
 	defer man.toolsLock.Unlock()
 	man.tools = tools
+	// set a tools map for quick look up by other functions
+	for _, newTool := range tools {
+		man.toolsMap[newTool.Name] = newTool
+	}
 }
 
 // SetStatusForTesting sets the status directly for testing purposes.

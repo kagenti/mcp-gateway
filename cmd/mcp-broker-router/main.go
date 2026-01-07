@@ -1,4 +1,4 @@
-// main implements the CLI for the MCP broker.
+// main implements the CLI for the MCP broker/router, AND the controller.
 package main
 
 import (
