@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kagenti/mcp-gateway/internal/broker/upstream"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,22 @@ func TestStatusHandlerNotGet(t *testing.T) {
 	require.Equal(t, 405, res.StatusCode)
 }
 
+func createTestManagerForStatus(t *testing.T, serverName string, tools []mcp.Tool) *upstream.MCPManager {
+	t.Helper()
+	mcpServer := upstream.NewUpstreamMCP(&config.MCPServer{
+		Name:       serverName,
+		ToolPrefix: "test_",
+		URL:        "http://test.local/mcp",
+	})
+	manager := upstream.NewUpstreamMCPManager(mcpServer, nil, slog.Default(), 0)
+	manager.SetToolsForTesting(tools)
+	manager.SetStatusForTesting(upstream.ServerValidationStatus{
+		Name:  serverName,
+		Ready: false,
+	})
+	return manager
+}
+
 func TestStatusHandlerGetSingleServer(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	mcpBroker := NewBroker(logger)
@@ -39,19 +56,10 @@ func TestStatusHandlerGetSingleServer(t *testing.T) {
 	// Add a server
 	brokerImpl, ok := mcpBroker.(*mcpBrokerImpl)
 	require.True(t, ok)
-	brokerImpl.mcpServers["dummyServer"] = &upstreamMCP{
-		MCPServer: config.MCPServer{Name: "dummyServer"},
-		initializeResult: &mcp.InitializeResult{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-		},
-		toolsResult: &mcp.ListToolsResult{
-			Tools: []mcp.Tool{
-				{
-					Name: "dummyTool",
-				},
-			},
-		},
-	}
+	brokerImpl.mcpServers["dummyServer:test_:http://test.local/mcp"] = createTestManagerForStatus(t,
+		"dummyServer",
+		[]mcp.Tool{{Name: "dummyTool"}},
+	)
 
 	w = httptest.NewRecorder()
 	sh.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/status/dummyServer", nil))
@@ -67,19 +75,10 @@ func TestStatusHandlerGetAll(t *testing.T) {
 	// Add a server
 	brokerImpl, ok := mcpBroker.(*mcpBrokerImpl)
 	require.True(t, ok)
-	brokerImpl.mcpServers["dummyServer"] = &upstreamMCP{
-		MCPServer: config.MCPServer{Name: "dummyServer"},
-		initializeResult: &mcp.InitializeResult{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-		},
-		toolsResult: &mcp.ListToolsResult{
-			Tools: []mcp.Tool{
-				{
-					Name: "dummyTool",
-				},
-			},
-		},
-	}
+	brokerImpl.mcpServers["dummyServer:test_:http://test.local/mcp"] = createTestManagerForStatus(t,
+		"dummyServer",
+		[]mcp.Tool{{Name: "dummyTool"}},
+	)
 
 	w := httptest.NewRecorder()
 	sh.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/status", nil))

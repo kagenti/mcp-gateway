@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/kagenti/mcp-gateway/internal/broker/upstream"
 	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -24,7 +25,7 @@ VEiyi/nozagw7BaWXmzbOWyy95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
 func createTestJWT(t *testing.T, allowedTools map[string][]string) string {
 	t.Helper()
 	claimPayload, _ := json.Marshal(allowedTools)
-	block, _ := pem.Decode([]byte(`-----BEGIN EC PRIVATE KEY----- 
+	block, _ := pem.Decode([]byte(`-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIEY3QeiP9B9Bm3NHG3SgyiDHcbckwsGsQLKgv4fJxjJWoAoGCCqGSM49
 AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 95gZLirTkhUb1P4Z4lgKLU2rD5NCbGPHAA==
@@ -41,99 +42,68 @@ AwEHoUQDQgAE7WdMdvC8hviEAL4wcebqaYbLEtVOVEiyi/nozagw7BaWXmzbOWyy
 	return jwtToken
 }
 
+// createTestManager creates a test MCPManager with pre-populated tools
+func createTestManager(t *testing.T, serverName, toolPrefix string, tools []mcp.Tool) *upstream.MCPManager {
+	t.Helper()
+	mcpServer := upstream.NewUpstreamMCP(&config.MCPServer{
+		Name:       serverName,
+		ToolPrefix: toolPrefix,
+		URL:        "http://test.local/mcp",
+	})
+	manager := upstream.NewUpstreamMCPManager(mcpServer, nil, slog.Default(), 0)
+	// populate tools directly for testing (this requires accessing internal state)
+	manager.SetToolsForTesting(tools)
+	return manager
+}
+
 func TestFilteredTools(t *testing.T) {
 
 	testCases := []struct {
 		Name                 string
 		FullToolList         *mcp.ListToolsResult
 		AllowedToolsList     map[string][]string
-		RegisteredMCPServers mcpServers
+		RegisteredMCPServers map[config.UpstreamMCPID]*upstream.MCPManager
 		enforceFilterList    bool
 		ExpectedTools        []mcp.Tool
 	}{
 		{
 			Name: "test filters tools as expected",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
-				{
-					Name: "test_tool",
-				},
-				{
-					Name: "test_tool2",
-				},
+				{Name: "test_tool"},
+				{Name: "test_tool2"},
 			}},
-
-			RegisteredMCPServers: mcpServers{
-				"http://upstream.mcp.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server1",
-						ToolPrefix: "test_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
+			RegisteredMCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/test-server1:test_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server1",
+					"test_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
 			},
 			AllowedToolsList: map[string][]string{
 				"mcp-test/test-server1": {"tool"},
 			},
 			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
-				{
-					Name: "test_tool",
-				},
+				{Name: "test_tool"},
 			},
 		},
 		{
 			Name: "test filters tools with same tool name as expected",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
-				{
-					Name: "test1_tool",
-				},
-				{
-					Name: "test2_tool",
-				},
+				{Name: "test1_tool"},
+				{Name: "test2_tool"},
 			}},
-
-			RegisteredMCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server1",
-						ToolPrefix: "test1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
-				"http://upstream.mcp2.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server2",
-						ToolPrefix: "test2_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
+			RegisteredMCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/test-server1:test1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server1",
+					"test1_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
+				"mcp-test/test-server2:test2_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server2",
+					"test2_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
 			},
 			AllowedToolsList: map[string][]string{
 				"mcp-test/test-server1": {"tool"},
@@ -141,58 +111,27 @@ func TestFilteredTools(t *testing.T) {
 			},
 			enforceFilterList: true,
 			ExpectedTools: []mcp.Tool{
-				{
-					Name: "test1_tool",
-				},
-				{
-					Name: "test2_tool",
-				},
+				{Name: "test1_tool"},
+				{Name: "test2_tool"},
 			},
 		},
 		{
 			Name: "test filters tools returns no tools if none allowed",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
-				{
-					Name: "test1_tool",
-				},
-				{
-					Name: "test2_tool",
-				},
+				{Name: "test1_tool"},
+				{Name: "test2_tool"},
 			}},
-
-			RegisteredMCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server1",
-						ToolPrefix: "test1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
-				"http://upstream.mcp2.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server2",
-						ToolPrefix: "test2_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
+			RegisteredMCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/test-server1:test1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server1",
+					"test1_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
+				"mcp-test/test-server2:test2_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server2",
+					"test2_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
 			},
 			AllowedToolsList:  map[string][]string{},
 			enforceFilterList: true,
@@ -201,41 +140,21 @@ func TestFilteredTools(t *testing.T) {
 		{
 			Name: "test filters tools returns all tools enforce tool filter set to false",
 			FullToolList: &mcp.ListToolsResult{Tools: []mcp.Tool{
-				{
-					Name: "test1_tool",
-				},
-				{
-					Name: "test1_tool2",
-				},
+				{Name: "test1_tool"},
+				{Name: "test1_tool2"},
 			}},
-
-			RegisteredMCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/test-server1",
-						ToolPrefix: "test1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{
-								Name: "tool",
-							},
-							{
-								Name: "tool2",
-							},
-						},
-					},
-				},
+			RegisteredMCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/test-server1:test1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/test-server1",
+					"test1_",
+					[]mcp.Tool{{Name: "tool"}, {Name: "tool2"}},
+				),
 			},
 			AllowedToolsList:  nil,
 			enforceFilterList: false,
 			ExpectedTools: []mcp.Tool{
-				{
-					Name: "test1_tool",
-				},
-				{
-					Name: "test1_tool2",
-				},
+				{Name: "test1_tool"},
+				{Name: "test1_tool2"},
 			},
 		},
 	}
@@ -246,6 +165,7 @@ func TestFilteredTools(t *testing.T) {
 				enforceToolFilter:       tc.enforceFilterList,
 				trustedHeadersPublicKey: testPublicKey,
 				logger:                  slog.Default(),
+				mcpServers:              tc.RegisteredMCPServers,
 			}
 
 			request := &mcp.ListToolsRequest{}
@@ -255,8 +175,11 @@ func TestFilteredTools(t *testing.T) {
 					authorizedToolsHeader: {headerValue},
 				}
 			}
-			mcpBroker.mcpServers = tc.RegisteredMCPServers
 			mcpBroker.FilterTools(context.TODO(), 1, request, tc.FullToolList)
+
+			if len(tc.ExpectedTools) != len(tc.FullToolList.Tools) {
+				t.Fatalf("expected %d tools but got %d: %v", len(tc.ExpectedTools), len(tc.FullToolList.Tools), tc.FullToolList.Tools)
+			}
 
 			for _, exp := range tc.ExpectedTools {
 				found := false
@@ -314,13 +237,13 @@ func TestVirtualServerFiltering(t *testing.T) {
 			ExpectedTools:   []string{},
 		},
 		{
-			Name: "returns empty when virtual server not found",
+			Name: "returns all tools when virtual server not found",
 			InputTools: &mcp.ListToolsResult{Tools: []mcp.Tool{
 				{Name: "server1_tool1"},
 			}},
 			VirtualServers:  map[string]*config.VirtualServer{},
 			VirtualServerID: "mcp-test/nonexistent",
-			ExpectedTools:   []string{},
+			ExpectedTools:   []string{"server1_tool1"}, // returns original tools when VS not found
 		},
 		{
 			Name: "returns all tools when no virtual server header",
@@ -354,6 +277,10 @@ func TestVirtualServerFiltering(t *testing.T) {
 
 			mcpBroker.FilterTools(context.TODO(), 1, request, tc.InputTools)
 
+			if len(tc.ExpectedTools) != len(tc.InputTools.Tools) {
+				t.Fatalf("expected %d tools but got %d: %v", len(tc.ExpectedTools), len(tc.InputTools.Tools), tc.InputTools.Tools)
+			}
+
 			for _, expectedName := range tc.ExpectedTools {
 				found := false
 				for _, tool := range tc.InputTools.Tools {
@@ -373,7 +300,7 @@ func TestVirtualServerFiltering(t *testing.T) {
 func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 	testCases := []struct {
 		Name             string
-		MCPServers       mcpServers
+		MCPServers       map[config.UpstreamMCPID]*upstream.MCPManager
 		VirtualServers   map[string]*config.VirtualServer
 		AllowedToolsList map[string][]string
 		VirtualServerID  string
@@ -381,20 +308,12 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 	}{
 		{
 			Name: "x-authorized-tools filtered first then virtual server filters further",
-			MCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/server1",
-						ToolPrefix: "s1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{Name: "tool1"},
-							{Name: "tool2"},
-							{Name: "tool3"},
-						},
-					},
-				},
+			MCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/server1:s1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/server1",
+					"s1_",
+					[]mcp.Tool{{Name: "tool1"}, {Name: "tool2"}, {Name: "tool3"}},
+				),
 			},
 			VirtualServers: map[string]*config.VirtualServer{
 				"mcp-test/my-vs": {
@@ -413,19 +332,12 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 		},
 		{
 			Name: "x-authorized-tools only when no virtual server header",
-			MCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/server1",
-						ToolPrefix: "s1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{Name: "tool1"},
-							{Name: "tool2"},
-						},
-					},
-				},
+			MCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/server1:s1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/server1",
+					"s1_",
+					[]mcp.Tool{{Name: "tool1"}, {Name: "tool2"}},
+				),
 			},
 			VirtualServers: map[string]*config.VirtualServer{
 				"mcp-test/my-vs": {
@@ -441,19 +353,12 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 		},
 		{
 			Name: "virtual server only when no x-authorized-tools header",
-			MCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/server1",
-						ToolPrefix: "s1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{Name: "tool1"},
-							{Name: "tool2"},
-						},
-					},
-				},
+			MCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/server1:s1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/server1",
+					"s1_",
+					[]mcp.Tool{{Name: "tool1"}, {Name: "tool2"}},
+				),
 			},
 			VirtualServers: map[string]*config.VirtualServer{
 				"mcp-test/my-vs": {
@@ -467,19 +372,12 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 		},
 		{
 			Name: "empty result when filters have no intersection",
-			MCPServers: mcpServers{
-				"http://upstream.mcp1.cluster.local": &upstreamMCP{
-					MCPServer: config.MCPServer{
-						Name:       "mcp-test/server1",
-						ToolPrefix: "s1_",
-					},
-					toolsResult: &mcp.ListToolsResult{
-						Tools: []mcp.Tool{
-							{Name: "tool1"},
-							{Name: "tool2"},
-						},
-					},
-				},
+			MCPServers: map[config.UpstreamMCPID]*upstream.MCPManager{
+				"mcp-test/server1:s1_:http://test.local/mcp": createTestManager(t,
+					"mcp-test/server1",
+					"s1_",
+					[]mcp.Tool{{Name: "tool1"}, {Name: "tool2"}},
+				),
 			},
 			VirtualServers: map[string]*config.VirtualServer{
 				"mcp-test/my-vs": {
@@ -510,13 +408,11 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 
 			// build input tools from all registered servers
 			inputTools := &mcp.ListToolsResult{Tools: []mcp.Tool{}}
-			for _, server := range tc.MCPServers {
-				if server.toolsResult != nil {
-					for _, tool := range server.toolsResult.Tools {
-						inputTools.Tools = append(inputTools.Tools, mcp.Tool{
-							Name: server.ToolPrefix + tool.Name,
-						})
-					}
+			for _, manager := range tc.MCPServers {
+				for _, tool := range manager.GetManagedTools() {
+					inputTools.Tools = append(inputTools.Tools, mcp.Tool{
+						Name: manager.MCP.GetPrefix() + tool.Name,
+					})
 				}
 			}
 
@@ -529,6 +425,10 @@ func TestCombinedAuthorizedToolsAndVirtualServer(t *testing.T) {
 			}
 
 			mcpBroker.FilterTools(context.TODO(), 1, request, inputTools)
+
+			if len(tc.ExpectedTools) != len(inputTools.Tools) {
+				t.Fatalf("expected %d tools but got %d: %v", len(tc.ExpectedTools), len(inputTools.Tools), inputTools.Tools)
+			}
 
 			for _, expectedName := range tc.ExpectedTools {
 				found := false

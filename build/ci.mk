@@ -37,6 +37,7 @@ ci-setup: kind tools ## Setup environment for CI (creates Kind cluster if needed
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-api-key-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-custom-path-server -n mcp-test
 	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/mcp-oidc-server -n mcp-test
+	$(KUBECTL) wait --for=condition=available --timeout=180s deployment/everything-server -n mcp-test	
 
 # Collect debug info on failure
 .PHONY: ci-debug-logs

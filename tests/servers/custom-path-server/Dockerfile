@@ -1,14 +1,14 @@
-FROM golang:1.23-alpine AS builder
-RUN apk --no-cache add git
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 COPY go.mod go.sum* ./
 RUN go mod download
-COPY . .
-RUN go build -o custom-path-server .
+
+# Copy the rest of the application source code
+COPY *.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o custom-path-server .
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 COPY --from=builder /app/custom-path-server .
 ENTRYPOINT ["./custom-path-server", "-http", ":8080"]

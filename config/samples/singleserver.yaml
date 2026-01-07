@@ -1,0 +1,15 @@
+apiVersion: mcp.kagenti.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server1
+  namespace: mcp-test
+  labels:
+    'kagenti/mcp': 'true'
+spec:
+  # Tool prefix applied to all servers in this MCPServer
+  toolPrefix: test_
+  targetRef:
+    # Server 1 - Go SDK based (hi, time, slow, headers tools)
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-server1-route

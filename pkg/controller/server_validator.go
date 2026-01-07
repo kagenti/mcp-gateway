@@ -78,7 +78,7 @@ func (v *ServerValidator) ValidateServers(ctx context.Context) (*broker.StatusRe
 			logger.Error(err, "Failed to get status from endpoint", "url", addr)
 			continue
 		}
-		logger.V(1).Info("Successfully got status from endpoint", "url", addr)
+		logger.V(1).Info("Successfully got status from endpoint", "status", status)
 		return status, nil
 	}
 

@@ -85,6 +85,46 @@ type slowArgs struct {
 	Seconds int `json:"seconds" jsonschema:"number of seconds to wait"`
 }
 
+type addToolArgs struct {
+	Name        string `json:"name" jsonschema:"the name of the new tool to add"`
+	Description string `json:"description" jsonschema:"the description of the new tool"`
+}
+
+type dynamicToolManager struct {
+	server *mcp.Server
+}
+
+// addTool dynamically adds a new tool to the server and triggers notifications/tools/list_changed
+func (m *dynamicToolManager) addTool(
+	_ context.Context,
+	_ *mcp.ServerSession,
+	params *mcp.CallToolParamsFor[addToolArgs],
+) (*mcp.CallToolResultFor[struct{}], error) {
+	name := params.Arguments.Name
+	desc := params.Arguments.Description
+	if desc == "" {
+		desc = "dynamically added tool"
+	}
+
+	mcp.AddTool(m.server, &mcp.Tool{Name: name, Description: desc}, func(
+		_ context.Context,
+		_ *mcp.ServerSession,
+		_ *mcp.CallToolParamsFor[struct{}],
+	) (*mcp.CallToolResultFor[struct{}], error) {
+		return &mcp.CallToolResultFor[struct{}]{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "I am the dynamically added tool: " + name},
+			},
+		}, nil
+	})
+
+	return &mcp.CallToolResultFor[struct{}]{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("Added new tool: %s", name)},
+		},
+	}, nil
+}
+
 // A long-running tool that waits N seconds, notifying the client of progress
 func slowTool(
 	ctx context.Context,
@@ -153,9 +193,12 @@ func main() {
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test mcp server 1"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "greet", Description: "say hi"}, sayHi)
-	mcp.AddTool(server, &mcp.Tool{Name: "time", Description: "get current time"}, timeTool)
+	mcp.AddTool(server, &mcp.Tool{Name: "time", Description: "get current time", Annotations: &mcp.ToolAnnotations{Title: "time"}}, timeTool)
 	mcp.AddTool(server, &mcp.Tool{Name: "slow", Description: "delay N seconds"}, slowTool)
 	mcp.AddTool(server, &mcp.Tool{Name: "headers", Description: "get headers"}, headersTool)
+
+	toolManager := &dynamicToolManager{server: server}
+	mcp.AddTool(server, &mcp.Tool{Name: "add_tool", Description: "dynamically add a new tool (triggers notifications/tools/list_changed)", Annotations: &mcp.ToolAnnotations{Title: "add"}}, toolManager.addTool)
 
 	server.AddPrompt(&mcp.Prompt{Name: "greet"}, promptHi)
 

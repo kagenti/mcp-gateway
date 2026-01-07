@@ -73,7 +73,7 @@ func createServerWithWrongProtocol() {
 					"jsonrpc": "2.0",
 					"id": 1,
 					"result": {
-						"protocolVersion": "2024-11-05",
+						"protocolVersion": "2021-11-05",
 						"capabilities": {
 							"tools": {}
 						},

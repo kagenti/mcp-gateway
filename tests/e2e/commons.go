@@ -263,6 +263,80 @@ func VerifyMCPServerReady(ctx context.Context, k8sClient client.Client, name, na
 
 }
 
+// VerifyMCPVerifyMCPServerReadyWithToolsCountServerReady checks if the MCPServer has Ready condition. Once ready it should be able to be invoked
+func VerifyMCPServerReadyWithToolsCount(ctx context.Context, k8sClient client.Client, name, namespace string, toolsCount int) error {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return fmt.Errorf("failed to verify mcp server %s ready %w", mcpServer.Name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
+			if mcpServer.Status.DiscoveredTools != toolsCount {
+				return fmt.Errorf("status tool count does not match expected %d got %d", toolsCount, mcpServer.Status.DiscoveredTools)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("mcpserver %s not ready ", mcpServer.Name)
+
+}
+
+// GetMCPServerStatusMessage returns the Ready condition message for an MCPServer
+func GetMCPServerStatusMessage(ctx context.Context, k8sClient client.Client, name, namespace string) (string, error) {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get mcp server %s: %w", name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" {
+			return condition.Message, nil
+		}
+	}
+	return "", fmt.Errorf("mcpserver %s has no Ready condition", name)
+}
+
+// VerifyMCPServerNotReadyWithReason checks if MCPServer has Ready=False with message containing reason
+func VerifyMCPServerNotReadyWithReason(ctx context.Context, k8sClient client.Client, name, namespace, expectedReason string) error {
+	mcpServer := &mcpv1alpha1.MCPServer{}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, mcpServer)
+
+	if err != nil {
+		return fmt.Errorf("failed to get mcp server %s: %w", name, err)
+	}
+
+	for _, condition := range mcpServer.Status.Conditions {
+		if condition.Type == "Ready" {
+			if condition.Status == metav1.ConditionTrue {
+				return fmt.Errorf("mcpserver %s is Ready, expected NotReady with reason: %s", name, expectedReason)
+			}
+			if !strings.Contains(condition.Message, expectedReason) {
+				return fmt.Errorf("mcpserver %s message %q does not contain expected reason %q", name, condition.Message, expectedReason)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("mcpserver %s has no Ready condition", name)
+}
+
 // MCPServerRegistrationBuilder builds and registers MCP server resources
 type MCPServerRegistrationBuilder struct {
 	k8sClient     client.Client
@@ -278,6 +352,7 @@ func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServ
 		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
 	mcpServer := BuildTestMCPServer(httpRoute.Name, TestNamespace,
 		httpRoute.Name, httpRoute.Name).Build()
+	mcpServer.Labels["test"] = testName
 
 	return &MCPServerRegistrationBuilder{
 		k8sClient: k8sClient,
@@ -338,7 +413,11 @@ func (b *MCPServerRegistrationBuilder) WithBackendTarget(backend string, port in
 			Name: gatewayapiv1.ObjectName(backend),
 			Port: &p,
 		}
+		b.httpRoute.Spec.Hostnames = []gatewayapiv1.Hostname{gatewayapiv1.Hostname(fmt.Sprintf("%s.mcp.local", backend))}
 	}
+	// regen the mcp server
+	b.mcpServer = BuildTestMCPServer(b.httpRoute.Name, TestNamespace,
+		b.httpRoute.Name, b.httpRoute.Name).Build()
 	return b
 }
 
@@ -351,6 +430,14 @@ func (b *MCPServerRegistrationBuilder) WithCredential(secret *corev1.Secret, key
 // WithHTTPRoute overrides the default HTTPRoute
 func (b *MCPServerRegistrationBuilder) WithHTTPRoute(route *gatewayapiv1.HTTPRoute) *MCPServerRegistrationBuilder {
 	b.httpRoute = route
+	return b
+}
+
+// WithToolPrefix overrides the default tool prefix
+func (b *MCPServerRegistrationBuilder) WithToolPrefix(prefix string) *MCPServerRegistrationBuilder {
+	if b.mcpServer != nil {
+		b.mcpServer.Spec.ToolPrefix = prefix
+	}
 	return b
 }
 
@@ -543,7 +630,7 @@ func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, hea
 	if err != nil {
 		return nil, err
 	}
-	res, err := gatewayClient.Initialize(ctx, mcp.InitializeRequest{
+	_, err = gatewayClient.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			Capabilities:    mcp.ClientCapabilities{},
@@ -556,6 +643,62 @@ func NewMCPGatewayClientWithHeaders(ctx context.Context, gatewayHost string, hea
 	if err != nil {
 		return nil, err
 	}
-	GinkgoWriter.Println("init response ", res.ServerInfo)
 	return gatewayClient, nil
+}
+
+// verifyMCPServerToolsPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
+func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsResult) bool {
+	if toolsList == nil {
+		return false
+	}
+	for _, t := range toolsList.Tools {
+		if strings.HasPrefix(t.Name, serverPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// ScaleDeployment scales a deployment to the specified replicas
+func ScaleDeployment(namespace, name string, replicas int) error {
+	cmd := exec.Command("kubectl", "scale", "deployment", name,
+		"-n", namespace, fmt.Sprintf("--replicas=%d", replicas))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to scale deployment %s: %s: %w", name, string(output), err)
+	}
+	return nil
+}
+
+// WaitForDeploymentReady waits for a deployment to have the expected number of ready replicas
+func WaitForDeploymentReady(namespace, name string, expectedReplicas int) error {
+	cmd := exec.Command("kubectl", "rollout", "status", "deployment", name,
+		"-n", namespace, "--timeout=60s")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("deployment %s not ready: %s: %w", name, string(output), err)
+	}
+	return nil
+}
+
+// WaitForDeploymentScaledDown waits for a deployment to have 0 available replicas
+func WaitForDeploymentScaledDown(namespace, name string) error {
+	cmd := exec.Command("kubectl", "wait", "deployment", name,
+		"-n", namespace, "--for=jsonpath={.status.availableReplicas}=0", "--timeout=60s")
+	// kubectl wait doesn't work well with 0 replicas, use rollout status instead
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// fallback: check replicas directly
+		checkCmd := exec.Command("kubectl", "get", "deployment", name,
+			"-n", namespace, "-o", "jsonpath={.status.availableReplicas}")
+		checkOutput, checkErr := checkCmd.CombinedOutput()
+		if checkErr != nil {
+			return fmt.Errorf("failed to check deployment %s: %s: %w", name, string(output), err)
+		}
+		if strings.TrimSpace(string(checkOutput)) == "" || strings.TrimSpace(string(checkOutput)) == "0" {
+			return nil
+		}
+		return fmt.Errorf("deployment %s still has replicas: %s", name, string(checkOutput))
+	}
+	return nil
 }

@@ -16,9 +16,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /mcp-test-server
 # Runtime stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
-
 WORKDIR /root/
 
 # Copy the binary from builder stage
