@@ -213,7 +213,7 @@ deploy-conformance-server: kind-load-conformance-server ## Deploy conformance MC
 	@echo "Conformance server ready, deploying MCPServer resource..."
 	kubectl apply -f config/samples/mcpserver-conformance-server.yaml
 	@echo "Waiting for MCPServer to be Ready..."
-	@kubectl wait --for=condition=Ready mcpserver/conformance-server -n mcp-test --timeout=60s
+	@kubectl wait --for=condition=Ready mcpserver/conformance-server -n mcp-test --timeout=120s
 
 # Build and push container image
 docker-build: ## Build container image locally
