@@ -19,7 +19,7 @@ var gatewayURL = "http://localhost:8001/mcp"
 var sharedMCPTestServer1 = "mcp-test-server1"
 var sharedMCPTestServer2 = "mcp-test-server2"
 
-// this should only be used by one test as the tests run in parrallel.
+// this should only be used by one test as the tests run in parallel.
 var scaledMCPTestServer = "mcp-test-server3"
 
 var _ = Describe("MCP Gateway Registration Happy Path", func() {
@@ -148,13 +148,13 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(content.Text).To(Equal("Hello, e2e!"))
 	})
 
-	It("should register mcp server with credetential with the gateway and make the tools available", func() {
+	It("should register mcp server with credential with the gateway and make the tools available", func() {
 		cred := BuildCredentialSecret("mcp-credential", "test-api-key-secret-toke")
 		registration := NewMCPServerRegistration("credentials", k8sClient).
 			WithCredential(cred, "token").WithBackendTarget("mcp-api-key-server", 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
-		By("ensuring broker has failed authentication and the mcp server is not registered and the tools dont exist")
+		By("ensuring broker has failed authentication and the mcp server is not registered and the tools don't exist")
 		Eventually(func(g Gomega) {
 			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer.Name, registeredServer.Namespace)).Error().To(Not(BeNil()))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
@@ -363,12 +363,12 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should send notifications/tools/list_changed to connected clients when MCPServer is registered", func() {
 		// NOTE on notifications. A notification is sent when servers are removed during clean up as this effects tools list also.
-		// as the list_changed notification is broadcast, this can mean clients in other tests receive additonal notifications
+		// as the list_changed notification is broadcast, this can mean clients in other tests receive additional notifications
 		// for that reason we only assert we received at least one rather than a set number
 		By("Creating clients with notification handlers and different sessions")
 		client1Notification := false
 		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
-			GinkgoWriter.Println("client 1 recieved notifcation registration", j.Method)
+			GinkgoWriter.Println("client 1 received notification registration", j.Method)
 			client1Notification = true
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -376,7 +376,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 		client2Notification := false
 		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
-			GinkgoWriter.Println("client 2 recieved notifcation registration", j.Method)
+			GinkgoWriter.Println("client 2 received notification registration", j.Method)
 			client2Notification = true
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -439,7 +439,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		client1Notification := false
 		client1, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
 			if j.Method == "notifications/tools/list_changed" {
-				GinkgoWriter.Println("client 1 recieved notifcation", j.Method)
+				GinkgoWriter.Println("client 1 received notification", j.Method)
 				client1Notification = true
 			}
 		})
@@ -448,7 +448,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 		client2Notification := false
 		client2, err := NewMCPGatewayClientWithNotifications(ctx, gatewayURL, func(j mcp.JSONRPCNotification) {
-			GinkgoWriter.Println("client 2 recieved notifcation", j.Method)
+			GinkgoWriter.Println("client 2 received notification", j.Method)
 			if j.Method == "notifications/tools/list_changed" {
 				client2Notification = true
 			}
