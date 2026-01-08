@@ -74,6 +74,10 @@ jobs:
 
           npx @modelcontextprotocol/conformance server \
             --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
+            --scenario ping
+
+          npx @modelcontextprotocol/conformance server \
+            --url http://mcp.127-0-0-1.sslip.io:8001/mcp \
             --scenario tools-call-simple-text
 
           npx @modelcontextprotocol/conformance server \
