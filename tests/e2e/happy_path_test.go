@@ -709,4 +709,63 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 	})
 
+	It("should allow multiple MCP Servers without prefixes", func() {
+		By("Creating HTTPRoutes and MCP Servers")
+		// create httproutes for test servers that should already be deployed
+		registration := NewMCPServerRegistrationEx("same-prefix", "e2e-server1.mcp.local", "mcp-test-server1", 9090, k8sClient).
+			WithToolPrefix("")
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer1 := registration.Register(ctx)
+		registration = NewMCPServerRegistrationEx("same-prefix", "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient).
+			WithToolPrefix("")
+		// Important as we need to make sure to clean up
+		testResources = append(testResources, registration.GetObjects()...)
+		registeredServer2 := registration.Register(ctx)
+
+		By("Verifying MCPServers become ready")
+		Eventually(func(g Gomega) {
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer1.Name, registeredServer1.Namespace)).To(BeNil())
+			g.Expect(VerifyMCPServerReady(ctx, k8sClient, registeredServer2.Name, registeredServer2.Namespace)).To(BeNil())
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		By("Verifying expected tools are present")
+		Eventually(func(g Gomega) {
+			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
+			g.Expect(err).Error().NotTo(HaveOccurred())
+			g.Expect(toolsList).NotTo(BeNil())
+			g.Expect(verifyMCPServerToolPresent("greet", toolsList)).To(BeTrueBecause("%q should exist", "greet"))
+			g.Expect(verifyMCPServerToolPresent("hello_world", toolsList)).To(BeTrueBecause("%q should exist", "hello_world"))
+		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
+
+		toolName := "hello_world"
+		GinkgoWriter.Println("tool", toolName)
+		By("Invoking the first tool")
+		res, err := mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{
+				"name": "e2e",
+			}},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		Expect(len(res.Content)).To(BeNumerically("==", 1))
+		content, ok := res.Content[0].(mcp.TextContent)
+		Expect(ok).To(BeTrue())
+		Expect(content.Text).To(Equal("Hello, e2e!"))
+
+		toolName = "greet"
+		GinkgoWriter.Println("tool", toolName)
+		By("Invoking the second tool")
+		res, err = mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{
+				"name": "e2e",
+			}},
+		})
+		Expect(err).Error().NotTo(HaveOccurred())
+		Expect(res).NotTo(BeNil())
+		Expect(len(res.Content)).To(BeNumerically("==", 1))
+		content, ok = res.Content[0].(mcp.TextContent)
+		Expect(ok).To(BeTrue())
+		Expect(content.Text).To(Equal("Hi e2e"))
+	})
 })

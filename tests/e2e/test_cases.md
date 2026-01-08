@@ -64,3 +64,7 @@
 - When a backend MCPServer is added but the backend MCP is invalid because it has conflicting tools due to tool name overlap with another server that has been added, the status of the MCPServer resource should report the reason for the MCPSever being invalid
 
 - When a backend MCPServer is added but the backend MCP is invalid because the broker cannot connect to the the backend MCP server, the MCPServer resource should report the reason for the MCPSever being invalid
+
+### [Happy] Multiple MCP Servers without prefix
+
+- When two servers with no prefix are used, the gateway sees and forwards both tools correctly.
