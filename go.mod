@@ -1,8 +1,6 @@
 module github.com/kagenti/mcp-gateway
 
-go 1.24.0
-
-toolchain go1.24.4
+go 1.25.5
 
 require (
 	github.com/caitlinelfring/go-env-default v1.1.0

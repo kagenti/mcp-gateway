@@ -1,6 +1,6 @@
 module github.com/kagenti/mcp-gateway/tests/servers/server2
 
-go 1.24.0
+go 1.25.5
 
 require (
 	github.com/kagenti/mcp-gateway v0.0.0-20250910152025-f6e9732065b7

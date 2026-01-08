@@ -1,6 +1,6 @@
 module github.com/kagenti/mcp-gateway/tests/servers/server4
 
-go 1.24
+go 1.25.5
 
 require github.com/modelcontextprotocol/go-sdk v0.2.0
 
