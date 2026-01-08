@@ -712,11 +712,13 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should allow multiple MCP Servers without prefixes", func() {
 		By("Creating HTTPRoutes and MCP Servers")
 		// create httproutes for test servers that should already be deployed
-		registration := NewMCPServerRegistrationEx("same-prefix", "e2e-server1.mcp.local", "mcp-test-server1", 9090, k8sClient).
+		registration := NewMCPServerRegistrationEx("same-prefix", "everything-server.mcp.local", "everything-server", 9090, k8sClient).
 			WithToolPrefix("")
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer1 := registration.Register(ctx)
+
+		// This server has a 'hello_world' tool
 		registration = NewMCPServerRegistrationEx("same-prefix", "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient).
 			WithToolPrefix("")
 		// Important as we need to make sure to clean up
@@ -734,7 +736,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 			toolsList, err := mcpGatewayClient.ListTools(ctx, mcp.ListToolsRequest{})
 			g.Expect(err).Error().NotTo(HaveOccurred())
 			g.Expect(toolsList).NotTo(BeNil())
-			g.Expect(verifyMCPServerToolPresent("greet", toolsList)).To(BeTrueBecause("%q should exist", "greet"))
+			g.Expect(verifyMCPServerToolPresent("echo", toolsList)).To(BeTrueBecause("%q should exist", "greet"))
 			g.Expect(verifyMCPServerToolPresent("hello_world", toolsList)).To(BeTrueBecause("%q should exist", "hello_world"))
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
@@ -753,12 +755,12 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(ok).To(BeTrue())
 		Expect(content.Text).To(Equal("Hello, e2e!"))
 
-		toolName = "greet"
+		toolName = "echo"
 		GinkgoWriter.Println("tool", toolName)
 		By("Invoking the second tool")
 		res, err = mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
 			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{
-				"name": "e2e",
+				"message": "e2e",
 			}},
 		})
 		Expect(err).Error().NotTo(HaveOccurred())
@@ -766,6 +768,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(len(res.Content)).To(BeNumerically("==", 1))
 		content, ok = res.Content[0].(mcp.TextContent)
 		Expect(ok).To(BeTrue())
-		Expect(content.Text).To(Equal("Hi e2e"))
+		Expect(content.Text).To(Equal("Echo: e2e"))
 	})
 })
