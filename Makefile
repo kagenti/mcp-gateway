@@ -140,14 +140,14 @@ build-image: kind ## Build the mcp-gateway image
 # Deploy example MCPServer
 deploy-example: install-crd ## Deploy example MCPServer resource
 	@echo "Waiting for test servers to be ready..."
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server1 --timeout=60s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server2 --timeout=60s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-test-server3 --timeout=90s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-api-key-server --timeout=60s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-custom-path-server --timeout=60s 2>/dev/null || true
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-oidc-server --timeout=60s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=everything-server --timeout=60s
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=mcp-custom-response --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-test-server1 --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-test-server2 --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-test-server3 --timeout=90s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-api-key-server --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-custom-path-server --timeout=60s 2>/dev/null || true
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-oidc-server --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=everything-server --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=mcp-custom-response --timeout=60s
 	@echo "All test servers ready, deploying MCPServer resources..."
 	kubectl apply -f config/samples/mcpserver-test-servers.yaml
 	@echo "Waiting for controller to process MCPServer..."
@@ -209,7 +209,7 @@ deploy-conformance-server: kind-load-conformance-server ## Deploy conformance MC
 	@echo "Deploying conformance MCP server..."
 	kubectl apply -k config/test-servers/conformance-server/
 	@echo "Waiting for conformance server to be ready..."
-	@kubectl wait --for=condition=ready pod -n mcp-test -l app=conformance-server --timeout=60s
+	@kubectl wait --for=condition=Available deployment -n mcp-test -l app=conformance-server --timeout=60s
 	@echo "Conformance server ready, deploying MCPServer resource..."
 	kubectl apply -f config/samples/mcpserver-conformance-server.yaml
 	@echo "Waiting for MCPServer to be Ready..."
