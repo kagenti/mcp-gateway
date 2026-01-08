@@ -2,6 +2,7 @@
 apikey
 authorino
 Authorino
+clientcmd
 configmap
 crds
 curlimages
@@ -21,15 +22,20 @@ KAGENTI
 kagenti
 Kagenti
 Kiali
+kubeconfig
+KUBECONFIG
 kuadrant
 Kuadrant
 Kuadrant's
 kubeadm
 kubelet
 logql
+mcpclient
 mcps
 mcpserver
 mcpservers
+mcpsession
+mcpsessionid
 mcpvirtualserver
 mcpvirtualservers
 modelcontextprotocol
@@ -97,6 +103,7 @@ fastmcp
 frankban
 fsnotify
 fxamacker
+gatewayapiv
 gatewayv
 genproto
 gitops
@@ -197,6 +204,7 @@ pmezard
 printcolumn
 protectected
 protoc
+pytime
 quicktest
 randfill
 rbody
@@ -213,9 +221,11 @@ Reponse
 retval
 rhcl
 Rkfdsw
+regen
 rogpeppe
 sagikazarmark
 sailoperator
+Serv
 servicemeshoperator
 sessionid
 sesssion
