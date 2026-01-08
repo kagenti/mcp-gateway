@@ -190,13 +190,13 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 		return calculatedResponse.Build()
 	}
 
-	if s.Broker == nil {
-		panic("ExtProcServer requires a Broker")
-	}
-
 	// Get tool annotations from broker and set headers
 	headers := NewHeaders()
-	serverInfo := s.Broker.GetServerInfo(toolName)
+	serverInfo, err := s.Broker.GetServerInfo(toolName)
+	if err != nil {
+		s.Logger.Debug("no server for tool", "toolName", toolName)
+		calculatedResponse.WithImmediateResponse(400, "unknown tool")
+	}
 	if annotations, hasAnnotations := s.Broker.ToolAnnotations(serverInfo.ID(), toolName); hasAnnotations {
 		// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
 		var parts []string

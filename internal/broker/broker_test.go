@@ -195,20 +195,24 @@ func TestGetServerInfo(t *testing.T) {
 	})
 	bImpl.mcpServers["test4"] = createTestManager(t, "test4", "tt", []mcp.Tool{})
 
-	svr := b.GetServerInfo("pour_chocolate")
+	svr, err := b.GetServerInfo("pour_chocolate")
 	require.NotNil(t, svr)
+	require.NoError(t, err)
 	require.Equal(t, "test1", svr.Name)
 
-	svr = b.GetServerInfo("restore_from_tape")
+	svr, err = b.GetServerInfo("restore_from_tape")
 	require.NotNil(t, svr)
+	require.NoError(t, err)
 	require.Equal(t, "test2", svr.Name)
 
 	// We used a prefix so that this tool exists
-	svr = b.GetServerInfo("trestore_from_tape")
+	svr, err = b.GetServerInfo("trestore_from_tape")
 	require.NotNil(t, svr)
+	require.NoError(t, err)
 	require.Equal(t, "test3", svr.Name)
 
 	// There is no tool, even though the prefix matches
-	svr = b.GetServerInfo("tt_orbit_mars")
+	svr, err = b.GetServerInfo("tt_orbit_mars")
+	require.Error(t, err)
 	require.Nil(t, svr)
 }

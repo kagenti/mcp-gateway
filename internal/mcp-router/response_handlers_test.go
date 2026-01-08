@@ -384,19 +384,19 @@ func newMockBroker(svrConfigs []*config.MCPServer, tool2svr map[string]string) b
 }
 
 // GetServerInfo implements broker.MCPBroker.
-func (m *mockBrokerImpl) GetServerInfo(tool string) *config.MCPServer {
+func (m *mockBrokerImpl) GetServerInfo(tool string) (*config.MCPServer, error) {
 	svrName, ok := m.tool2svr[tool]
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("No server for tool %q", tool)
 	}
 
 	for _, svrInfo := range m.svrConfigs {
 		if svrName == svrInfo.Name {
-			return svrInfo
+			return svrInfo, nil
 		}
 	}
 
-	panic(fmt.Sprintf("failed to get server for tool %q", tool))
+	return nil, fmt.Errorf("failed to get server %q for tool %q", svrName, tool)
 }
 
 // GetVirtualSeverByHeader implements broker.MCPBroker.
