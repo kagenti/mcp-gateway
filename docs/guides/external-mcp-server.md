@@ -6,14 +6,16 @@ Clients call your Gateway's hostname, and the Gateway rewrites and routes traffi
 
 ## Prerequisites
 
-- MCP Gateway installed and configured (`make local-env-setup`)
+- MCP Gateway installed and configured
 - Gateway API Provider (Istio) with ServiceEntry and DestinationRule support
 - Network egress access to external MCP server
 - Authentication credentials for the external server (if required)
 
+**Note:** If you're trying this locally, `make local-env-setup` already meets all prerequisites except the GitHub PAT.
+
 ## About the GitHub MCP Server
 
-The GitHub MCP server (https://api.githubcopilot.com/mcp/) provides programmatic access to GitHub functionality through the Model Context Protocol. It exposes 90+ tools for repository management, issues, pull requests, and code operations.
+The GitHub MCP server (https://api.githubcopilot.com/mcp/) provides programmatic access to GitHub functionality through the Model Context Protocol. It exposes tools for repository management, issues, pull requests, and code operations.
 
 For this example, you'll need a GitHub Personal Access Token with `read:user` permissions. Get one at https://github.com/settings/tokens/new
 
@@ -232,15 +234,7 @@ kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered.*tool
 
 ## Test Integration
 
-Test the external MCP server through the gateway:
-
-```bash
-curl -X POST http://mcp.127-0-0-1.sslip.io:8080/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
-```
-
-To test tool calls, open the MCP Inspector:
+To test the integration, open the MCP Inspector:
 
 ```bash
 make inspect-gateway
