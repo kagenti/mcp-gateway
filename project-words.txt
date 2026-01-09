@@ -30,6 +30,8 @@ logql
 mcps
 mcpserver
 mcpservers
+mcpgateway
+mcpgateways
 mcpvirtualserver
 mcpvirtualservers
 modelcontextprotocol
@@ -202,6 +204,7 @@ randfill
 rbody
 readyz
 Readyz
+referencegrant
 regauth
 regheaders
 reghello
