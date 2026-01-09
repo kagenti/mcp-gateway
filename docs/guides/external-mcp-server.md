@@ -234,7 +234,15 @@ kubectl logs -n mcp-system deployment/mcp-broker-router | grep "Discovered.*tool
 
 ## Test Integration
 
-To test the integration, open the MCP Inspector:
+Test tools/list through the gateway:
+
+```bash
+curl -X POST http://mcp.127-0-0-1.sslip.io:8001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+```
+
+To test tool calls, open the MCP Inspector:
 
 ```bash
 make inspect-gateway
