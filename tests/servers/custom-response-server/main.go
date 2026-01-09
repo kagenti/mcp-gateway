@@ -31,9 +31,9 @@ func main() {
   "result": {
     "tools": [
       {
-        "name": "cutom response code",
+        "name": "custom response code",
         "title": "Return a custom response",
-        "description": "Return a custom respinse",
+        "description": "Return a custom response",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -112,7 +112,7 @@ func main() {
 			if jsonrpcReq.Method == "initialize" {
 				log.Println("initialize")
 				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("mcp-session-id", "myamazingsession")
+				w.Header().Set("mcp-session-id", "my amazing session")
 				w.WriteHeader(200)
 				w.Write([]byte(initResp))
 				return

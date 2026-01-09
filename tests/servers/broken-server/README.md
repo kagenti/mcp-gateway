@@ -47,7 +47,7 @@ kubectl scale deployment mcp-test-Broken-server -n mcp-test --replicas=0
 kubectl scale deployment mcp-test-Broken-server -n mcp-test --replicas=1
 ```
 
-- Scaling to 0 replicas simulates server unreachability
+- Scaling to 0 replicas simulates the server being unreachable
 - Should fail connection validation (connection refused)
 
 ## Usage
