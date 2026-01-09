@@ -106,6 +106,26 @@ func (rb *ResponseBuilder) WithImmediateResponse(statusCode int32, message strin
 	return rb
 }
 
+// WithImmediateJSONRPCResponse adds an immediate response, typically JSON-RPC format,
+// that terminates request processing
+func (rb *ResponseBuilder) WithImmediateJSONRPCResponse(statusCode int32, setHeaders []*basepb.HeaderValueOption, message string) *ResponseBuilder {
+	rb.response = append(rb.response, &eppb.ProcessingResponse{
+		Response: &eppb.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &eppb.ImmediateResponse{
+				Status: &typepb.HttpStatus{
+					Code: typepb.StatusCode(statusCode),
+				},
+				Body: []byte(message),
+				Headers: &eppb.HeaderMutation{
+					SetHeaders: setHeaders,
+				},
+				Details: fmt.Sprintf("ext-proc error: %s", message),
+			},
+		},
+	})
+	return rb
+}
+
 // WithStreamingResponse adds a streaming request body response with headers
 func (rb *ResponseBuilder) WithStreamingResponse(headers []*basepb.HeaderValueOption, body []byte) *ResponseBuilder {
 	rb.response = append(rb.response, &eppb.ProcessingResponse{

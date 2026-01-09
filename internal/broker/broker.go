@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,9 @@ type MCPBroker interface {
 
 	// Returns tool annotations for a given tool name
 	ToolAnnotations(serverID config.UpstreamMCPID, tool string) (mcp.ToolAnnotation, bool)
+
+	// Returns server info for a given tool name
+	GetServerInfo(tool string) (*config.MCPServer, error)
 
 	// MCPServer gets an MCP server that federates the upstreams known to this MCPBroker
 	MCPServer() *server.MCPServer
@@ -220,6 +224,24 @@ func (m *mcpBrokerImpl) ToolAnnotations(serverID config.UpstreamMCPID, tool stri
 		return t.Annotations, true
 	}
 	return mcp.ToolAnnotation{}, false
+}
+
+// GetServerInfo implements MCPBroker by providing a lookup of the server that implements a tool.
+func (m *mcpBrokerImpl) GetServerInfo(tool string) (*config.MCPServer, error) {
+	for _, upstream := range m.mcpServers {
+		rawTool := strings.TrimPrefix(tool, upstream.MCP.GetPrefix())
+		t := upstream.GetManagedTool(rawTool)
+		if t != nil {
+			slog.Info("[EXT-PROC] Found matching server",
+				"toolName", tool,
+				"serverPrefix", upstream.MCP.GetPrefix(),
+				"serverName", upstream.MCP.GetName())
+			retval := upstream.MCP.GetConfig()
+			return &retval, nil
+		}
+	}
+
+	return nil, fmt.Errorf("tool name %q doesn't match any configured server", tool)
 }
 
 func (m *mcpBrokerImpl) Shutdown(_ context.Context) error {

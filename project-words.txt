@@ -275,3 +275,4 @@ zoneinfo
 zpdl
 Zscifu
 tkennon
+trestore_from_tape

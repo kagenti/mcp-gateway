@@ -182,22 +182,27 @@ func TestHandleRequestBody(t *testing.T) {
 		return nil, fmt.Errorf("InitForClient should not be called when session exists")
 	}
 
+	serverConfigs := []*config.MCPServer{
+		{
+			Name:       "dummy",
+			URL:        "http://localhost:8080/mcp",
+			ToolPrefix: "s_",
+			Enabled:    true,
+			Hostname:   "localhost",
+		},
+	}
+
 	server := &ExtProcServer{
 		RoutingConfig: &config.MCPServersConfig{
-			Servers: []*config.MCPServer{
-				{
-					Name:       "dummy",
-					URL:        "http://localhost:8080/mcp",
-					ToolPrefix: "s_",
-					Enabled:    true,
-					Hostname:   "localhost",
-				},
-			},
+			Servers: serverConfigs,
 		},
 		JWTManager:    jwtManager,
 		Logger:        logger,
 		SessionCache:  cache,
 		InitForClient: mockInitForClient,
+		Broker: newMockBroker(serverConfigs, map[string]string{
+			"s_mytool": "dummy",
+		}),
 	}
 
 	data := &MCPRequest{
@@ -267,6 +272,7 @@ func TestHandleRequestHeaders(t *testing.T) {
 					MCPGatewayExternalHostname: tc.GatewayHostname,
 				},
 				Logger: logger,
+				Broker: newMockBroker(nil, map[string]string{}),
 			}
 
 			headers := &eppb.HttpHeaders{

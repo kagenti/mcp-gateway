@@ -2,15 +2,30 @@ package mcprouter
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"testing"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/kagenti/mcp-gateway/internal/broker"
+	"github.com/kagenti/mcp-gateway/internal/broker/upstream"
+	"github.com/kagenti/mcp-gateway/internal/config"
 	"github.com/kagenti/mcp-gateway/internal/session"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
 )
+
+type mockBrokerImpl struct {
+	// Servers known to this mock broker
+	svrConfigs []*config.MCPServer
+
+	// Map of tool name to server name
+	tool2svr map[string]string
+}
 
 func TestHandleResponseHeaders_ReturnsGatewaySessionID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -20,6 +35,7 @@ func TestHandleResponseHeaders_ReturnsGatewaySessionID(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	gatewaySessionID := "gateway-session-123"
@@ -77,6 +93,7 @@ func TestHandleResponseHeaders_NoGatewaySessionID(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	// request headers without gateway session ID
@@ -119,6 +136,7 @@ func TestHandleResponseHeaders_404RemovesServerSession(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	gatewaySessionID := "gateway-session-123"
@@ -184,6 +202,7 @@ func TestHandleResponseHeaders_404WithoutMCPRequest(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	gatewaySessionID := "gateway-session-123"
@@ -228,6 +247,7 @@ func TestHandleResponseHeaders_404WithMultipleServerSessions(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	gatewaySessionID := "gateway-session-123"
@@ -298,6 +318,7 @@ func TestHandleResponseHeaders_SuccessStatusDoesNotRemoveSession(t *testing.T) {
 	server := &ExtProcServer{
 		Logger:       logger,
 		SessionCache: cache,
+		Broker:       newMockBroker(nil, map[string]string{}),
 	}
 
 	gatewaySessionID := "gateway-session-123"
@@ -353,4 +374,67 @@ func TestHandleResponseHeaders_SuccessStatusDoesNotRemoveSession(t *testing.T) {
 			require.Equal(t, "upstream-session-456", sessions[serverName])
 		})
 	}
+}
+
+func newMockBroker(svrConfigs []*config.MCPServer, tool2svr map[string]string) broker.MCPBroker {
+	return &mockBrokerImpl{
+		svrConfigs: svrConfigs,
+		tool2svr:   tool2svr,
+	}
+}
+
+// GetServerInfo implements broker.MCPBroker.
+func (m *mockBrokerImpl) GetServerInfo(tool string) (*config.MCPServer, error) {
+	svrName, ok := m.tool2svr[tool]
+	if !ok {
+		return nil, fmt.Errorf("No server for tool %q", tool)
+	}
+
+	for _, svrInfo := range m.svrConfigs {
+		if svrName == svrInfo.Name {
+			return svrInfo, nil
+		}
+	}
+
+	return nil, fmt.Errorf("failed to get server %q for tool %q", svrName, tool)
+}
+
+// GetVirtualSeverByHeader implements broker.MCPBroker.
+func (m *mockBrokerImpl) GetVirtualSeverByHeader(_ string) (config.VirtualServer, error) {
+	panic("unimplemented")
+}
+
+// HandleStatusRequest implements broker.MCPBroker.
+func (m *mockBrokerImpl) HandleStatusRequest(_ http.ResponseWriter, _ *http.Request) {
+	panic("unimplemented")
+}
+
+// MCPServer implements broker.MCPBroker.
+func (m *mockBrokerImpl) MCPServer() *server.MCPServer {
+	panic("unimplemented")
+}
+
+// OnConfigChange implements broker.MCPBroker.
+func (m *mockBrokerImpl) OnConfigChange(_ context.Context, _ *config.MCPServersConfig) {
+	panic("unimplemented")
+}
+
+// RegisteredMCPServers implements broker.MCPBroker.
+func (m *mockBrokerImpl) RegisteredMCPServers() map[config.UpstreamMCPID]*upstream.MCPManager {
+	panic("unimplemented")
+}
+
+// Shutdown implements broker.MCPBroker.
+func (m *mockBrokerImpl) Shutdown(_ context.Context) error {
+	panic("unimplemented")
+}
+
+// ToolAnnotations implements broker.MCPBroker.
+func (m *mockBrokerImpl) ToolAnnotations(_ config.UpstreamMCPID, _ string) (mcp.ToolAnnotation, bool) {
+	return mcp.ToolAnnotation{}, false
+}
+
+// ValidateAllServers implements broker.MCPBroker.
+func (m *mockBrokerImpl) ValidateAllServers() broker.StatusResponse {
+	panic("unimplemented")
 }

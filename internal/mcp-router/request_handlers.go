@@ -189,36 +189,49 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 		calculatedResponse.WithImmediateResponse(404, "session no longer valid")
 		return calculatedResponse.Build()
 	}
-	serverInfo := s.RoutingConfig.GetServerInfo(toolName)
-	if serverInfo == nil {
-		s.Logger.Info("Tool name doesn't match any configured server prefix", "tool", toolName)
-		calculatedResponse.WithImmediateResponse(404, "not found")
-		return calculatedResponse.Build()
-	}
+
 	// Get tool annotations from broker and set headers
 	headers := NewHeaders()
-	if s.Broker != nil {
-		if annotations, hasAnnotations := s.Broker.ToolAnnotations(serverInfo.ID(), toolName); hasAnnotations {
-			// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
-			var parts []string
-			push := func(key string, val *bool) {
-				if val == nil {
-					parts = append(parts, fmt.Sprintf("%s=unspecified", key))
-				} else if *val {
-					parts = append(parts, fmt.Sprintf("%s=true", key))
-				} else {
-					parts = append(parts, fmt.Sprintf("%s=false", key))
-				}
+	serverInfo, err := s.Broker.GetServerInfo(toolName)
+	if err != nil {
+		// For unknown tool, the spec says to return a JSON RPC error response,
+		// and the error is not an HTTP error, so we return a 200 status code.
+		// See https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling
+		s.Logger.Debug("no server for tool", "toolName", toolName)
+		calculatedResponse.WithImmediateJSONRPCResponse(200,
+			[]*corev3.HeaderValueOption{
+				{
+					Header: &corev3.HeaderValue{
+						Key:   "mcp-session-id",
+						Value: mcpReq.GetSessionID(),
+					},
+				},
+			},
+			`
+event: message
+data: {"result":{"content":[{"type":"text","text":"MCP error -32602: Tool not found"}],"isError":true},"jsonrpc":"2.0"}`)
+		return calculatedResponse.Build()
+	}
+	if annotations, hasAnnotations := s.Broker.ToolAnnotations(serverInfo.ID(), toolName); hasAnnotations {
+		// build header value (e.g. readOnly=true,destructive=false,openWorld=true)
+		var parts []string
+		push := func(key string, val *bool) {
+			if val == nil {
+				parts = append(parts, fmt.Sprintf("%s=unspecified", key))
+			} else if *val {
+				parts = append(parts, fmt.Sprintf("%s=true", key))
+			} else {
+				parts = append(parts, fmt.Sprintf("%s=false", key))
 			}
-
-			push("readOnly", annotations.ReadOnlyHint)
-			push("destructive", annotations.DestructiveHint)
-			push("idempotent", annotations.IdempotentHint)
-			push("openWorld", annotations.OpenWorldHint)
-
-			hintsHeader := strings.Join(parts, ",")
-			headers.WithToolAnnotations(hintsHeader)
 		}
+
+		push("readOnly", annotations.ReadOnlyHint)
+		push("destructive", annotations.DestructiveHint)
+		push("idempotent", annotations.IdempotentHint)
+		push("openWorld", annotations.OpenWorldHint)
+
+		hintsHeader := strings.Join(parts, ",")
+		headers.WithToolAnnotations(hintsHeader)
 	}
 
 	headers.WithMCPMethod(mcpReq.Method)

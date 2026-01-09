@@ -346,10 +346,15 @@ type MCPServerRegistrationBuilder struct {
 	mcpServer     *mcpv1alpha1.MCPServer
 }
 
-// NewMCPServerRegistration creates a new registration builder with defaults
-func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
+// NewMCPServerRegistrationWithDefaults creates a new registration builder with defaults
+func NewMCPServerRegistrationWithDefaults(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
+	return NewMCPServerRegistration(testName, "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient)
+}
+
+// NewMCPServerRegistration creates a new registration builder
+func NewMCPServerRegistration(testName, hostName, serviceName string, port int32, k8sClient client.Client) *MCPServerRegistrationBuilder {
 	httpRoute := BuildTestHTTPRoute("e2e-server2-route-"+testName, TestNamespace,
-		"e2e-server2.mcp.local", "mcp-test-server2", 9090)
+		hostName, serviceName, port)
 	mcpServer := BuildTestMCPServer(httpRoute.Name, TestNamespace,
 		httpRoute.Name, httpRoute.Name).Build()
 	mcpServer.Labels["test"] = testName
@@ -653,6 +658,19 @@ func verifyMCPServerToolsPresent(serverPrefix string, toolsList *mcp.ListToolsRe
 	}
 	for _, t := range toolsList.Tools {
 		if strings.HasPrefix(t.Name, serverPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyMCPServerToolPresent this will ensure at least one tool in the tools list is from the MCPServer that uses the prefix
+func verifyMCPServerToolPresent(toolName string, toolsList *mcp.ListToolsResult) bool {
+	if toolsList == nil {
+		return false
+	}
+	for _, t := range toolsList.Tools {
+		if t.Name == toolName {
 			return true
 		}
 	}
