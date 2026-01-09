@@ -52,11 +52,11 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should register multiple mcp servers with the gateway and make their tools available", func() {
 		By("Creating HTTPRoutes and MCP Servers")
 		// create httproutes for test servers that should already be deployed
-		registration := NewMCPServerRegistration("basic-registration", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("basic-registration", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer1 := registration.Register(ctx)
-		registration = NewMCPServerRegistration("basic-registration", k8sClient)
+		registration = NewMCPServerRegistrationWithDefaults("basic-registration", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer2 := registration.Register(ctx)
@@ -79,7 +79,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should unregister mcp servers with the gateway", func() {
-		registration := NewMCPServerRegistration("basic-unregister", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("basic-unregister", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -114,7 +114,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	})
 
 	It("should invoke tools successfully", func() {
-		registration := NewMCPServerRegistration("tools-invoke", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("tools-invoke", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -150,7 +150,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should register mcp server with credetential with the gateway and make the tools available", func() {
 		cred := BuildCredentialSecret("mcp-credential", "test-api-key-secret-toke")
-		registration := NewMCPServerRegistration("credentials", k8sClient).
+		registration := NewMCPServerRegistrationWithDefaults("credentials", k8sClient).
 			WithCredential(cred, "token").WithBackendTarget("mcp-api-key-server", 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -189,7 +189,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should use and re-use a backend MCP session", func() {
 
-		registration := NewMCPServerRegistration("sessions", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("sessions", k8sClient)
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -315,7 +315,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 
 	It("should only return tools specified by MCPVirtualServer when using X-Mcp-Virtualserver header", func() {
 		By("Creating an MCPServer with tools")
-		registration := NewMCPServerRegistration("virtualserver-test", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("virtualserver-test", k8sClient)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
 
@@ -386,7 +386,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(client1.sessionID).NotTo(Equal(client2.sessionID))
 
 		By("registering a new MCPServer")
-		registration := NewMCPServerRegistration("notification-test", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("notification-test", k8sClient)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
 
@@ -415,7 +415,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should forward notifications/tools/list_changed from backend MCP server to connected clients", func() {
 
 		By("Creating an MCPServer pointing to server1 which has the add_tool feature")
-		registration := NewMCPServerRegistration("backend-notification-test", k8sClient).
+		registration := NewMCPServerRegistrationWithDefaults("backend-notification-test", k8sClient).
 			WithBackendTarget(sharedMCPTestServer1, 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -503,7 +503,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(ScaleDeployment(TestNamespace, scaledMCPTestServer, 0)).To(Succeed())
 
 		By("Registering an MCPServer pointing to server3")
-		registration := NewMCPServerRegistration("unavailable-test", k8sClient).
+		registration := NewMCPServerRegistrationWithDefaults("unavailable-test", k8sClient).
 			WithBackendTarget(scaledMCPTestServer, 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -599,7 +599,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}
 
 		By("Creating an MCPServer with tools")
-		registration := NewMCPServerRegistration("authorized-tools-test", k8sClient)
+		registration := NewMCPServerRegistrationWithDefaults("authorized-tools-test", k8sClient)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
 
@@ -649,7 +649,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should report invalid protocol version in MCPServer status", func() {
 		By("Creating an MCPServer pointing to the broken server with wrong protocol version")
 		// The broken server is already deployed with --failure-mode=protocol
-		registration := NewMCPServerRegistration("protocol-status-test", k8sClient).
+		registration := NewMCPServerRegistrationWithDefaults("protocol-status-test", k8sClient).
 			WithBackendTarget("mcp-test-broken-server", 9090)
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer := registration.Register(ctx)
@@ -671,7 +671,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should report tool conflicts in MCPServer status when same prefix is used", func() {
 
 		By("Creating first MCPServer with a specific prefix")
-		registration1 := NewMCPServerRegistration("conflict-test-1", k8sClient).
+		registration1 := NewMCPServerRegistrationWithDefaults("conflict-test-1", k8sClient).
 			WithToolPrefix("conflict_")
 		testResources = append(testResources, registration1.GetObjects()...)
 		server1 := registration1.Register(ctx)
@@ -682,7 +682,7 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		By("Creating second MCPServer with the SAME prefix pointing to server2")
-		registration2 := NewMCPServerRegistration("conflict-test-2", k8sClient).
+		registration2 := NewMCPServerRegistrationWithDefaults("conflict-test-2", k8sClient).
 			WithToolPrefix("conflict_")
 		testResources = append(testResources, registration2.GetObjects()...)
 		server2 := registration2.Register(ctx)
@@ -712,14 +712,14 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 	It("should allow multiple MCP Servers without prefixes", func() {
 		By("Creating HTTPRoutes and MCP Servers")
 		// create httproutes for test servers that should already be deployed
-		registration := NewMCPServerRegistrationEx("same-prefix", "everything-server.mcp.local", "everything-server", 9090, k8sClient).
+		registration := NewMCPServerRegistration("same-prefix", "everything-server.mcp.local", "everything-server", 9090, k8sClient).
 			WithToolPrefix("")
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
 		registeredServer1 := registration.Register(ctx)
 
 		// This server has a 'hello_world' tool
-		registration = NewMCPServerRegistrationEx("same-prefix", "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient).
+		registration = NewMCPServerRegistration("same-prefix", "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient).
 			WithToolPrefix("")
 		// Important as we need to make sure to clean up
 		testResources = append(testResources, registration.GetObjects()...)
@@ -741,7 +741,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		}, TestTimeoutLong, TestRetryInterval).To(Succeed())
 
 		toolName := "hello_world"
-		GinkgoWriter.Println("tool", toolName)
 		By("Invoking the first tool")
 		res, err := mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
 			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{
@@ -756,7 +755,6 @@ var _ = Describe("MCP Gateway Registration Happy Path", func() {
 		Expect(content.Text).To(Equal("Hello, e2e!"))
 
 		toolName = "echo"
-		GinkgoWriter.Println("tool", toolName)
 		By("Invoking the second tool")
 		res, err = mcpGatewayClient.CallTool(ctx, mcp.CallToolRequest{
 			Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]string{

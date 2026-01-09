@@ -194,8 +194,23 @@ func (s *ExtProcServer) HandleToolCall(ctx context.Context, mcpReq *MCPRequest) 
 	headers := NewHeaders()
 	serverInfo, err := s.Broker.GetServerInfo(toolName)
 	if err != nil {
+		// For unknown tool, the spec says to return a JSON RPC error response,
+		// and the error is not an HTTP error, so we return a 200 status code.
+		// See https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling
 		s.Logger.Debug("no server for tool", "toolName", toolName)
-		calculatedResponse.WithImmediateResponse(400, "unknown tool")
+		calculatedResponse.WithImmediateJSONRPCResponse(200,
+			[]*corev3.HeaderValueOption{
+				{
+					Header: &corev3.HeaderValue{
+						Key:   "mcp-session-id",
+						Value: mcpReq.GetSessionID(),
+					},
+				},
+			},
+			`
+event: message
+data: {"result":{"content":[{"type":"text","text":"MCP error -32602: Tool not found"}],"isError":true},"jsonrpc":"2.0"}`)
+		return calculatedResponse.Build()
 	}
 	if annotations, hasAnnotations := s.Broker.ToolAnnotations(serverInfo.ID(), toolName); hasAnnotations {
 		// build header value (e.g. readOnly=true,destructive=false,openWorld=true)

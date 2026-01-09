@@ -346,13 +346,13 @@ type MCPServerRegistrationBuilder struct {
 	mcpServer     *mcpv1alpha1.MCPServer
 }
 
-// NewMCPServerRegistration creates a new registration builder with defaults
-func NewMCPServerRegistration(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
-	return NewMCPServerRegistrationEx(testName, "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient)
+// NewMCPServerRegistrationWithDefaults creates a new registration builder with defaults
+func NewMCPServerRegistrationWithDefaults(testName string, k8sClient client.Client) *MCPServerRegistrationBuilder {
+	return NewMCPServerRegistration(testName, "e2e-server2.mcp.local", "mcp-test-server2", 9090, k8sClient)
 }
 
-// NewMCPServerRegistration creates a new registration builder with defaults
-func NewMCPServerRegistrationEx(testName, hostName, serviceName string, port int32, k8sClient client.Client) *MCPServerRegistrationBuilder {
+// NewMCPServerRegistration creates a new registration builder
+func NewMCPServerRegistration(testName, hostName, serviceName string, port int32, k8sClient client.Client) *MCPServerRegistrationBuilder {
 	httpRoute := BuildTestHTTPRoute("e2e-server2-route-"+testName, TestNamespace,
 		hostName, serviceName, port)
 	mcpServer := BuildTestMCPServer(httpRoute.Name, TestNamespace,
