@@ -63,6 +63,11 @@ This CRD is expected to converge with or be replaced by a 'Backend' resource tha
 
 *Example 3:* The MCP Gateway project includes an ext-proc component that parses MCP requests, hoisting information like the tool being called into headers. It also provides MCP server multiplexing by way of tool prefixing. In time, this multiplexing may be a feature available from Envoy proxy. We would look to leverage that feature in Envoy proxy instead of our own ext-proc at that time.
 
+## Why Envoy?
+
+- **Battle-tested foundation**: Envoy is a graduated CNCF project ([since 2018](https://www.cncf.io/announcements/2018/11/28/cncf-announces-envoy-graduation/)) with [proven production use](https://theirstack.com/en/technology/envoy/us) at scale
+- **Rich extension model**: External Processor (ext_proc), WASM, Lua filters enable custom protocol support
+
 ## Why not use...
 
 ### ...standalone MCP Servers? (aka. the case for an MCP Gateway, in general)
