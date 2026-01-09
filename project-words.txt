@@ -1,4 +1,5 @@
 # New Words
+Agentic
 apikey
 authorino
 Authorino
@@ -29,6 +30,7 @@ Kuadrant
 Kuadrant's
 kubeadm
 kubelet
+kgateway
 logql
 mcpclient
 mcps
