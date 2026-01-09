@@ -57,7 +57,7 @@ Success is measured by reduced duplication across MCP servers, consistent policy
 Note, these are just examples at the time of writing, and are not intended to be goals.
 
 *Example 1:* The MCP Gateway project will provide a Kubernetes CRD, like MCPServer, that represents a running MCP Server somewhere.
-This CRD is expected to converge with or be replaced by a 'Backend' resource that is aligned with the outcome of the ai-gatweay working group or agentic-networking sub-project. This Backend resource may get implemented in the Gateway API provider, Istio, in time.
+This CRD is expected to converge with or be replaced by a 'Backend' resource that is aligned with the outcome of the ai-gateway working group or agentic-networking sub-project. This Backend resource may get implemented in the Gateway API provider, Istio, in time.
 
 *Example 2:* The MCP Gateway project has some very specific Kuadrant AuthPolicy examples around tool permissions based on integrating with Keycloak. The MCP Gateway project will provide a KeycloakToolRoleMappingPolicy that wraps an AuthPolicy, abstracting the detailed rules configuration required to parse and iterate tools, checking against Keycloak role mappings.
 
